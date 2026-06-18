@@ -15,35 +15,47 @@
 //   setChats: (chats) => set({ chats }),
 //   setActiveChat: (id) => set({ activeChatId: id }),
 // }));
+"use client";
+
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { Chat } from "@/types/chat";
 
 interface ChatStore {
   chats: Chat[];
   activeChatId: string | null;
 
-  lastSeen: Record<string, number>;
+  openedAt: Record<string, number>;
 
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string) => void;
-
-  setLastSeen: (chatId: string) => void;
+  markOpened: (chatId: string) => void;
 }
 
-export const useChatStore = create<ChatStore>((set) => ({
-  chats: [],
-  activeChatId: null,
+export const useChatStore = create<ChatStore>()(
+  persist(
+    (set, get) => ({
+      chats: [],
+      activeChatId: null,
+      openedAt: {},
 
-  lastSeen: {},
+      setChats: (chats) => set({ chats }),
 
-  setChats: (chats) => set({ chats }),
-  setActiveChat: (id) => set({ activeChatId: id }),
+      setActiveChat: (id) => set({ activeChatId: id }),
 
-  setLastSeen: (chatId) =>
-    set((state) => ({
-      lastSeen: {
-        ...state.lastSeen,
-        [chatId]: Date.now(),
-      },
-    })),
-}));
+      markOpened: (chatId) =>
+        set((state) => ({
+          openedAt: {
+            ...state.openedAt,
+            [chatId]: Date.now(),
+          },
+        })),
+    }),
+    {
+      name: "chat-store",
+      partialize: (state) => ({
+        openedAt: state.openedAt,
+      }),
+    }
+  )
+);
