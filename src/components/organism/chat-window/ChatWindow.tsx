@@ -111,8 +111,8 @@ export default function ChatWindow() {
                 className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm wrap-break-word transition-all duration-200
                   ${
                     isMine
-                      ? "bg-[#A78BFA]/90 backdrop-blur-md text-white rounded-br-sm shadow-lg shadow-purple-500/10"
-                      : "bg-white/5 backdrop-blur-md text-white border border-white/10 rounded-bl-sm"
+                      ? "bg-[#A78BFA]/90 backdrop-blur-md text-white font-bold rounded-br-sm shadow-lg shadow-purple-500/10"
+                      : "bg-white/5 backdrop-blur-md text-white border font-bold border-white/10 rounded-bl-sm"
                   }
                   `}
               >
