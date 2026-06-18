@@ -95,8 +95,8 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col  w-full h-full bg-black text-white">
-      <div className="h-14 border-b border-zinc-800 flex items-center px-4 font-medium">
+    <div className="flex flex-col w-full h-full bg-[#0B0F14] text-[#E5E7EB]">
+      <div className="h-14 border-b border-[#1F2A37] bg-[#0F1620] flex items-center px-4 font-medium">
         Chat
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
@@ -108,14 +108,13 @@ export default function ChatWindow() {
               className={`flex ${isMine ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`
-                  max-w-[70%] px-4 py-2 rounded-2xl text-sm break-words
+                className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm wrap-break-word transition-all duration-200
                   ${
                     isMine
-                      ? "bg-[#EBA0CE] text-white rounded-br-sm"
-                      : "bg-[#B6E6F0] text-black rounded-bl-sm"
+                      ? "bg-[#A78BFA]/90 backdrop-blur-md text-black rounded-br-sm shadow-lg shadow-purple-500/10"
+                      : "bg-white/5 backdrop-blur-md text-white border border-white/10 rounded-bl-sm"
                   }
-                `}
+                  `}
               >
                 {m.text}
               </div>
@@ -126,17 +125,21 @@ export default function ChatWindow() {
         <div ref={bottomRef} />
       </div>
       {typingUsers.length > 0 && (
-        <div className="px-4 text-sm text-zinc-400">typing...</div>
+        <div className="px-4 pb-2 text-sm text-zinc-400 flex items-center gap-1">
+          <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" />
+          <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:150ms]" />
+          <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:300ms]" />
+        </div>
       )}
-      <div className="border-t border-zinc-800 p-3 flex gap-2 bg-zinc-950">
+      <div className="border-t border-[#1F2A37] p-3 flex gap-2 bg-[#0F1620]">
         <input
           value={text}
           onChange={handleTyping}
-          className="flex-1 p-2 rounded bg-zinc-800 outline-none"
+          className="flex-1 p-2 rounded bg-[#1B2633] text-[#E5E7EB] outline-none"
         />
         <button
           onClick={send}
-          className="bg-[#EBA0CE] hover:bg-green-400 text-black px-4 py-2 rounded-xl font-medium"
+          className="bg-[#A78BFA] hover:bg-[#34D399] text-black px-4 py-2 rounded-xl font-medium"
         >
           Send
         </button>
