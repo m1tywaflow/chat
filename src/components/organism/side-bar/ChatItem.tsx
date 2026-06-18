@@ -78,9 +78,12 @@ export default function ChatItem({ chat }: Props) {
     ? chat.participant.avatar
     : `https://api.dicebear.com/7.x/avataaars/svg?seed=${chat.participant.username}`;
 
-  const lastTime = chat.lastMessageTime?.seconds
-    ? chat.lastMessageTime.seconds * 1000
-    : new Date(chat.lastMessageTime || 0).getTime();
+  const lastTime =
+    typeof chat.lastMessageTime === "number"
+      ? chat.lastMessageTime
+      : chat.lastMessageTime
+      ? new Date(chat.lastMessageTime).getTime()
+      : 0;
 
   const isNew =
     !!chat.lastMessage && (!openedAt[chat.id] || lastTime > openedAt[chat.id]);
