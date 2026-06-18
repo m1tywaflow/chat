@@ -33,12 +33,18 @@ export async function setTyping(
 export async function createOrGetChat(myUid: string, otherUid: string) {
   const chatId = [myUid, otherUid].sort().join("_");
 
-  await setDoc(doc(db, "chats", chatId), {
-    id: chatId,
-    participantIds: [myUid, otherUid],
-    lastMessage: "",
-    updatedAt: Date.now(),
-  });
+  await setDoc(
+    doc(db, "chats", chatId),
+    {
+      id: chatId,
+      participantIds: [myUid, otherUid],
+      lastMessage: "",
+      lastMessageTime: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      typing: {},
+    },
+    { merge: true }
+  );
 
   return chatId;
 }
