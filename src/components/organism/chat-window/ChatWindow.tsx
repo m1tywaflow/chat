@@ -95,7 +95,7 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col w-full h-full bg-white/30 text-white">
+    <div className="flex flex-col  w-full h-full bg-black text-white">
       <div className="h-14 border-b border-zinc-800 flex items-center px-4 font-medium">
         Chat
       </div>
