@@ -108,7 +108,7 @@ export default function ChatWindow() {
               className={`flex ${isMine ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm wrap-break-word transition-all duration-200
+                className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm font-bold wrap-break-word transition-all duration-200
                   ${
                     isMine
                       ? "bg-[#A78BFA]/90 backdrop-blur-md text-white font-bold rounded-br-sm shadow-lg shadow-purple-500/10"
@@ -140,7 +140,7 @@ export default function ChatWindow() {
         />
         <button
           onClick={send}
-          className="bg-[#A78BFA] hover:bg-[#34D399] text-black px-4 py-2 rounded-xl font-medium"
+          className="bg-[#A78BFA] hover:bg-[#34D399] text-black px-4 py-2 rounded-xl font-bold"
         >
           Send
         </button>
