@@ -1,9 +1,27 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import MainSection from "@/components/organism/main/mainSec";
 
-export default function Main() {
-  return (
-    <>
-      <MainSection />
-    </>
-  );
+export default function Home() {
+  const router = useRouter();
+  const { isAuthenticated, loading } = useCurrentUser();
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [loading, isAuthenticated, router]);
+
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <p className="text-zinc-400">Loading...</p>
+      </div>
+    );
+  }
+
+  return <MainSection />;
 }

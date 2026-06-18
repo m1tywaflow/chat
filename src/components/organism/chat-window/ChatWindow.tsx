@@ -1,0 +1,146 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useChatStore } from "@/store/chat-store";
+import {
+  subscribeToMessages,
+  sendMessage,
+  setTyping,
+} from "@/lib/firestore/chats";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { onSnapshot, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+export default function ChatWindow() {
+  const chatId = useChatStore((s) => s.activeChatId);
+
+  const [messages, setMessages] = useState<any[]>([]);
+  const [text, setText] = useState("");
+  const [myUid, setMyUid] = useState<string | null>(null);
+
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (u) => {
+      setMyUid(u?.uid || null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!chatId) return;
+
+    const unsub = subscribeToMessages(chatId, setMessages);
+    return () => unsub();
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId || !myUid) return;
+
+    const unsub = onSnapshot(doc(db, "chats", chatId), (snap) => {
+      const data = snap.data();
+
+      if (!data?.typing) return;
+
+      const typingList = Object.entries(data.typing)
+        .filter(([uid, val]) => val && uid !== myUid)
+        .map(([uid]) => uid);
+
+      setTypingUsers(typingList);
+    });
+
+    return () => unsub();
+  }, [chatId, myUid]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
+    setText(e.target.value);
+
+    if (!chatId || !myUid) return;
+
+    setTyping(chatId, myUid, true);
+
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+    }
+
+    typingTimeout.current = setTimeout(() => {
+      setTyping(chatId, myUid, false);
+    }, 1200);
+  }
+
+  async function send() {
+    if (!text.trim() || !chatId || !myUid) return;
+
+    await sendMessage(chatId, myUid, text);
+    setText("");
+
+    if (chatId && myUid) {
+      setTyping(chatId, myUid, false);
+    }
+  }
+
+  if (!chatId) {
+    return (
+      <div className="flex items-center justify-center h-full text-zinc-400">
+        Select a chat 👈
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col w-full h-full bg-zinc-950 text-white">
+      <div className="h-14 border-b border-zinc-800 flex items-center px-4 font-medium">
+        Chat
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        {messages.map((m) => {
+          const isMine = m.senderId === myUid;
+          return (
+            <div
+              key={m.id}
+              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`
+                  max-w-[70%] px-4 py-2 rounded-2xl text-sm break-words
+                  ${
+                    isMine
+                      ? "bg-green-500 text-black rounded-br-sm"
+                      : "bg-zinc-800 text-white rounded-bl-sm"
+                  }
+                `}
+              >
+                {m.text}
+              </div>
+            </div>
+          );
+        })}
+
+        <div ref={bottomRef} />
+      </div>
+      {typingUsers.length > 0 && (
+        <div className="px-4 text-sm text-zinc-400">typing...</div>
+      )}
+      <div className="border-t border-zinc-800 p-3 flex gap-2 bg-zinc-950">
+        <input
+          value={text}
+          onChange={handleTyping}
+          className="flex-1 p-2 rounded bg-zinc-800 outline-none"
+        />
+        <button
+          onClick={send}
+          className="bg-green-500 hover:bg-green-400 text-black px-4 py-2 rounded-xl font-medium"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
