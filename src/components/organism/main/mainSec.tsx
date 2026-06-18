@@ -7,7 +7,7 @@ export default function MainSection() {
     <section className=" w-7xl mx-auto h-screen border-2 flex flex-col">
       <Header />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 h-screen overflow-hidden">
         <SideBar />
         <ChatWindow />
       </div>

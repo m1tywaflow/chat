@@ -23,6 +23,12 @@ export default function ChatWindow() {
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const setLastSeen = useChatStore((s) => s.setLastSeen);
+  useEffect(() => {
+    if (chatId) {
+      setLastSeen(chatId);
+    }
+  }, [chatId]);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
@@ -94,12 +100,18 @@ export default function ChatWindow() {
     );
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      send();
+    }
+  }
+
   return (
-    <div className="flex flex-col w-full h-full bg-[#0B0F14] text-[#E5E7EB]">
+    <div className="flex flex-col w-full h-full min-h-0  bg-[#0B0F14] text-[#E5E7EB]">
       <div className="h-14 justify-center border-b border-[#1F2A37] bg-[#0F1620] flex items-center px-4 font-medium">
         Chat
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-2">
         {messages.map((m) => {
           const isMine = m.senderId === myUid;
           return (
@@ -136,6 +148,7 @@ export default function ChatWindow() {
         <input
           value={text}
           onChange={handleTyping}
+          onKeyDown={handleKeyDown}
           className="flex-1 p-2 rounded bg-[#1B2633] text-[#E5E7EB] outline-none"
         />
         <button
