@@ -95,7 +95,7 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col w-full h-full bg-[#0C9CAB] text-white">
+    <div className="flex flex-col w-full h-full bg-white/30 text-white">
       <div className="h-14 border-b border-zinc-800 flex items-center px-4 font-medium">
         Chat
       </div>
@@ -112,8 +112,8 @@ export default function ChatWindow() {
                   max-w-[70%] px-4 py-2 rounded-2xl text-sm break-words
                   ${
                     isMine
-                      ? "bg-[#AB3FD1] text-black rounded-br-sm"
-                      : "bg-zinc-800 text-white rounded-bl-sm"
+                      ? "bg-[#EBA0CE] text-white rounded-br-sm"
+                      : "bg-[#B6E6F0] text-black rounded-bl-sm"
                   }
                 `}
               >
@@ -136,7 +136,7 @@ export default function ChatWindow() {
         />
         <button
           onClick={send}
-          className="bg-[#AB3FD1] hover:bg-green-400 text-black px-4 py-2 rounded-xl font-medium"
+          className="bg-[#EBA0CE] hover:bg-green-400 text-black px-4 py-2 rounded-xl font-medium"
         >
           Send
         </button>
