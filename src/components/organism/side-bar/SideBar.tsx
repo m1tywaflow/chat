@@ -156,7 +156,7 @@ export default function SideBar() {
   const setChats = useChatStore((s) => s.setChats);
   const setActiveChat = useChatStore((s) => s.setActiveChat);
 
-  const { firebaseUser, user } = useCurrentUser();
+  const { firebaseUser } = useCurrentUser();
 
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<any[]>([]);
