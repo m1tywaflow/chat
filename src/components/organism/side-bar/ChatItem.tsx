@@ -67,26 +67,13 @@ interface Props {
   chat: Chat;
 }
 
+
 export default function ChatItem({ chat }: Props) {
   const activeChatId = useChatStore((s) => s.activeChatId);
   const setActiveChat = useChatStore((s) => s.setActiveChat);
-  const openedAt = useChatStore((s) => s.openedAt);
 
   const isActive = activeChatId === chat.id;
-
-  const avatar = chat.participant?.avatar?.trim()
-    ? chat.participant.avatar
-    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${chat.participant.username}`;
-
-  const lastTime =
-    typeof chat.lastMessageTime === "number"
-      ? chat.lastMessageTime
-      : chat.lastMessageTime
-      ? new Date(chat.lastMessageTime).getTime()
-      : 0;
-
-  const isNew =
-    !!chat.lastMessage && (!openedAt[chat.id] || lastTime > openedAt[chat.id]);
+  const hasUnread = chat.unreadCount > 0;
 
   return (
     <button
@@ -95,14 +82,11 @@ export default function ChatItem({ chat }: Props) {
         ${
           isActive
             ? "bg-zinc-800"
-            : isNew
+            : hasUnread
             ? "bg-[#A78BFA]/10"
             : "hover:bg-zinc-900"
         }`}
     >
-      {isNew && (
-        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#A78BFA] animate-pulse" />
-      )}
       <div className="relative flex-shrink-0">
         {chat.participant?.avatar ? (
           <img
@@ -115,23 +99,34 @@ export default function ChatItem({ chat }: Props) {
           </div>
         )}
       </div>
+
       <div className="flex-1 text-left overflow-hidden">
-        <div className="flex items-center gap-2">
-          <h3 className="font-medium truncate">{chat.participant.username}</h3>
-          {isNew && (
-            <span className="text-[10px] px-2 py-[1px] rounded-full bg-[#A78BFA] text-black font-bold">
-              new
+        <div className="flex items-center justify-between gap-2">
+          <h3
+            className={`font-medium truncate ${
+              hasUnread ? "text-white" : "text-zinc-300"
+            }`}
+          >
+            {chat.participant.username}
+          </h3>
+          <span className="text-xs text-zinc-500 flex-shrink-0">
+            {formatTime(chat.lastMessageTime)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <p
+            className={`text-sm truncate ${
+              hasUnread ? "text-zinc-300" : "text-zinc-500"
+            }`}
+          >
+            {chat.lastMessage || "No messages yet"}
+          </p>
+          {hasUnread && (
+            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-[#A78BFA] text-black text-[11px] font-bold flex items-center justify-center">
+              {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
             </span>
           )}
         </div>
-        <p className="text-sm text-zinc-400 truncate">
-          {chat.lastMessage || "No messages yet"}
-        </p>
-      </div>
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-xs text-zinc-500">
-          {formatTime(chat.lastMessageTime)}
-        </span>
       </div>
     </button>
   );

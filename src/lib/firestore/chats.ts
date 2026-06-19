@@ -10,6 +10,7 @@ import {
   getDocs,
   updateDoc,
   serverTimestamp,
+  increment,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -64,19 +65,36 @@ export async function searchUsers(search: string) {
     .filter((u: any) => (u.username || "").toLowerCase().includes(q));
 }
 
-export async function sendMessage(chatId: string, myUid: string, text: string) {
+export async function sendMessage(
+  chatId: string,
+  myUid: string,
+  text: string,
+  replyTo?: any
+) {
   if (!chatId || !myUid || !text.trim()) return;
+
+  const [uid1, uid2] = chatId.split("_");
+  const otherUid = uid1 === myUid ? uid2 : uid1;
 
   await addDoc(collection(db, "chats", chatId, "messages"), {
     senderId: myUid,
     text: text.trim(),
     createdAt: serverTimestamp(),
+
+    replyTo: replyTo
+      ? {
+          id: replyTo.id,
+          text: replyTo.text,
+          senderId: replyTo.senderId,
+        }
+      : null,
   });
 
   await updateDoc(doc(db, "chats", chatId), {
     lastMessage: text.trim(),
     lastMessageTime: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    [`unreadCount.${otherUid}`]: increment(1),
   });
 }
 
@@ -111,28 +129,25 @@ export function subscribeToUserChats(myUid: string, cb: (c: any[]) => void) {
     const chats = await Promise.all(
       snap.docs.map(async (d) => {
         const chat = d.data() as any;
-
         const otherUid =
           chat?.participantIds?.find((id: string) => id !== myUid) || "";
-
         const otherUser = otherUid ? await getUserById(otherUid) : null;
 
         return {
           id: chat.id,
-
           participant: otherUser || {
             id: otherUid,
             username: "Unknown user",
             avatar: "",
             online: false,
           },
-
           lastMessage: chat.lastMessage || "",
           lastMessageTime: chat.lastMessageTime || null,
+          unreadCount: chat.unreadCount?.[myUid] || 0,
+          deleted: chat.deleted?.[myUid] || false,
         };
       })
     );
-
     cb(chats);
   });
 }

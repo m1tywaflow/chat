@@ -6,4 +6,7 @@ export interface Chat {
   lastMessage: string;
   lastMessageTime: string;
   unreadCount: number;
+  deleted?: {
+    [uid: string]: boolean;
+  };
 }
