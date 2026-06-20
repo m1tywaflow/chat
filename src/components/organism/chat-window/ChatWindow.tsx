@@ -284,7 +284,11 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useChatStore } from "@/store/chat-store";
-import { subscribeToMessages, sendMessage, setTyping } from "@/lib/firestore/chats";
+import {
+  subscribeToMessages,
+  sendMessage,
+  setTyping,
+} from "@/lib/firestore/chats";
 import { getUserById } from "@/lib/firestore/users";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -310,7 +314,8 @@ export default function ChatWindow() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        setMenuOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -393,8 +398,8 @@ export default function ChatWindow() {
 
   if (!chatId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-500">
-        <span className="text-sm">Select a conversation</span>
+      <div className="flex w-full justify-center items-center h-full gap-3 bg-[#151D28]  text-zinc-500">
+        <span className="text-sm font-bold">Select a conversation</span>
       </div>
     );
   }
@@ -416,13 +421,16 @@ export default function ChatWindow() {
         @keyframes dotbounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
       `}</style>
 
-      
       <div className="flex flex-col w-full h-full bg-[#0B0F14] text-[#E5E7EB] overflow-hidden">
-
         <div className="flex-none h-14 flex items-center justify-between px-5 border-b border-white/[0.06] bg-[#0F1620]">
-          <span className="text-sm font-semibold text-white/80 tracking-wide">{otherUser?.username ?? "..."}</span>
+          <span className="text-sm font-semibold text-white/80 tracking-wide">
+            {otherUser?.username ?? "..."}
+          </span>
           <div className="relative" ref={menuRef}>
-            <button onClick={() => setMenuOpen((v) => !v)} className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+            >
               <MoreVertical size={16} />
             </button>
             {menuOpen && (
@@ -430,7 +438,9 @@ export default function ChatWindow() {
                 <button
                   onClick={async () => {
                     if (!chatId) return;
-                    await updateDoc(doc(db, "chats", chatId), { [`deleted.${myUid}`]: true });
+                    await updateDoc(doc(db, "chats", chatId), {
+                      [`deleted.${myUid}`]: true,
+                    });
                     useChatStore.getState().setActiveChat(null);
                     setMenuOpen(false);
                   }}
@@ -451,14 +461,21 @@ export default function ChatWindow() {
               <div
                 key={m.id}
                 id={`msg-${m.id}`}
-                className={`msg-row flex ${isMine ? "justify-end" : "justify-start"}`}
-                onContextMenu={(e) => { e.preventDefault(); handleReply(m); }}
+                className={`msg-row flex ${
+                  isMine ? "justify-end" : "justify-start"
+                }`}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  handleReply(m);
+                }}
               >
                 <div className="relative group max-w-[72%] min-w-0">
                   <button
                     onClick={() => handleReply(m)}
                     title="Reply"
-                    className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-8" : "-right-8"} w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/5 transition-colors`}
+                    className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
+                      isMine ? "-left-8" : "-right-8"
+                    } w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/5 transition-colors`}
                   >
                     <CornerUpLeft size={13} />
                   </button>
@@ -468,12 +485,22 @@ export default function ChatWindow() {
                       onClick={() => scrollToMessage(m.replyTo.id)}
                       className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#A78BFA] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
                     >
-                      <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">Reply</div>
-                      <div className="text-xs text-zinc-400 truncate">{m.replyTo.text}</div>
+                      <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
+                        Reply
+                      </div>
+                      <div className="text-xs text-zinc-400 truncate">
+                        {m.replyTo.text}
+                      </div>
                     </div>
                   )}
 
-                  <div className={`px-4 py-2 text-sm break-words leading-relaxed ${isMine ? "bg-[#A78BFA] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20" : "bg-white/[0.07] text-white/90 border border-white/[0.08] rounded-2xl rounded-bl-md"}`}>
+                  <div
+                    className={`px-4 py-2 text-sm break-words leading-relaxed ${
+                      isMine
+                        ? "bg-[#A78BFA] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
+                        : "bg-white/[0.07] text-white/90 border border-white/[0.08] rounded-2xl rounded-bl-md"
+                    }`}
+                  >
                     {m.text}
                   </div>
                 </div>
@@ -499,10 +526,17 @@ export default function ChatWindow() {
             <div className="mx-3 mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07]">
               <div className="w-0.5 h-7 rounded-full bg-[#A78BFA] shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">Replying</div>
-                <div className="text-xs text-zinc-400 truncate">{replyMessage.text}</div>
+                <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
+                  Replying
+                </div>
+                <div className="text-xs text-zinc-400 truncate">
+                  {replyMessage.text}
+                </div>
               </div>
-              <button onClick={() => setReplyMessage(null)} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-zinc-600 hover:text-white hover:bg-white/10 transition-colors">
+              <button
+                onClick={() => setReplyMessage(null)}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-zinc-600 hover:text-white hover:bg-white/10 transition-colors"
+              >
                 <X size={12} />
               </button>
             </div>
@@ -526,7 +560,6 @@ export default function ChatWindow() {
             </button>
           </div>
         </div>
-
       </div>
     </>
   );
