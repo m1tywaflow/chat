@@ -12,6 +12,7 @@ import { ArrowLeft } from "lucide-react";
 export default function SettingsPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [username, setUsername] = useState("");
+  const [bio, setBio] = useState("");
   const [currentAvatar, setCurrentAvatar] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -28,6 +29,7 @@ export default function SettingsPage() {
         const data = snap.data();
         setUsername(data.username || "");
         setCurrentAvatar(data.avatar || "");
+        setBio(data.bio || "");
       }
     });
     return () => unsub();
@@ -50,6 +52,7 @@ export default function SettingsPage() {
       const cleanUsername = username.trim().toLowerCase();
       if (cleanUsername) data.username = cleanUsername;
       if (avatarUrl) data.avatar = avatarUrl;
+      if (bio.trim() !== undefined) data.bio = bio.trim();
       if (Object.keys(data).length === 0) return;
       await updateUser(uid, data);
       if (avatarUrl) setCurrentAvatar(avatarUrl);
@@ -76,6 +79,7 @@ export default function SettingsPage() {
             manage your account
           </p>
         </div>
+
         <div className="flex items-center gap-5 p-5 bg-[#0f1520] border border-white/[0.07] rounded-2xl mb-6">
           <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-gradient-to-br from-[#A78BFA] to-[#60A5FA] flex-shrink-0">
             {avatarSrc ? (
@@ -105,7 +109,8 @@ export default function SettingsPage() {
             </label>
           </div>
         </div>
-        <div className="mb-6">
+
+        <div className="mb-4">
           <div className="text-[11px] text-white/30 tracking-widest mb-2">
             USERNAME
           </div>
@@ -117,12 +122,29 @@ export default function SettingsPage() {
           />
         </div>
 
+        <div className="mb-6">
+          <div className="text-[11px] text-white/30 tracking-widest mb-2">
+            BIO
+          </div>
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tell something about yourself…"
+            maxLength={160}
+            rows={3}
+            className="w-full px-4 py-3 bg-[#0f1520] border border-white/[0.08] focus:border-[#A78BFA]/40 text-sm text-white outline-none transition-colors resize-none"
+          />
+          <div className="text-right text-[10px] text-white/20 mt-1">
+            {bio.length}/160
+          </div>
+        </div>
+
         <div className="h-px bg-white/[0.06] mb-5" />
 
         <button
           onClick={save}
           disabled={saving}
-          className="w-full py-3 cursor-pointer bg-[#A78BFA] hover:bg-[#8B5CF6] text-black text-sm font-semibold  transition-colors disabled:opacity-50 mb-3"
+          className="w-full py-3 cursor-pointer bg-[#A78BFA] hover:bg-[#8B5CF6] text-black text-sm font-semibold transition-colors disabled:opacity-50 mb-3"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>
