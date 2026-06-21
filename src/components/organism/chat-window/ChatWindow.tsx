@@ -291,7 +291,7 @@ export default function ChatWindow() {
                   <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-3">
                     Gifts
                   </div>
-                  <div className="flex flex-wrap gap-2 justify-center">
+                  <div className="grid grid-cols-2 gap-6 justify-center">
                     {otherUser.gifts.map((giftId: string) => {
                       const gift = GIFTS[giftId];
                       if (!gift) return null;

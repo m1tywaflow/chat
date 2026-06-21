@@ -20,6 +20,34 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782017940/plush-pepe-telegram-pepe_p0l96z.gif",
     rarity: "unreal",
   },
+  pusheen: {
+    id: "pusheen",
+    name: "Pusheen",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782076770/cat-kitty_azsraw.gif",
+    rarity: "unreal",
+  },
+  jellyfish: {
+    id: "jellyfish",
+    name: "jellyfish",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782075757/Jellyfish_loves_everyone_qvxxmj.gif",
+    rarity: "legendary",
+  },
+  iphone: {
+    id: "iphone",
+    name: "iphone",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782075756/phone_ydmvhb.gif",
+    rarity: "legendary",
+  },
+  ronaldo: {
+    id: "ronaldo",
+    name: "ronaldo",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782077154/200_mul34d.gif",
+    rarity: "unreal",
+  },
 };
 
 export const RARITY_COLORS = {
