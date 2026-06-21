@@ -20,7 +20,6 @@ export function usePresence(uid: string | null) {
 
     setOnline();
 
-    // heartbeat каждые 60 сек — обновляем lastSeen пока юзер на странице
     const heartbeat = setInterval(() => {
       if (document.visibilityState === "visible") setOnline();
     }, 60_000);
