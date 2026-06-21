@@ -117,12 +117,13 @@ export default function SideBar() {
               No chats yet. Search users above.
             </p>
           )}
-
-          {chats
-            .filter((chat) => !chat.deleted)
-            .map((chat) => (
-              <ChatItem key={chat.id} chat={chat} />
-            ))}
+          <div className="divide-y divide-black">
+            {chats
+              .filter((chat) => !chat.deleted)
+              .map((chat) => (
+                <ChatItem key={chat.id} chat={chat} />
+              ))}
+          </div>
         </div>
 
         <div>
