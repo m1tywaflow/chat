@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { formatLastSeen, isOnline } from "@/lib/formatLastSeen";
 import { useChatStore } from "@/store/chat-store";
+import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import {
   subscribeToMessages,
   sendMessage,
@@ -284,6 +285,47 @@ export default function ChatWindow() {
                 </p>
               ) : (
                 <p className="text-sm text-zinc-600 italic">No bio yet</p>
+              )}
+              {otherUser.gifts?.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                  <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+                    Gifts
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {otherUser.gifts.map((giftId: string) => {
+                      const gift = GIFTS[giftId];
+                      if (!gift) return null;
+                      return (
+                        <div
+                          key={giftId}
+                          className="flex flex-col items-center gap-1 group"
+                        >
+                          <div
+                            className="w-42 h-42 rounded-2xl flex items-center justify-center p-1"
+                            style={{
+                              background: `${RARITY_COLORS[gift.rarity]}15`,
+                              border: `1px solid ${
+                                RARITY_COLORS[gift.rarity]
+                              }30`,
+                            }}
+                          >
+                            <img
+                              src={gift.imageUrl}
+                              alt={gift.name}
+                              className="w-50 h-50 object-contain"
+                            />
+                          </div>
+                          <span
+                            className="text-[10px]"
+                            style={{ color: RARITY_COLORS[gift.rarity] }}
+                          >
+                            {gift.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
           </div>
