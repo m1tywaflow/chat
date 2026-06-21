@@ -17,8 +17,9 @@ export default function Home() {
 
   if (loading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <p className="text-zinc-400">Loading...</p>
+      <div className="min-h-screen flex flex-col gap-4 items-center justify-center bg-zinc-950">
+        <img src="/logo.png" alt="loader" width={60} height={60} />
+        <h1 className="text-xl font-bold">Loading...</h1>
       </div>
     );
   }

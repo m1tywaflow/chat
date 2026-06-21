@@ -3,7 +3,7 @@ import "./globals.css";
 import AuthProvider from "@/components/providers/AuthProvider";
 
 export const metadata: Metadata = {
-  title: "Chatik",
+  title: "pislk",
   description: "Chat Pislk",
 };
 

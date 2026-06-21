@@ -197,7 +197,9 @@ export default function ChatWindow() {
   if (!chatId) {
     return (
       <div className="flex w-full justify-center items-center h-full gap-3 bg-[#151D28] text-zinc-500">
-        <span className="text-sm font-bold">Select a conversation</span>
+        <span className="text-sm font-bold">
+          Select a conversation in the pislk
+        </span>
       </div>
     );
   }
