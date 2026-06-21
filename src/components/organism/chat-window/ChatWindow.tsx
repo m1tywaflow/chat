@@ -365,6 +365,7 @@ import {
   Trash2,
   Paperclip,
   ImageIcon,
+  Download,
 } from "lucide-react";
 
 async function uploadImageToCloudinary(file: File): Promise<string> {
@@ -396,6 +397,7 @@ export default function ChatWindow() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -447,15 +449,21 @@ export default function ChatWindow() {
   }, [messages]);
 
   useEffect(() => {
-    if (profileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    const isModalOpen = profileOpen || !!lightboxUrl;
+    document.body.style.overflow = isModalOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [profileOpen]);
+  }, [profileOpen, lightboxUrl]);
+
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxUrl(null);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [lightboxUrl]);
 
   function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
     setText(e.target.value);
@@ -545,11 +553,46 @@ export default function ChatWindow() {
         .dot:nth-child(3) { animation-delay: 0.3s; }
         @keyframes dotbounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
         .profile-modal { animation: fadeIn 0.15s ease-out; }
+        .lightbox-img { animation: fadeIn 0.15s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
         .chat-img { cursor: zoom-in; transition: opacity 0.15s; }
-        .chat-img:hover { opacity: 0.9; }
+        .chat-img:hover { opacity: 0.85; }
       `}</style>
 
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <a
+              href={lightboxUrl}
+              download
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <Download size={16} />
+            </a>
+            <button
+              onClick={() => setLightboxUrl(null)}
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <img
+            src={lightboxUrl}
+            alt="photo"
+            className="lightbox-img max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* Profile modal */}
       {profileOpen && otherUser && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -702,7 +745,7 @@ export default function ChatWindow() {
                         src={m.imageUrl}
                         alt="image"
                         className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
-                        onClick={() => window.open(m.imageUrl, "_blank")}
+                        onClick={() => setLightboxUrl(m.imageUrl)}
                       />
                     )}
                     {m.text && (
