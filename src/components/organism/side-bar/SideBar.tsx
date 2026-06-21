@@ -117,7 +117,7 @@ export default function SideBar() {
               No chats yet. Search users above.
             </p>
           )}
-          <div className="divide-y divide-black">
+          <div className="divide-y divide-[#1F2A37]">
             {chats
               .filter((chat) => !chat.deleted)
               .map((chat) => (
