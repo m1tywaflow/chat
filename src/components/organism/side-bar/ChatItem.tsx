@@ -76,6 +76,7 @@
 import { Chat } from "@/types/chat";
 import { useChatStore } from "@/store/chat-store";
 import { formatTime } from "@/lib/format-time";
+import { isOnline } from "@/lib/formatLastSeen";
 
 interface Props {
   chat: Chat;
@@ -99,7 +100,7 @@ export default function ChatItem({ chat }: Props) {
           : "hover:bg-zinc-900"
       }`}
     >
-      <div className="shrink-0">
+      <div className="shrink-0 relative">
         {chat.participant?.avatar ? (
           <img
             src={chat.participant.avatar}
@@ -110,6 +111,11 @@ export default function ChatItem({ chat }: Props) {
             {chat.participant.username?.[0]?.toUpperCase()}
           </div>
         )}
+        <span
+          className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0F1620] ${
+            isOnline(chat.participant) ? "bg-[#34D399]" : "bg-zinc-600"
+          }`}
+        />
       </div>
 
       <div className="flex-1 min-w-0 text-left">

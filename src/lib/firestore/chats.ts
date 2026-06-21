@@ -65,13 +65,47 @@ export async function searchUsers(search: string) {
     .filter((u: any) => (u.username || "").toLowerCase().includes(q));
 }
 
+// export async function sendMessage(
+//   chatId: string,
+//   myUid: string,
+//   text: string,
+//   replyTo?: any
+// ) {
+//   if (!chatId || !myUid || !text.trim()) return;
+
+//   const [uid1, uid2] = chatId.split("_");
+//   const otherUid = uid1 === myUid ? uid2 : uid1;
+
+//   await addDoc(collection(db, "chats", chatId, "messages"), {
+//     senderId: myUid,
+//     text: text.trim(),
+//     createdAt: serverTimestamp(),
+
+//     replyTo: replyTo
+//       ? {
+//           id: replyTo.id,
+//           text: replyTo.text,
+//           senderId: replyTo.senderId,
+//         }
+//       : null,
+//   });
+
+//   await updateDoc(doc(db, "chats", chatId), {
+//     lastMessage: text.trim(),
+//     lastMessageTime: serverTimestamp(),
+//     updatedAt: serverTimestamp(),
+//     [`unreadCount.${otherUid}`]: increment(1),
+//   });
+// }
+
 export async function sendMessage(
   chatId: string,
   myUid: string,
   text: string,
-  replyTo?: any
+  replyTo?: any,
+  imageUrl?: string
 ) {
-  if (!chatId || !myUid || !text.trim()) return;
+  if (!chatId || !myUid || (!text.trim() && !imageUrl)) return;
 
   const [uid1, uid2] = chatId.split("_");
   const otherUid = uid1 === myUid ? uid2 : uid1;
@@ -79,19 +113,20 @@ export async function sendMessage(
   await addDoc(collection(db, "chats", chatId, "messages"), {
     senderId: myUid,
     text: text.trim(),
+    imageUrl: imageUrl || null,
     createdAt: serverTimestamp(),
-
     replyTo: replyTo
       ? {
           id: replyTo.id,
           text: replyTo.text,
           senderId: replyTo.senderId,
+          imageUrl: replyTo.imageUrl || null,
         }
       : null,
   });
 
   await updateDoc(doc(db, "chats", chatId), {
-    lastMessage: text.trim(),
+    lastMessage: imageUrl && !text.trim() ? "📷 Photo" : text.trim(),
     lastMessageTime: serverTimestamp(),
     updatedAt: serverTimestamp(),
     [`unreadCount.${otherUid}`]: increment(1),
@@ -125,29 +160,58 @@ export function subscribeToUserChats(myUid: string, cb: (c: any[]) => void) {
     orderBy("updatedAt", "desc")
   );
 
-  return onSnapshot(q, async (snap) => {
-    const chats = await Promise.all(
-      snap.docs.map(async (d) => {
-        const chat = d.data() as any;
-        const otherUid =
-          chat?.participantIds?.find((id: string) => id !== myUid) || "";
-        const otherUser = otherUid ? await getUserById(otherUid) : null;
+  const userUnsubs = new Map<string, () => void>();
+  const userCache = new Map<string, any>();
+  let chatCache: any[] = [];
 
-        return {
-          id: chat.id,
-          participant: otherUser || {
-            id: otherUid,
-            username: "Unknown user",
-            avatar: "",
-            online: false,
-          },
-          lastMessage: chat.lastMessage || "",
-          lastMessageTime: chat.lastMessageTime || null,
-          unreadCount: chat.unreadCount?.[myUid] || 0,
-          deleted: chat.deleted?.[myUid] || false,
-        };
-      })
+  function rebuild() {
+    cb(
+      chatCache
+        .map((chat) => ({
+          ...chat,
+          participant: userCache.get(chat._otherUid) || chat.participant,
+        }))
+        .filter((c) => !c.deleted)
     );
-    cb(chats);
+  }
+
+  const chatUnsub = onSnapshot(q, (snap) => {
+    chatCache = snap.docs.map((d) => {
+      const chat = d.data() as any;
+      const otherUid =
+        chat?.participantIds?.find((id: string) => id !== myUid) || "";
+
+      if (otherUid && !userUnsubs.has(otherUid)) {
+        const unsub = onSnapshot(doc(db, "users", otherUid), (userSnap) => {
+          if (userSnap.exists()) {
+            userCache.set(otherUid, { id: userSnap.id, ...userSnap.data() });
+            rebuild();
+          }
+        });
+        userUnsubs.set(otherUid, unsub);
+      }
+
+      return {
+        id: chat.id,
+        _otherUid: otherUid,
+        participant: userCache.get(otherUid) || {
+          id: otherUid,
+          username: "Unknown user",
+          avatar: "",
+          online: false,
+        },
+        lastMessage: chat.lastMessage || "",
+        lastMessageTime: chat.lastMessageTime || null,
+        unreadCount: chat.unreadCount?.[myUid] || 0,
+        deleted: chat.deleted?.[myUid] || false,
+      };
+    });
+
+    rebuild();
   });
+
+  return () => {
+    chatUnsub();
+    userUnsubs.forEach((unsub) => unsub());
+  };
 }
