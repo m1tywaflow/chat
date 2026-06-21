@@ -11,10 +11,10 @@ import {
   updateDoc,
   serverTimestamp,
   increment,
+  arrayUnion,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { getUserById } from "./users";
 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
@@ -64,39 +64,6 @@ export async function searchUsers(search: string) {
     }))
     .filter((u: any) => (u.username || "").toLowerCase().includes(q));
 }
-
-// export async function sendMessage(
-//   chatId: string,
-//   myUid: string,
-//   text: string,
-//   replyTo?: any
-// ) {
-//   if (!chatId || !myUid || !text.trim()) return;
-
-//   const [uid1, uid2] = chatId.split("_");
-//   const otherUid = uid1 === myUid ? uid2 : uid1;
-
-//   await addDoc(collection(db, "chats", chatId, "messages"), {
-//     senderId: myUid,
-//     text: text.trim(),
-//     createdAt: serverTimestamp(),
-
-//     replyTo: replyTo
-//       ? {
-//           id: replyTo.id,
-//           text: replyTo.text,
-//           senderId: replyTo.senderId,
-//         }
-//       : null,
-//   });
-
-//   await updateDoc(doc(db, "chats", chatId), {
-//     lastMessage: text.trim(),
-//     lastMessageTime: serverTimestamp(),
-//     updatedAt: serverTimestamp(),
-//     [`unreadCount.${otherUid}`]: increment(1),
-//   });
-// }
 
 export async function sendMessage(
   chatId: string,
@@ -214,4 +181,12 @@ export function subscribeToUserChats(myUid: string, cb: (c: any[]) => void) {
     chatUnsub();
     userUnsubs.forEach((unsub) => unsub());
   };
+}
+export async function markMessageRead(
+  chatId: string,
+  messageId: string,
+  uid: string
+) {
+  const ref = doc(db, "chats", chatId, "messages", messageId);
+  await updateDoc(ref, { readBy: arrayUnion(uid) });
 }

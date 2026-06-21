@@ -1,200 +1,175 @@
-// "use client";
-
-// import { useEffect, useState } from "react";
-// import { signOut } from "firebase/auth";
-// import { doc, getDoc } from "firebase/firestore";
-// import { useRouter } from "next/navigation";
-// import { auth, db } from "@/lib/firebase";
-// import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
-// import { Gem, X } from "lucide-react";
-
-// export default function ProfileModal({ onClose }: { onClose: () => void }) {
-//   const router = useRouter();
-
-//   const [username, setUsername] = useState("");
-//   const [avatar, setAvatar] = useState("");
-//   const [joined, setJoined] = useState("");
-//   const [bio, setBio] = useState("");
-//   const [gifts, setGifts] = useState<string[]>([]);
-
-//   useEffect(() => {
-//     const user = auth.currentUser;
-//     if (!user) return;
-
-//     getDoc(doc(db, "users", user.uid)).then((snap) => {
-//       if (snap.exists()) {
-//         const data = snap.data();
-
-//         setUsername(data.username || "");
-//         setAvatar(data.avatar || "");
-//         setBio(data.bio || "");
-//         setGifts(data.gifts || []);
-//       }
-//     });
-
-//     const date = new Date(user.metadata.creationTime!);
-
-//     setJoined(
-//       date.toLocaleDateString("en-US", {
-//         month: "long",
-//         year: "numeric",
-//       })
-//     );
-//   }, []);
-
-//   async function logout() {
-//     await signOut(auth);
-//     router.push("/login");
-//   }
-
-//   return (
-//     <div
-//       className="fixed inset-0 bg-black/55 flex items-center justify-center z-50"
-//       onClick={onClose}
-//     >
-//       <div
-//         className="bg-[#0f1520] border border-white/[0.08] rounded-2xl p-8 w-[320px] flex flex-col items-center gap-5 relative"
-//         onClick={(e) => e.stopPropagation()}
-//       >
-//         <button
-//           onClick={onClose}
-//           className="absolute top-3 right-4 text-white/20 hover:text-white/60 transition-colors"
-//         >
-//           <X size={24} />
-//         </button>
-
-//         <div className="w-[72px] h-[72px] rounded-full p-[2px] bg-gradient-to-br from-[#A78BFA] to-[#60A5FA]">
-//           {avatar && (
-//             <img
-//               src={avatar}
-//               alt="avatar"
-//               className="w-full h-full rounded-full object-cover"
-//             />
-//           )}
-//         </div>
-
-//         <div className="flex flex-col items-center gap-1">
-//           <span className="text-white font-semibold text-lg tracking-[0.03em]">
-//             {username}
-//           </span>
-
-//           <span className="text-[10px] text-white/22 tracking-widest uppercase">
-//             joined {joined}
-//           </span>
-
-//           <div className="px-3 py-1 flex items-center gap-2 bg-gradient-to-r from-[#A78BFA]/20 to-[#60A5FA]/20 border border-white/10 text-xs text-white rounded-lg">
-//             Early Member
-//             <Gem size={14} color="gold" />
-//           </div>
-//         </div>
-
-//         {bio && (
-//           <p className="text-xs text-white/40 text-center leading-relaxed">
-//             {bio}
-//           </p>
-//         )}
-
-//         {gifts.length > 0 && (
-//           <div className="w-full overflow-hidden">
-//             <div className="text-[10px] text-white/35 uppercase tracking-[0.2em] text-center mb-3">
-//               Gifts
-//             </div>
-
-//             <div className="grid grid-cols-2 gap-6 justify-center">
-//               {Array(2)
-//                 .fill(gifts)
-//                 .flat()
-//                 .map((giftId, i) => {
-//                   const gift = GIFTS[giftId];
-//                   if (!gift) return null;
-
-//                   return (
-//                     <div
-//                       key={giftId + i}
-//                       className="flex flex-col items-center gap-1 shrink-0"
-//                     >
-//                       <div
-//                         className="w-42 h-42 rounded-2xl flex items-center justify-center"
-//                         style={{
-//                           background: `${RARITY_COLORS[gift.rarity]}15`,
-//                           border: `1px solid ${RARITY_COLORS[gift.rarity]}40`,
-//                         }}
-//                       >
-//                         <img
-//                           src={gift.imageUrl}
-//                           alt={gift.name}
-//                           className="w-40 h-40 object-contain"
-//                         />
-//                       </div>
-
-//                       <span
-//                         className="text-[10px]"
-//                         style={{ color: RARITY_COLORS[gift.rarity] }}
-//                       >
-//                         {gift.name}
-//                       </span>
-//                     </div>
-//                   );
-//                 })}
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="w-full h-px bg-white/[0.06]" />
-
-//         <button
-//           onClick={logout}
-//           className="text-[11px] text-red-400/55 hover:text-red-400 tracking-widest transition-colors"
-//         >
-//           LOG OUT
-//         </button>
-//       </div>
-//     </div>
-//   );
-// }
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
-import { Gem, X } from "lucide-react";
+import { Gem, X, Pencil, Check, Upload } from "lucide-react";
 
-export default function ProfileModal({ onClose }: { onClose: () => void }) {
+const BANNER_PRESETS = [
+  { id: "purple-blue", value: "linear-gradient(135deg, #A78BFA, #60A5FA)" },
+  { id: "pink-orange", value: "linear-gradient(135deg, #F472B6, #FB923C)" },
+  { id: "teal-green", value: "linear-gradient(135deg, #2DD4BF, #34D399)" },
+  { id: "indigo-purple", value: "linear-gradient(135deg, #6366F1, #A78BFA)" },
+  { id: "rose-pink", value: "linear-gradient(135deg, #FB7185, #F472B6)" },
+  { id: "amber-red", value: "linear-gradient(135deg, #FBBF24, #EF4444)" },
+  { id: "sky-indigo", value: "linear-gradient(135deg, #38BDF8, #6366F1)" },
+  { id: "dark", value: "linear-gradient(135deg, #1e2535, #0B0F14)" },
+];
+
+const AVATAR_BORDERS = [
+  { id: "purple-blue", value: "linear-gradient(135deg, #A78BFA, #60A5FA)" },
+  { id: "pink-orange", value: "linear-gradient(135deg, #F472B6, #FB923C)" },
+  { id: "teal-green", value: "linear-gradient(135deg, #2DD4BF, #34D399)" },
+  { id: "gold", value: "linear-gradient(135deg, #FBBF24, #F59E0B)" },
+  { id: "rose", value: "linear-gradient(135deg, #FB7185, #E11D48)" },
+  { id: "white", value: "linear-gradient(135deg, #ffffff, #d1d5db)" },
+];
+
+async function uploadToCloudinary(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", "jhravxtb");
+  formData.append("folder", "banners");
+  const res = await fetch(
+    "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
+    { method: "POST", body: formData }
+  );
+  if (!res.ok) throw new Error("Upload failed");
+  const data = await res.json();
+  return data.secure_url;
+}
+
+interface ProfileModalProps {
+  onClose: () => void;
+  userId?: string;
+}
+
+export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const router = useRouter();
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [username, setUsername] = useState("");
   const [avatar, setAvatar] = useState("");
   const [joined, setJoined] = useState("");
   const [bio, setBio] = useState("");
   const [gifts, setGifts] = useState<string[]>([]);
+  const [bannerGradient, setBannerGradient] = useState(BANNER_PRESETS[0].value);
+  const [avatarBorder, setAvatarBorder] = useState(AVATAR_BORDERS[0].value);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draftBanner, setDraftBanner] = useState(BANNER_PRESETS[0].value);
+  const [draftBorder, setDraftBorder] = useState(AVATAR_BORDERS[0].value);
+  const [bannerIsImage, setBannerIsImage] = useState(false);
+  const [draftBannerIsImage, setDraftBannerIsImage] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerLocalPreview, setBannerLocalPreview] = useState<string | null>(
+    null
+  );
+
+  const currentUser = auth.currentUser;
+  const targetUid = userId ?? currentUser?.uid;
+  const isOwnProfile = !userId || userId === currentUser?.uid;
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    getDoc(doc(db, "users", user.uid)).then((snap) => {
+    if (!targetUid) return;
+    getDoc(doc(db, "users", targetUid)).then((snap) => {
       if (snap.exists()) {
         const data = snap.data();
         setUsername(data.username || "");
         setAvatar(data.avatar || "");
         setBio(data.bio || "");
         setGifts(data.gifts || []);
+        const bg = data.bannerGradient || BANNER_PRESETS[0].value;
+        const isImg = data.bannerIsImage || false;
+        const ab = data.avatarBorder || AVATAR_BORDERS[0].value;
+        setBannerGradient(bg);
+        setBannerIsImage(isImg);
+        setAvatarBorder(ab);
+        setDraftBanner(bg);
+        setDraftBannerIsImage(isImg);
+        setDraftBorder(ab);
       }
     });
-
+    if (userId) return;
+    const user = auth.currentUser;
+    if (!user) return;
     const date = new Date(user.metadata.creationTime!);
     setJoined(
       date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
     );
-  }, []);
+  }, [targetUid]);
+
+  function openEdit() {
+    setDraftBanner(bannerGradient);
+    setDraftBannerIsImage(bannerIsImage);
+    setDraftBorder(avatarBorder);
+    setBannerLocalPreview(null);
+    setEditing(true);
+  }
+
+  async function handleBannerFileChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setBannerLocalPreview(URL.createObjectURL(file));
+    setBannerUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setDraftBanner(url);
+      setDraftBannerIsImage(true);
+    } catch (err) {
+      console.error("Banner upload failed:", err);
+      setBannerLocalPreview(null);
+    } finally {
+      setBannerUploading(false);
+    }
+  }
+
+  async function saveEdit() {
+    const user = auth.currentUser;
+    if (!user) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        bannerGradient: draftBanner,
+        bannerIsImage: draftBannerIsImage,
+        avatarBorder: draftBorder,
+      });
+      setBannerGradient(draftBanner);
+      setBannerIsImage(draftBannerIsImage);
+      setAvatarBorder(draftBorder);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+      setBannerLocalPreview(null);
+    }
+  }
 
   async function logout() {
     await signOut(auth);
     router.push("/login");
   }
+
+  const activeBannerValue = editing
+    ? bannerLocalPreview || draftBanner
+    : bannerGradient;
+  const activeBannerIsImage = editing
+    ? !!bannerLocalPreview || draftBannerIsImage
+    : bannerIsImage;
+  const activeBorder = editing ? draftBorder : avatarBorder;
+
+  const bannerStyle = activeBannerIsImage
+    ? {
+        backgroundImage: `url(${activeBannerValue})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }
+    : { background: activeBannerValue };
 
   return (
     <div
@@ -202,93 +177,229 @@ export default function ProfileModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-[#0f1520] border border-white/[0.08] rounded-2xl p-8 w-[320px] flex flex-col items-center gap-5 relative"
+        className="bg-[#0f1520] border border-white/[0.08] rounded-2xl w-[320px] flex flex-col items-center relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-4 text-white/20 hover:text-white/60 transition-colors"
+        <div
+          className="w-full h-[88px] relative z-0 shrink-0"
+          style={bannerStyle}
         >
-          <X size={24} />
-        </button>
+          {bannerUploading && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 text-white/40 hover:text-white/80 transition-colors bg-black/20 rounded-full p-0.5"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-        <div className="w-[72px] h-[72px] rounded-full p-[2px] bg-gradient-to-br from-[#A78BFA] to-[#60A5FA]">
-          {avatar && (
-            <img
-              src={avatar}
-              alt="avatar"
-              className="w-full h-full rounded-full object-cover"
-            />
+        <div className="w-full flex flex-col items-center px-8 pb-7 relative">
+          <div
+            className="relative z-10 -mt-9 mb-3 w-[72px] h-[72px] rounded-full p-[2.5px] shrink-0"
+            style={{ background: activeBorder }}
+          >
+            <div className="w-full h-full rounded-full bg-[#0f1520] flex items-center justify-center overflow-hidden">
+              {avatar && (
+                <img
+                  src={avatar}
+                  alt="avatar"
+                  className="w-full h-full rounded-full object-cover"
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-1 mb-4">
+            <span className="text-white font-semibold text-lg tracking-[0.03em]">
+              {username}
+            </span>
+            <span className="text-[10px] text-white/22 tracking-widest uppercase">
+              joined {joined}
+            </span>
+            <div className="mt-1 px-3 py-1 flex items-center gap-2 bg-gradient-to-r from-[#A78BFA]/20 to-[#60A5FA]/20 border border-white/10 text-xs text-white rounded-lg">
+              Early Member
+              <Gem size={14} color="gold" />
+            </div>
+          </div>
+
+          {bio && !editing && (
+            <p className="text-xs text-white/40 text-center leading-relaxed mb-4">
+              {bio}
+            </p>
+          )}
+
+          {editing ? (
+            <div className="w-full flex flex-col gap-5 mb-5">
+              <div>
+                <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
+                  Banner
+                </p>
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {BANNER_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setDraftBanner(p.value);
+                        setDraftBannerIsImage(false);
+                        setBannerLocalPreview(null);
+                      }}
+                      className="h-8 rounded-lg transition-all"
+                      style={{
+                        background: p.value,
+                        outline:
+                          !draftBannerIsImage &&
+                          !bannerLocalPreview &&
+                          draftBanner === p.value
+                            ? "2px solid #A78BFA"
+                            : "2px solid transparent",
+                        outlineOffset: "2px",
+                      }}
+                    />
+                  ))}
+                </div>
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleBannerFileChange}
+                />
+                <button
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={bannerUploading}
+                  className="w-full h-9 flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] text-[11px] text-white/40 hover:text-white/70 hover:border-white/20 transition-colors tracking-widest disabled:opacity-40"
+                >
+                  <Upload size={13} />
+                  {bannerUploading
+                    ? "UPLOADING..."
+                    : draftBannerIsImage || bannerLocalPreview
+                    ? "CHANGE PHOTO"
+                    : "UPLOAD PHOTO"}
+                </button>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
+                  Avatar border
+                </p>
+                <div className="grid grid-cols-6 gap-2">
+                  {AVATAR_BORDERS.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => setDraftBorder(b.value)}
+                      className="h-7 rounded-full transition-all"
+                      style={{
+                        background: b.value,
+                        outline:
+                          draftBorder === b.value
+                            ? "2px solid #A78BFA"
+                            : "2px solid transparent",
+                        outlineOffset: "2px",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditing(false);
+                    setBannerLocalPreview(null);
+                  }}
+                  className="flex-1 py-2 text-[11px] text-white/30 hover:text-white/60 border border-white/[0.08] transition-colors tracking-widest"
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={saveEdit}
+                  disabled={saving || bannerUploading}
+                  className="flex-1 py-2 text-[11px] text-[#A78BFA] hover:text-white border border-[#A78BFA]/30 hover:border-[#A78BFA]/60 transition-colors tracking-widest flex items-center justify-center gap-1.5 disabled:opacity-40"
+                >
+                  {saving ? (
+                    "SAVING..."
+                  ) : (
+                    <>
+                      <Check size={12} /> SAVE
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {gifts.length > 0 && (
+                <div className="w-full mb-4">
+                  <div className="text-[10px] text-white/35 uppercase tracking-[0.2em] text-center mb-3">
+                    Gifts
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {gifts.map((giftId, i) => {
+                      const gift = GIFTS[giftId];
+                      if (!gift) return null;
+                      return (
+                        <div
+                          key={giftId + i}
+                          className="flex flex-col items-center gap-1.5"
+                        >
+                          <div
+                            className="w-full aspect-square rounded-2xl flex items-center justify-center"
+                            style={{
+                              background: `${RARITY_COLORS[gift.rarity]}15`,
+                              border: `1px solid ${
+                                RARITY_COLORS[gift.rarity]
+                              }40`,
+                            }}
+                          >
+                            <img
+                              src={gift.imageUrl}
+                              alt={gift.name}
+                              className="w-4/5 h-4/5 object-contain"
+                            />
+                          </div>
+                          <span
+                            className="text-[10px]"
+                            style={{ color: RARITY_COLORS[gift.rarity] }}
+                          >
+                            {gift.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="w-full h-px bg-white/[0.06] mb-4" />
+
+              <div className="flex items-center justify-between w-full">
+                {isOwnProfile ? (
+                  <button
+                    onClick={logout}
+                    className="text-[11px] text-red-400/55 hover:text-red-400 tracking-widest transition-colors"
+                  >
+                    LOG OUT
+                  </button>
+                ) : (
+                  <div />
+                )}
+                {isOwnProfile && (
+                  <button
+                    onClick={openEdit}
+                    className="flex items-center gap-1.5 text-[11px] text-white/30 hover:text-white/70 tracking-widest transition-colors"
+                  >
+                    <Pencil size={12} />
+                    EDIT
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
-
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-white font-semibold text-lg tracking-[0.03em]">
-            {username}
-          </span>
-          <span className="text-[10px] text-white/22 tracking-widest uppercase">
-            joined {joined}
-          </span>
-          <div className="px-3 py-1 flex items-center gap-2 bg-gradient-to-r from-[#A78BFA]/20 to-[#60A5FA]/20 border border-white/10 text-xs text-white rounded-lg">
-            Early Member
-            <Gem size={14} color="gold" />
-          </div>
-        </div>
-
-        {bio && (
-          <p className="text-xs text-white/40 text-center leading-relaxed">
-            {bio}
-          </p>
-        )}
-
-        {gifts.length > 0 && (
-          <div className="w-full">
-            <div className="text-[10px] text-white/35 uppercase tracking-[0.2em] text-center mb-3">
-              Gifts
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {gifts.map((giftId, i) => {
-                const gift = GIFTS[giftId];
-                if (!gift) return null;
-                return (
-                  <div
-                    key={giftId + i}
-                    className="flex flex-col items-center gap-1.5"
-                  >
-                    <div
-                      className="w-full aspect-square rounded-2xl flex items-center justify-center"
-                      style={{
-                        background: `${RARITY_COLORS[gift.rarity]}15`,
-                        border: `1px solid ${RARITY_COLORS[gift.rarity]}40`,
-                      }}
-                    >
-                      <img
-                        src={gift.imageUrl}
-                        alt={gift.name}
-                        className="w-4/5 h-4/5 object-contain"
-                      />
-                    </div>
-                    <span
-                      className="text-[10px]"
-                      style={{ color: RARITY_COLORS[gift.rarity] }}
-                    >
-                      {gift.name}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="w-full h-px bg-white/[0.06]" />
-
-        <button
-          onClick={logout}
-          className="text-[11px] text-red-400/55 hover:text-red-400 tracking-widest transition-colors"
-        >
-          LOG OUT
-        </button>
       </div>
     </div>
   );

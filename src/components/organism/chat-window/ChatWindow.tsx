@@ -3,11 +3,11 @@
 import { useEffect, useState, useRef } from "react";
 import { formatLastSeen, isOnline } from "@/lib/formatLastSeen";
 import { useChatStore } from "@/store/chat-store";
-import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import {
   subscribeToMessages,
   sendMessage,
   setTyping,
+  markMessageRead,
 } from "@/lib/firestore/chats";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -21,7 +21,10 @@ import {
   Paperclip,
   ImageIcon,
   Download,
+  Check,
+  CheckCheck,
 } from "lucide-react";
+import ProfileModal from "../profile-modal/ProfileModal";
 
 async function uploadImageToCloudinary(file: File): Promise<string> {
   const formData = new FormData();
@@ -98,6 +101,15 @@ export default function ChatWindow() {
     markOpened(chatId);
     updateDoc(doc(db, "chats", chatId), { [`unreadCount.${myUid}`]: 0 });
   }, [chatId, myUid]);
+
+  useEffect(() => {
+    if (!chatId || !myUid || messages.length === 0) return;
+    messages.forEach((m) => {
+      if (m.senderId !== myUid && !(m.readBy || []).includes(myUid)) {
+        markMessageRead(chatId, m.id, myUid);
+      }
+    });
+  }, [messages, chatId, myUid]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -207,7 +219,6 @@ export default function ChatWindow() {
         .dot:nth-child(2) { animation-delay: 0.15s; }
         .dot:nth-child(3) { animation-delay: 0.3s; }
         @keyframes dotbounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-        .profile-modal { animation: fadeIn 0.15s ease-out; }
         .lightbox-img { animation: fadeIn 0.15s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
         .chat-img { cursor: zoom-in; transition: opacity 0.15s; }
@@ -246,90 +257,11 @@ export default function ChatWindow() {
         </div>
       )}
 
-      {profileOpen && otherUser && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setProfileOpen(false)}
-        >
-          <div
-            className="profile-modal w-full max-w-sm mx-4 bg-[#0F1620] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="h-24 bg-gradient-to-br from-[#A78BFA]/30 to-[#60A5FA]/20 relative">
-              <button
-                onClick={() => setProfileOpen(false)}
-                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-black/30 text-white/60 hover:text-white transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-6 pb-6 text-center">
-              <div className="-mt-10 mb-4 flex justify-center">
-                {otherUser.avatar ? (
-                  <img
-                    src={otherUser.avatar}
-                    className="w-20 h-20 rounded-full object-cover border-4 border-[#0F1620]"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-full border-4 border-[#0F1620] flex items-center justify-center text-white text-2xl font-bold">
-                    {otherUser.username?.[0]?.toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div className="text-lg font-semibold text-white mb-1">
-                {otherUser.username}
-              </div>
-              {otherUser.bio ? (
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  {otherUser.bio}
-                </p>
-              ) : (
-                <p className="text-sm text-zinc-600 italic">No bio yet</p>
-              )}
-              {otherUser.gifts?.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                  <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-                    Gifts
-                  </div>
-                  <div className="grid grid-cols-2 gap-6 justify-center">
-                    {otherUser.gifts.map((giftId: string) => {
-                      const gift = GIFTS[giftId];
-                      if (!gift) return null;
-                      return (
-                        <div
-                          key={giftId}
-                          className="flex flex-col items-center gap-1 group"
-                        >
-                          <div
-                            className="w-42 h-42 rounded-2xl flex items-center justify-center p-1"
-                            style={{
-                              background: `${RARITY_COLORS[gift.rarity]}15`,
-                              border: `1px solid ${
-                                RARITY_COLORS[gift.rarity]
-                              }30`,
-                            }}
-                          >
-                            <img
-                              src={gift.imageUrl}
-                              alt={gift.name}
-                              className="w-50 h-50 object-contain"
-                            />
-                          </div>
-                          <span
-                            className="text-[10px]"
-                            style={{ color: RARITY_COLORS[gift.rarity] }}
-                          >
-                            {gift.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {profileOpen && otherUser?.id && (
+        <ProfileModal
+          userId={otherUser.id}
+          onClose={() => setProfileOpen(false)}
+        />
       )}
 
       <div className="flex flex-col w-full h-full bg-[#0B0F14] text-[#E5E7EB] overflow-hidden">
@@ -384,6 +316,12 @@ export default function ChatWindow() {
         <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0">
           {messages.map((m) => {
             const isMine = m.senderId === myUid;
+            const isRead = isMine && (m.readBy || []).includes(otherUser?.id);
+            const isLastMine =
+              isMine &&
+              messages.filter((msg) => msg.senderId === myUid).at(-1)?.id ===
+                m.id;
+
             return (
               <div
                 key={m.id}
@@ -406,6 +344,7 @@ export default function ChatWindow() {
                   >
                     <CornerUpLeft size={13} />
                   </button>
+
                   {m.replyTo && (
                     <div
                       onClick={() => scrollToMessage(m.replyTo.id)}
@@ -427,6 +366,7 @@ export default function ChatWindow() {
                       )}
                     </div>
                   )}
+
                   <div
                     className={`text-sm break-words leading-relaxed overflow-hidden ${
                       isMine
@@ -447,7 +387,33 @@ export default function ChatWindow() {
                         className={m.imageUrl ? "block px-3 pb-1 pt-2" : ""}
                       >
                         {m.text}
+                        {isMine && isLastMine && (
+                          <span
+                            className={`inline-flex items-center ml-2 relative top-[2px] transition-colors ${
+                              isRead ? "text-white/70" : "text-white/40"
+                            }`}
+                          >
+                            {isRead ? (
+                              <CheckCheck size={16} />
+                            ) : (
+                              <Check size={16} />
+                            )}
+                          </span>
+                        )}
                       </span>
+                    )}
+                    {!m.text && m.imageUrl && isMine && isLastMine && (
+                      <div
+                        className={`flex justify-end px-2 pb-1 transition-colors ${
+                          isRead ? "text-white/70" : "text-white/40"
+                        }`}
+                      >
+                        {isRead ? (
+                          <CheckCheck size={16} />
+                        ) : (
+                          <Check size={16} />
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
