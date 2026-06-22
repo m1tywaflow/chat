@@ -64,7 +64,10 @@ export default function ChatItem({ chat }: Props) {
               hasUnread ? "text-zinc-300" : "text-zinc-500"
             }`}
           >
-            {chat.lastMessage || "No messages yet"}
+            {chat.lastMessage?.startsWith("Reacted to") ||
+            chat.lastMessage?.includes("Reacted to a message")
+              ? chat.lastMessage
+              : chat.lastMessage || "No messages yet"}
           </p>
           {hasUnread && (
             <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[#A78BFA] text-black text-[10px] font-bold flex items-center justify-center">

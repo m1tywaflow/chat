@@ -12,6 +12,8 @@ import {
   serverTimestamp,
   increment,
   arrayUnion,
+  arrayRemove,
+  getDoc,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -189,4 +191,27 @@ export async function markMessageRead(
 ) {
   const ref = doc(db, "chats", chatId, "messages", messageId);
   await updateDoc(ref, { readBy: arrayUnion(uid) });
+}
+export async function toggleReaction(
+  chatId: string,
+  messageId: string,
+  emoji: string,
+  uid: string
+): Promise<void> {
+  const msgRef = doc(db, "chats", chatId, "messages", messageId);
+  const snap = await getDoc(msgRef);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const current: string[] = data?.reactions?.[emoji] ?? [];
+  const hasReacted = current.includes(uid);
+  await updateDoc(msgRef, {
+    [`reactions.${emoji}`]: hasReacted ? arrayRemove(uid) : arrayUnion(uid),
+  });
+  if (!hasReacted) {
+    await updateDoc(doc(db, "chats", chatId), {
+      lastMessage: `${emoji} Reacted to a message`,
+      lastMessageTime: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 }
