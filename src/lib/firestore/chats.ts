@@ -215,3 +215,32 @@ export async function toggleReaction(
     });
   }
 }
+
+export async function editMessage(
+  chatId: string,
+  messageId: string,
+  newText: string
+) {
+  await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
+    text: newText,
+    edited: true,
+  });
+}
+
+export async function deleteMessage(chatId: string, messageId: string) {
+  await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
+    deleted: true,
+    text: "",
+    imageUrl: null,
+  });
+}
+
+export async function pinMessage(
+  chatId: string,
+  messageId: string | null,
+  messageText: string | null
+) {
+  await updateDoc(doc(db, "chats", chatId), {
+    pinnedMessage: messageId ? { id: messageId, text: messageText } : null,
+  });
+}
