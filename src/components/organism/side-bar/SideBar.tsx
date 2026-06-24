@@ -1,35 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   subscribeToUserChats,
   searchUsers,
   createOrGetChat,
+  togglePinChat,
 } from "@/lib/firestore/chats";
 import ChatItem from "./ChatItem";
 import ProfileModal from "../profile-modal/ProfileModal";
-import { Settings, Search, UserCircle } from "lucide-react";
+import { Settings, Search, UserCircle, Pin } from "lucide-react";
 import Link from "next/link";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+
+interface CtxMenu {
+  chatId: string;
+  x: number;
+  y: number;
+  pinned: boolean;
+}
 
 export default function SideBar() {
   const chats = useChatStore((s) => s.chats);
   const setChats = useChatStore((s) => s.setChats);
   const setActiveChat = useChatStore((s) => s.setActiveChat);
-
   const { firebaseUser } = useCurrentUser();
 
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [pinnedChats, setPinnedChats] = useState<Record<string, boolean>>({});
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
+  const ctxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!firebaseUser) return;
     const unsub = subscribeToUserChats(firebaseUser.uid, setChats);
     return unsub;
   }, [firebaseUser, setChats]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const unsub = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
+      setPinnedChats(snap.data()?.pinnedChats || {});
+    });
+    return () => unsub();
+  }, [firebaseUser]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -48,6 +68,15 @@ export default function SideBar() {
     return () => clearTimeout(timeout);
   }, [query, firebaseUser]);
 
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function handleClick() {
+      setCtxMenu(null);
+    }
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [ctxMenu]);
+
   async function openChat(otherUid: string) {
     if (!firebaseUser) return;
     const chatId = await createOrGetChat(firebaseUser.uid, otherUid);
@@ -55,6 +84,27 @@ export default function SideBar() {
     setQuery("");
     setUsers([]);
   }
+
+  function handleCtxMenu(e: React.MouseEvent, chatId: string) {
+    e.preventDefault();
+    setCtxMenu({
+      chatId,
+      x: e.clientX,
+      y: e.clientY,
+      pinned: !!pinnedChats[chatId],
+    });
+  }
+
+  async function handlePin() {
+    if (!ctxMenu || !firebaseUser) return;
+    await togglePinChat(firebaseUser.uid, ctxMenu.chatId, !ctxMenu.pinned);
+    setCtxMenu(null);
+  }
+
+  const visibleChats = chats.filter((c) => !c.deleted);
+  const pinned = visibleChats.filter((c) => pinnedChats[c.id]);
+  const unpinned = visibleChats.filter((c) => !pinnedChats[c.id]);
+  const sortedChats = [...pinned, ...unpinned];
 
   return (
     <>
@@ -112,17 +162,21 @@ export default function SideBar() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {chats.length === 0 && (
+          {sortedChats.length === 0 && (
             <p className="text-zinc-400 text-sm p-4">
               No chats yet. Search users above.
             </p>
           )}
           <div className="divide-y divide-[#1F2A37]">
-            {chats
-              .filter((chat) => !chat.deleted)
-              .map((chat) => (
-                <ChatItem key={chat.id} chat={chat} />
-              ))}
+            {sortedChats.map((chat) => (
+              <div
+                key={chat.id}
+                onContextMenu={(e) => handleCtxMenu(e, chat.id)}
+                className="relative"
+              >
+                <ChatItem chat={chat} pinned={!!pinnedChats[chat.id]} />
+              </div>
+            ))}
           </div>
         </div>
 
@@ -134,7 +188,6 @@ export default function SideBar() {
             <Settings size={18} className="text-[#A78BFA]" />
             <span className="text-sm text-zinc-200">Settings</span>
           </Link>
-
           <button
             onClick={() => setShowProfile(true)}
             className="flex items-center gap-3 p-4 border-t border-[#1F2A37] hover:bg-[#1B2633] transition-colors w-full text-left"
@@ -148,6 +201,28 @@ export default function SideBar() {
       </section>
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          style={{
+            position: "fixed",
+            top: ctxMenu.y,
+            left: ctxMenu.x,
+            zIndex: 999,
+          }}
+          className="min-w-[140px] rounded-xl bg-[#151D28] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handlePin}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors cursor-pointer"
+          >
+            <Pin size={13} className={ctxMenu.pinned ? "text-[#A78BFA]" : ""} />
+            {ctxMenu.pinned ? "Unpin chat" : "Pin chat"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

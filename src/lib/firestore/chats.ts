@@ -244,3 +244,13 @@ export async function pinMessage(
     pinnedMessage: messageId ? { id: messageId, text: messageText } : null,
   });
 }
+
+export async function togglePinChat(
+  userId: string,
+  chatId: string,
+  pinned: boolean
+) {
+  await updateDoc(doc(db, "users", userId), {
+    [`pinnedChats.${chatId}`]: pinned,
+  });
+}
