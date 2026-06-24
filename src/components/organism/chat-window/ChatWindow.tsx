@@ -30,22 +30,33 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Play,
 } from "lucide-react";
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 
-async function uploadImageToCloudinary(file: File): Promise<string> {
+function isVideo(url: string) {
+  return (
+    /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url) ||
+    url.includes("/video/upload/")
+  );
+}
+
+async function uploadToCloudinary(file: File): Promise<string> {
+  const isVid = file.type.startsWith("video/");
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", "jhravxtb");
-  formData.append("folder", "chat_images");
+  formData.append("folder", isVid ? "chat_videos" : "chat_images");
   const res = await fetch(
-    "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
+    `https://api.cloudinary.com/v1_1/dgylh67ms/${
+      isVid ? "video" : "image"
+    }/upload`,
     { method: "POST", body: formData }
   );
-  if (!res.ok) throw new Error("Image upload failed");
+  if (!res.ok) throw new Error("Upload failed");
   const data = await res.json();
   return data.secure_url;
 }
@@ -80,6 +91,8 @@ export default function ChatWindow() {
     id: string;
     text: string;
   } | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [isFileVideo, setIsFileVideo] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -87,7 +100,6 @@ export default function ChatWindow() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
-  const [galleryOpen, setGalleryOpen] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -133,9 +145,8 @@ export default function ChatWindow() {
   useEffect(() => {
     if (!chatId || !myUid || messages.length === 0) return;
     messages.forEach((m) => {
-      if (m.senderId !== myUid && !(m.readBy || []).includes(myUid)) {
+      if (m.senderId !== myUid && !(m.readBy || []).includes(myUid))
         markMessageRead(chatId, m.id, myUid);
-      }
     });
   }, [messages, chatId, myUid]);
 
@@ -188,6 +199,8 @@ export default function ChatWindow() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    const vid = file.type.startsWith("video/");
+    setIsFileVideo(vid);
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   }
@@ -195,6 +208,7 @@ export default function ChatWindow() {
   function removeImagePreview() {
     setImageFile(null);
     setImagePreview(null);
+    setIsFileVideo(false);
   }
 
   async function send() {
@@ -205,12 +219,13 @@ export default function ChatWindow() {
     setUploading(true);
     try {
       let imageUrl: string | undefined;
-      if (imageFile) imageUrl = await uploadImageToCloudinary(imageFile);
+      if (imageFile) imageUrl = await uploadToCloudinary(imageFile);
       await sendMessage(chatId, myUid, text, replyMessage, imageUrl);
       setText("");
       setReplyMessage(null);
       setImageFile(null);
       setImagePreview(null);
+      setIsFileVideo(false);
       setTyping(chatId, myUid, false);
     } catch (err) {
       console.error("Send failed:", err);
@@ -334,6 +349,10 @@ export default function ChatWindow() {
         .reaction-emoji-btn { transition: transform 0.1s; }
         .reaction-emoji-btn:hover { transform:scale(1.25); }
         .deleted-msg { opacity: 0.45; font-style: italic; }
+        .chat-video { border-radius: 12px; max-width: 260px; width: 100%; display: block; background: #000; }
+        .video-thumb { position: relative; cursor: pointer; }
+        .video-thumb:hover .play-overlay { opacity: 1; }
+        .play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); border-radius: 12px; opacity: 0; transition: opacity 0.15s; }
       `}</style>
 
       {lightboxUrl && (
@@ -359,12 +378,22 @@ export default function ChatWindow() {
               <X size={16} />
             </button>
           </div>
-          <img
-            src={lightboxUrl}
-            alt="photo"
-            className="lightbox-img max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {isVideo(lightboxUrl) ? (
+            <video
+              src={lightboxUrl}
+              controls
+              autoPlay
+              className="lightbox-img max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={lightboxUrl}
+              alt="photo"
+              className="lightbox-img max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
 
@@ -397,21 +426,19 @@ export default function ChatWindow() {
                 </span>
               )}
             </button>
-            <div className="relative" ref={menuRef}>
-              <div className="flex">
-                <button
-                  onClick={() => setGalleryOpen(true)}
-                  className="w-8 h-8 flex items-center cursor-pointer justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors"
-                >
-                  <ImageIcon size={15} />
-                </button>
-                <button
-                  onClick={() => setMenuOpen((v) => !v)}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                >
-                  <MoreVertical size={16} />
-                </button>
-              </div>
+            <div className="relative flex items-center gap-1" ref={menuRef}>
+              <button
+                onClick={() => setGalleryOpen(true)}
+                className="w-8 h-8 flex items-center cursor-pointer justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <ImageIcon size={15} />
+              </button>
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+              >
+                <MoreVertical size={16} />
+              </button>
               {galleryOpen && chatId && (
                 <MediaGallery
                   chatId={chatId}
@@ -478,6 +505,7 @@ export default function ChatWindow() {
             const isMsgMenuOpen = msgMenuId === m.id;
             const isPinned = pinnedMessage?.id === m.id;
             const isEditing = editingId === m.id;
+            const msgIsVideo = m.imageUrl && isVideo(m.imageUrl);
 
             return (
               <div
@@ -513,7 +541,7 @@ export default function ChatWindow() {
                   )}
                   {isMsgMenuOpen && isMine && !m.deleted && (
                     <div
-                      className={`msg-ctx-menu absolute z-30 bottom-full mb-2 right-0 min-w-[140px] rounded-xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden`}
+                      className="msg-ctx-menu absolute z-30 bottom-full mb-2 right-0 min-w-[140px] rounded-xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {m.text && !m.imageUrl && (
@@ -572,14 +600,13 @@ export default function ChatWindow() {
                         <button
                           onClick={(e) => openMsgMenu(e, m.id)}
                           title="More"
-                          className={`msg-menu-btn absolute -top-2 right-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#151D28] border border-white/10 text-zinc-500 hover:text-white transition-colors`}
+                          className="msg-menu-btn absolute -top-2 right-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#151D28] border border-white/10 text-zinc-500 hover:text-white transition-colors"
                         >
                           <MoreVertical size={11} />
                         </button>
                       )}
                     </>
                   )}
-
                   {m.replyTo && (
                     <div
                       onClick={() => scrollToMessage(m.replyTo.id)}
@@ -601,7 +628,7 @@ export default function ChatWindow() {
                     </div>
                   )}
                   <div
-                    className={`text-sm break-words leading-relaxed overflow-hidden ${
+                    className={`text-sm  leading-relaxed overflow-hidden ${
                       isMine
                         ? "bg-[#A78BFA] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
                         : "bg-white/[0.07] text-white/90 border border-white/[0.08] rounded-2xl rounded-bl-md"
@@ -610,19 +637,40 @@ export default function ChatWindow() {
                     } ${isPinned ? "ring-1 ring-[#A78BFA]/40" : ""}`}
                   >
                     {m.deleted ? (
-                      <span className="deleted-msg text-zinc-500 text-xs">
+                      <span className="deleted-msg text-white text-xs">
                         Message deleted
                       </span>
                     ) : (
                       <>
-                        {m.imageUrl && (
-                          <img
-                            src={m.imageUrl}
-                            alt="image"
-                            className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
-                            onClick={() => setLightboxUrl(m.imageUrl)}
-                          />
-                        )}
+                        {m.imageUrl &&
+                          (msgIsVideo ? (
+                            <div
+                              className="video-thumb"
+                              onClick={() => setLightboxUrl(m.imageUrl)}
+                            >
+                              <video
+                                src={m.imageUrl}
+                                className="chat-video"
+                                preload="metadata"
+                              />
+                              <div className="play-overlay">
+                                <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                  <Play
+                                    size={18}
+                                    className="text-white ml-0.5"
+                                    fill="white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <img
+                              src={m.imageUrl}
+                              alt="image"
+                              className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                              onClick={() => setLightboxUrl(m.imageUrl)}
+                            />
+                          ))}
                         {isEditing ? (
                           <div className="flex items-center gap-2 py-0.5">
                             <input
@@ -699,6 +747,8 @@ export default function ChatWindow() {
                       </>
                     )}
                   </div>
+
+                  {/* Timestamp */}
                   {!m.deleted && (
                     <div
                       className={`text-[10px] text-zinc-600 mt-0.5 ${
@@ -708,6 +758,8 @@ export default function ChatWindow() {
                       {formatTime(m.createdAt)}
                     </div>
                   )}
+
+                  {/* Reaction pills */}
                   {hasReactions && !m.deleted && (
                     <div
                       className={`flex flex-wrap gap-1 mt-1 ${
@@ -736,6 +788,8 @@ export default function ChatWindow() {
           })}
           <div ref={bottomRef} />
         </div>
+
+        {/* Input */}
         <div className="flex-none border-t border-white/[0.06] bg-[#0F1620]">
           {typingUsers.length > 0 && (
             <div className="px-4 pt-2 flex items-center gap-1.5 text-xs text-zinc-500">
@@ -775,11 +829,19 @@ export default function ChatWindow() {
           )}
           {imagePreview && (
             <div className="mx-3 mt-2 relative inline-block">
-              <img
-                src={imagePreview}
-                alt="preview"
-                className="h-24 rounded-xl object-cover border border-white/10"
-              />
+              {isFileVideo ? (
+                <video
+                  src={imagePreview}
+                  className="h-24 rounded-xl border border-white/10 bg-black"
+                  muted
+                />
+              ) : (
+                <img
+                  src={imagePreview}
+                  alt="preview"
+                  className="h-24 rounded-xl object-cover border border-white/10"
+                />
+              )}
               <button
                 onClick={removeImagePreview}
                 className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-[#0F1620] border border-white/20 text-zinc-400 hover:text-white transition-colors"
@@ -797,13 +859,13 @@ export default function ChatWindow() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               className="hidden"
               onChange={handleFileChange}
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              title="Attach image"
+              title="Attach file"
               className="shrink-0 cursor-pointer w-9 h-9 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.06] transition-colors"
             >
               <Paperclip size={16} />
