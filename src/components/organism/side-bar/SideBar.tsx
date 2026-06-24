@@ -111,7 +111,7 @@ export default function SideBar() {
       <section className="h-full w-80 flex flex-col bg-[#0F1620] border-r border-[#1F2A37]">
         <div className="p-5 border-b border-[#1F2A37]">
           <h2 className="text-lg font-semibold text-white">Messages</h2>
-          <p className="text-xs text-zinc-400 mt-1">Your chats</p>
+          <p className="text-xs text-zinc-400 mt-1">All conversations</p>
         </div>
 
         <div className="p-4 border-b border-[#1F2A37]">
