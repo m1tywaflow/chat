@@ -313,7 +313,10 @@ export default function ChatWindow() {
 
   if (!chatId) {
     return (
-      <div className="flex w-full justify-center items-center h-full gap-3 bg-[#151D28] text-zinc-500">
+      <div
+        className="flex w-full justify-center items-center h-full gap-3 text-zinc-500"
+        style={{ background: "var(--color-chat-bg)" }}
+      >
         <span className="text-sm font-bold">
           Select a conversation in the pislk
         </span>
@@ -404,7 +407,13 @@ export default function ChatWindow() {
         />
       )}
 
-      <div className="flex flex-col w-full h-full bg-[#0B0F14] text-[#E5E7EB] overflow-hidden">
+      <div
+        className="flex flex-col w-full h-full overflow-hidden"
+        style={{
+          background: "var(--color-chat-bg)",
+          color: "var(--color-text)",
+        }}
+      >
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0F1620]">
           <div className="h-14 flex items-center justify-between px-5">
             <button
@@ -628,13 +637,21 @@ export default function ChatWindow() {
                     </div>
                   )}
                   <div
-                    className={`text-sm  leading-relaxed overflow-hidden ${
+                    className={`text-sm leading-relaxed overflow-hidden ${
                       isMine
                         ? "bg-[#A78BFA] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
-                        : "bg-white/[0.07] text-white/90 border border-white/[0.08] rounded-2xl rounded-bl-md"
+                        : "border border-white/[0.08] rounded-2xl rounded-bl-md"
                     } ${
                       !m.text && m.imageUrl && !m.deleted ? "p-1" : "px-4 py-2"
                     } ${isPinned ? "ring-1 ring-[#A78BFA]/40" : ""}`}
+                    style={
+                      !isMine
+                        ? {
+                            background: "var(--color-msg-bg)",
+                            color: "var(--color-text)",
+                          }
+                        : undefined
+                    }
                   >
                     {m.deleted ? (
                       <span className="deleted-msg text-white text-xs">
@@ -788,7 +805,6 @@ export default function ChatWindow() {
           })}
           <div ref={bottomRef} />
         </div>
-
         {/* Input */}
         <div className="flex-none border-t border-white/[0.06] bg-[#0F1620]">
           {typingUsers.length > 0 && (
