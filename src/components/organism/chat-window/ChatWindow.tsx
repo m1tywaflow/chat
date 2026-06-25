@@ -671,13 +671,7 @@ export default function ChatWindow() {
                 </span>
               )}
             </button>
-            <div className="relative flex items-center gap-1" ref={menuRef}>
-              <button
-                onClick={() => setGalleryOpen(true)}
-                className="w-8 h-8 flex items-center cursor-pointer justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors"
-              >
-                <ImageIcon size={15} />
-              </button>
+            <div className="relative  items-center " ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
@@ -692,6 +686,17 @@ export default function ChatWindow() {
               )}
               {menuOpen && (
                 <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#151D28] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                  <button
+                    onClick={() => {
+                      setGalleryOpen(true);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors"
+                  >
+                    <ImageIcon size={14} />
+                    Media gallery
+                  </button>
+                  <div className="h-px bg-white/[0.06]" />
                   <button
                     onClick={() => {
                       setDeleteChatConfirm(true);

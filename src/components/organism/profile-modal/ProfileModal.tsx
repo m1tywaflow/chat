@@ -96,6 +96,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [draftAvatar, setDraftAvatar] = useState<string | null>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<CropTarget>(null);
+  const [giftModal, setGiftModal] = useState<string | null>(null);
 
   const currentUser = auth.currentUser;
   const targetUid = userId ?? currentUser?.uid;
@@ -272,7 +273,6 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     ? avatarLocalPreview || draftAvatar || avatar
     : avatar;
   const activeCardColor = editing ? draftCardColor : cardColor;
-
   const bannerStyle = activeBannerIsImage
     ? {
         backgroundImage: `url(${activeBannerValue})`,
@@ -283,6 +283,22 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
 
   return (
     <>
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          60%, 100% { transform: translateX(200%); }
+        }
+        @keyframes gemBob {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          40% { transform: translateY(-2px) rotate(-8deg); }
+          60% { transform: translateY(-1px) rotate(5deg); }
+        }
+        @keyframes giftModalIn {
+          from { opacity: 0; transform: scale(0.92) translateY(6px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
+
       {cropSrc && (
         <ImageCropper
           src={cropSrc}
@@ -302,6 +318,120 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
           style={{ backgroundColor: activeCardColor }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* gift modal overlay */}
+          {giftModal &&
+            (() => {
+              const gift = GIFTS[giftModal];
+              if (!gift) return null;
+              const color = RARITY_COLORS[gift.rarity];
+
+              const rarityBg: Record<string, string> = {
+                common: "linear-gradient(160deg, #3f3f46, #27272a)",
+                rare: "linear-gradient(160deg, #1e3a5f, #1e2a4a)",
+                epic: "linear-gradient(160deg, #3b1f6e, #2d1a5a)",
+                legendary: "linear-gradient(160deg, #78350f, #451a03)",
+                unreal: "linear-gradient(160deg, #5a0f0f, #2d0000)",
+              };
+
+              return (
+                <div
+                  className="absolute inset-0 z-20 flex flex-col rounded-2xl overflow-hidden"
+                  style={{
+                    animation:
+                      "giftModalIn 0.22s cubic-bezier(0.34,1.4,0.64,1)",
+                  }}
+                >
+                  {/* art */}
+                  <div
+                    className="relative flex items-center justify-center flex-1"
+                    style={{ background: rarityBg[gift.rarity] }}
+                  >
+                    <div
+                      className="absolute inset-0 opacity-[0.07]"
+                      style={{
+                        backgroundImage: `radial-gradient(circle, ${color} 1px, transparent 1px)`,
+                        backgroundSize: "24px 24px",
+                      }}
+                    />
+                    <img
+                      src={gift.imageUrl}
+                      alt={gift.name}
+                      className="w-40 h-40 object-contain drop-shadow-2xl relative z-10"
+                      style={{ filter: `drop-shadow(0 0 32px ${color}60)` }}
+                    />
+                    <button
+                      onClick={() => setGiftModal(null)}
+                      className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/30 text-white/60 hover:text-white transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  {/* info */}
+                  <div
+                    className="flex flex-col items-center gap-3 px-6 py-5"
+                    style={{ backgroundColor: activeCardColor }}
+                  >
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="text-white font-bold text-base tracking-wide">
+                        {gift.name}
+                      </span>
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-[0.25em] px-3 py-1 rounded-full"
+                        style={{
+                          color,
+                          backgroundColor: `${color}18`,
+                          border: `1px solid ${color}40`,
+                        }}
+                      >
+                        {gift.rarity}
+                      </span>
+                    </div>
+                    <div className="w-full rounded-xl overflow-hidden border border-white/[0.07]">
+                      {[
+                        {
+                          label: "Rarity",
+                          value:
+                            gift.rarity.charAt(0).toUpperCase() +
+                            gift.rarity.slice(1),
+                        },
+                        { label: "Gift ID", value: gift.id },
+                      ].map(({ label, value }, i, arr) => (
+                        <div
+                          key={label}
+                          className={`flex items-center justify-between px-4 py-2.5 text-sm ${
+                            i < arr.length - 1
+                              ? "border-b border-white/[0.05]"
+                              : ""
+                          }`}
+                          style={{ backgroundColor: `${activeCardColor}` }}
+                        >
+                          <span className="text-white/40 text-xs">{label}</span>
+                          <span
+                            className="text-white/80 text-xs font-medium"
+                            style={label === "Rarity" ? { color } : {}}
+                          >
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setGiftModal(null)}
+                      className="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
+                      style={{
+                        backgroundColor: `${color}22`,
+                        color,
+                        border: `1px solid ${color}40`,
+                      }}
+                    >
+                      OK
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+          {/* banner */}
           <div
             className="w-full h-[88px] relative z-0 shrink-0"
             style={bannerStyle}
@@ -331,6 +461,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
           </div>
 
           <div className="w-full flex flex-col items-center px-8 pb-7 relative">
+            {/* avatar */}
             <div className="relative z-10 -mt-9 mb-3 shrink-0">
               <div
                 className="w-[72px] h-[72px] rounded-full p-[2.5px]"
@@ -392,6 +523,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
               onChange={(e) => setDraftCardColor(e.target.value)}
             />
 
+            {/* Username / joined / badge */}
             <div className="flex flex-col items-center gap-1 mb-4">
               <span className="text-white font-semibold text-lg tracking-[0.03em]">
                 {username}
@@ -399,9 +531,31 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
               <span className="text-[10px] text-white/22 tracking-widest uppercase">
                 joined {joined}
               </span>
-              <div className="mt-1 px-3 py-1 flex items-center gap-2 bg-gradient-to-r from-[#A78BFA]/20 to-[#60A5FA]/20 border border-white/10 text-xs text-white rounded-lg">
-                Early Member
-                <Gem size={14} color="gold" />
+              <div className="mt-1 px-3 py-1.5 flex items-center gap-2 rounded-xl relative overflow-hidden border border-amber-400/20 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10">
+                <span
+                  className="text-xs font-semibold tracking-wide"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #FBBF24, #A78BFA, #FBBF24)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                  }}
+                >
+                  Early Member
+                </span>
+                <Gem
+                  size={13}
+                  className="shrink-0 text-amber-400"
+                  style={{ animation: "gemBob 2.5s ease-in-out infinite" }}
+                />
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.07) 50%, transparent 60%)",
+                    animation: "shimmer 2.8s ease-in-out infinite",
+                  }}
+                />
               </div>
             </div>
 
@@ -538,12 +692,13 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                         const gift = GIFTS[giftId];
                         if (!gift) return null;
                         return (
-                          <div
+                          <button
                             key={giftId + i}
-                            className="flex flex-col items-center gap-1.5"
+                            onClick={() => setGiftModal(giftId)}
+                            className="flex flex-col items-center gap-1.5 group cursor-pointer"
                           >
                             <div
-                              className="w-full aspect-square rounded-2xl flex items-center justify-center"
+                              className="w-full aspect-square rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
                               style={{
                                 background: `${RARITY_COLORS[gift.rarity]}15`,
                                 border: `1px solid ${
@@ -563,7 +718,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                             >
                               {gift.name}
                             </span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
