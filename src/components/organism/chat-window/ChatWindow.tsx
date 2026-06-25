@@ -31,6 +31,7 @@ import {
   Pin,
   PinOff,
   Play,
+  Copy,
 } from "lucide-react";
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
@@ -67,6 +68,73 @@ function formatTime(ts: any): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+interface MsgMenuState {
+  id: string;
+  x: number;
+  y: number;
+  openUpward: boolean;
+}
+
+function ConfirmDialog({
+  icon,
+  title,
+  description,
+  onCancel,
+  onConfirm,
+  confirmLabel = "Delete",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  confirmLabel?: string;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="w-[320px] rounded-2xl bg-[#151D28] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 pt-6 pb-4">
+          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+            {icon}
+          </div>
+          <h3 className="text-[15px] font-semibold text-white mb-1">{title}</h3>
+          <p className="text-[13px] text-zinc-400 leading-relaxed">
+            {description}
+          </p>
+        </div>
+        <div className="flex border-t border-white/[0.06]">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3.5 text-sm text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors font-medium border-r border-white/[0.06] cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors font-semibold cursor-pointer"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatWindow() {
   const chatId = useChatStore((s) => s.activeChatId);
   const markOpened = useChatStore((s) => s.markOpened);
@@ -86,13 +154,16 @@ export default function ChatWindow() {
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [msgMenuId, setMsgMenuId] = useState<string | null>(null);
+  const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
   const [pinnedMessage, setPinnedMessage] = useState<{
     id: string;
     text: string;
   } | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [isFileVideo, setIsFileVideo] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteChatConfirm, setDeleteChatConfirm] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -100,6 +171,9 @@ export default function ChatWindow() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const msgMenuRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const isNearBottom = useRef(true);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -151,7 +225,19 @@ export default function ChatWindow() {
   }, [messages, chatId, myUid]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatScrollRef.current;
+    if (!el) return;
+    function onScroll() {
+      isNearBottom.current =
+        el!.scrollHeight - el!.scrollTop - el!.clientHeight < 80;
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isNearBottom.current) return;
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages]);
 
   useEffect(() => {
@@ -172,18 +258,29 @@ export default function ChatWindow() {
   }, [lightboxUrl]);
 
   useEffect(() => {
-    if (!pickerOpenId && !msgMenuId) return;
+    if (!pickerOpenId && !msgMenu) return;
     const handleClick = () => {
       setPickerOpenId(null);
-      setMsgMenuId(null);
+      setMsgMenu(null);
     };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
-  }, [pickerOpenId, msgMenuId]);
+  }, [pickerOpenId, msgMenu]);
 
   useEffect(() => {
     if (editingId) editInputRef.current?.focus();
   }, [editingId]);
+
+  // close header menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        setMenuOpen(false);
+    };
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [menuOpen]);
 
   function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
     setText(e.target.value);
@@ -199,8 +296,7 @@ export default function ChatWindow() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    const vid = file.type.startsWith("video/");
-    setIsFileVideo(vid);
+    setIsFileVideo(file.type.startsWith("video/"));
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   }
@@ -259,19 +355,36 @@ export default function ChatWindow() {
   function openPicker(e: React.MouseEvent, msgId: string) {
     e.stopPropagation();
     setPickerOpenId((prev) => (prev === msgId ? null : msgId));
-    setMsgMenuId(null);
+    setMsgMenu(null);
   }
 
-  function openMsgMenu(e: React.MouseEvent, msgId: string) {
+  function openMsgMenu(e: React.MouseEvent, msgId: string, isMine: boolean) {
+    e.preventDefault();
     e.stopPropagation();
-    setMsgMenuId((prev) => (prev === msgId ? null : msgId));
+    if (!isMine) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? {
+      bottom: e.clientY,
+      top: e.clientY,
+    };
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < 180;
+    setMsgMenu((prev) =>
+      prev?.id === msgId
+        ? null
+        : {
+            id: msgId,
+            x: e.clientX,
+            y: openUpward ? rect.top : rect.bottom,
+            openUpward,
+          }
+    );
     setPickerOpenId(null);
   }
 
   function startEdit(m: any) {
     setEditingId(m.id);
     setEditText(m.text || "");
-    setMsgMenuId(null);
+    setMsgMenu(null);
   }
 
   async function submitEdit() {
@@ -283,21 +396,41 @@ export default function ChatWindow() {
     setEditText("");
   }
 
-  async function handleDelete(msgId: string) {
+  function handleDelete(msgId: string) {
+    setMsgMenu(null);
+    setDeleteConfirmId(msgId);
+  }
+
+  async function confirmDelete() {
+    if (!chatId || !deleteConfirmId) return;
+    await deleteMessage(chatId, deleteConfirmId);
+    setDeleteConfirmId(null);
+  }
+
+  async function confirmDeleteChat() {
     if (!chatId) return;
-    setMsgMenuId(null);
-    await deleteMessage(chatId, msgId);
+    await updateDoc(doc(db, "chats", chatId), { [`deleted.${myUid}`]: true });
+    useChatStore.getState().setActiveChat(null);
+    setDeleteChatConfirm(false);
   }
 
   async function handlePin(m: any) {
     if (!chatId) return;
-    setMsgMenuId(null);
+    setMsgMenu(null);
     const isAlreadyPinned = pinnedMessage?.id === m.id;
     await pinMessage(
       chatId,
       isAlreadyPinned ? null : m.id,
       isAlreadyPinned ? null : m.text || "📷 Photo"
     );
+  }
+
+  async function handleCopy(m: any) {
+    if (!m.text) return;
+    await navigator.clipboard.writeText(m.text);
+    setCopiedId(m.id);
+    setMsgMenu(null);
+    setTimeout(() => setCopiedId(null), 1800);
   }
 
   function getReactionSummary(reactions: Record<string, string[]> | undefined) {
@@ -325,6 +458,9 @@ export default function ChatWindow() {
   }
 
   const canSend = (text.trim() || imageFile) && !uploading;
+  const currentMsgMenu = msgMenu
+    ? messages.find((m) => m.id === msgMenu.id)
+    : null;
 
   return (
     <>
@@ -335,8 +471,10 @@ export default function ChatWindow() {
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
         .highlight-flash { animation: flash 1.5s ease-out; }
         @keyframes flash { 0%,30% { background-color: rgba(167,139,250,0.15); border-radius: 12px; } 100% { background-color: transparent; } }
-        .reply-btn,.react-btn,.msg-menu-btn { opacity: 0; transition: opacity 0.15s; }
-        .msg-row:hover .reply-btn,.msg-row:hover .react-btn,.msg-row:hover .msg-menu-btn { opacity: 1; }
+        .reply-btn,.react-btn { opacity: 0; transition: opacity 0.15s; }
+        .msg-row:hover .reply-btn,.msg-row:hover .react-btn { opacity: 1; }
+        .msg-dots { opacity: 0; transition: opacity 0.15s, transform 0.15s; transform: scale(0.85); }
+        .msg-row:hover .msg-dots { opacity: 1; transform: scale(1); }
         .dot { width:6px; height:6px; border-radius:50%; background:#71717a; animation: dotbounce 1.2s infinite; }
         .dot:nth-child(2) { animation-delay:.15s; }
         .dot:nth-child(3) { animation-delay:.3s; }
@@ -345,8 +483,12 @@ export default function ChatWindow() {
         @keyframes fadeIn { from { opacity:0; transform:scale(0.97); } to { opacity:1; transform:scale(1); } }
         .chat-img { cursor:zoom-in; transition:opacity 0.15s; }
         .chat-img:hover { opacity:0.85; }
-        .reaction-picker,.msg-ctx-menu { animation: pickerIn 0.12s ease-out; transform-origin: bottom center; }
+        .reaction-picker { animation: pickerIn 0.12s ease-out; transform-origin: bottom center; }
         @keyframes pickerIn { from { opacity:0; transform:scale(0.85) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .msg-ctx-menu { animation: menuIn 0.15s cubic-bezier(0.34,1.56,0.64,1); transform-origin: top right; }
+        @keyframes menuIn { from { opacity:0; transform:scale(0.88) translateY(-6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .confirm-dialog { animation: dialogIn 0.18s cubic-bezier(0.34,1.4,0.64,1); }
+        @keyframes dialogIn { from { opacity:0; transform:scale(0.93) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
         .reaction-pill { transition: transform 0.1s, background 0.1s; }
         .reaction-pill:hover { transform:scale(1.06); }
         .reaction-emoji-btn { transition: transform 0.1s; }
@@ -356,8 +498,77 @@ export default function ChatWindow() {
         .video-thumb { position: relative; cursor: pointer; }
         .video-thumb:hover .play-overlay { opacity: 1; }
         .play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); border-radius: 12px; opacity: 0; transition: opacity 0.15s; }
+        .ctx-item { width:100%; display:flex; align-items:center; gap:10px; padding:9px 14px; font-size:13px; transition:background 0.1s; cursor:pointer; border:none; background:transparent; text-align:left; }
+        .ctx-item:hover { background: rgba(255,255,255,0.05); }
+        .ctx-divider { height:1px; background:rgba(255,255,255,0.06); margin:2px 0; }
       `}</style>
 
+      {/* Message context menu */}
+      {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
+        <div
+          ref={msgMenuRef}
+          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#151D28] border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden"
+          style={
+            msgMenu.openUpward
+              ? {
+                  bottom: window.innerHeight - msgMenu.y,
+                  right: window.innerWidth - msgMenu.x - 8,
+                }
+              : { top: msgMenu.y, right: window.innerWidth - msgMenu.x - 8 }
+          }
+          onClick={(e) => e.stopPropagation()}
+        >
+          {currentMsgMenu.text && !currentMsgMenu.imageUrl && (
+            <button
+              className="ctx-item text-zinc-300"
+              onClick={() => startEdit(currentMsgMenu)}
+            >
+              <Pencil size={14} className="text-zinc-500" />
+              Edit message
+            </button>
+          )}
+          <button
+            className="ctx-item text-zinc-300"
+            onClick={() => {
+              handleReply(currentMsgMenu);
+              setMsgMenu(null);
+            }}
+          >
+            <CornerUpLeft size={14} className="text-zinc-500" />
+            Reply
+          </button>
+          {currentMsgMenu.text && (
+            <button
+              className="ctx-item text-zinc-300"
+              onClick={() => handleCopy(currentMsgMenu)}
+            >
+              <Copy size={14} className="text-zinc-500" />
+              {copiedId === currentMsgMenu.id ? "Copied!" : "Copy text"}
+            </button>
+          )}
+          <button
+            className="ctx-item text-zinc-300"
+            onClick={() => handlePin(currentMsgMenu)}
+          >
+            {pinnedMessage?.id === currentMsgMenu.id ? (
+              <PinOff size={14} className="text-zinc-500" />
+            ) : (
+              <Pin size={14} className="text-zinc-500" />
+            )}
+            {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
+          </button>
+          <div className="ctx-divider" />
+          <button
+            className="ctx-item text-red-400"
+            onClick={() => handleDelete(currentMsgMenu.id)}
+          >
+            <Trash2 size={14} className="text-red-400/60" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Lightbox */}
       {lightboxUrl && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
@@ -407,6 +618,30 @@ export default function ChatWindow() {
         />
       )}
 
+      {/* Delete message confirm */}
+      {deleteConfirmId && (
+        <ConfirmDialog
+          icon={<Trash2 size={18} className="text-red-400" />}
+          title="Delete message?"
+          description="This action cannot be undone. The message will be permanently removed for everyone."
+          onCancel={() => setDeleteConfirmId(null)}
+          onConfirm={confirmDelete}
+          confirmLabel="Delete"
+        />
+      )}
+
+      {/* Delete chat confirm */}
+      {deleteChatConfirm && (
+        <ConfirmDialog
+          icon={<Trash2 size={18} className="text-red-400" />}
+          title="Delete chat?"
+          description="This will permanently delete the entire conversation. This action cannot be undone."
+          onCancel={() => setDeleteChatConfirm(false)}
+          onConfirm={confirmDeleteChat}
+          confirmLabel="Delete"
+        />
+      )}
+
       <div
         className="flex flex-col w-full h-full overflow-hidden"
         style={{
@@ -414,6 +649,7 @@ export default function ChatWindow() {
           color: "var(--color-text)",
         }}
       >
+        {/* Header */}
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0F1620]">
           <div className="h-14 flex items-center justify-between px-5">
             <button
@@ -457,12 +693,8 @@ export default function ChatWindow() {
               {menuOpen && (
                 <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#151D28] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
-                    onClick={async () => {
-                      if (!chatId) return;
-                      await updateDoc(doc(db, "chats", chatId), {
-                        [`deleted.${myUid}`]: true,
-                      });
-                      useChatStore.getState().setActiveChat(null);
+                    onClick={() => {
+                      setDeleteChatConfirm(true);
                       setMenuOpen(false);
                     }}
                     className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
@@ -500,7 +732,12 @@ export default function ChatWindow() {
             </div>
           )}
         </div>
-        <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0">
+
+        {/* Messages */}
+        <div
+          ref={chatScrollRef}
+          className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0"
+        >
           {messages.map((m) => {
             const isMine = m.senderId === myUid;
             const isRead = isMine && (m.readBy || []).includes(otherUser?.id);
@@ -511,7 +748,6 @@ export default function ChatWindow() {
             const reactionSummary = getReactionSummary(m.reactions);
             const hasReactions = reactionSummary.length > 0;
             const isPickerOpen = pickerOpenId === m.id;
-            const isMsgMenuOpen = msgMenuId === m.id;
             const isPinned = pinnedMessage?.id === m.id;
             const isEditing = editingId === m.id;
             const msgIsVideo = m.imageUrl && isVideo(m.imageUrl);
@@ -524,9 +760,11 @@ export default function ChatWindow() {
                   isMine ? "justify-end" : "justify-start"
                 } ${hasReactions ? "mb-2" : ""}`}
                 onContextMenu={(e) => {
-                  e.preventDefault();
-                  if (isMine && !m.deleted) openMsgMenu(e, m.id);
-                  else handleReply(m);
+                  if (isMine && !m.deleted) openMsgMenu(e, m.id, true);
+                  else {
+                    e.preventDefault();
+                    handleReply(m);
+                  }
                 }}
               >
                 <div className="relative group max-w-[72%] min-w-0">
@@ -548,43 +786,7 @@ export default function ChatWindow() {
                       ))}
                     </div>
                   )}
-                  {isMsgMenuOpen && isMine && !m.deleted && (
-                    <div
-                      className="msg-ctx-menu absolute z-30 bottom-full mb-2 right-0 min-w-[140px] rounded-xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {m.text && !m.imageUrl && (
-                        <button
-                          onClick={() => startEdit(m)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                        >
-                          <Pencil size={13} />
-                          <span>Edit</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handlePin(m)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        {isPinned ? <PinOff size={13} /> : <Pin size={13} />}
-                        <span>{isPinned ? "Unpin" : "Pin"}</span>
-                      </button>
-                      <button
-                        onClick={() => handleReply(m)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        <CornerUpLeft size={13} />
-                        <span>Reply</span>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        <Trash2 size={13} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  )}
+
                   {!m.deleted && (
                     <>
                       <button
@@ -607,15 +809,16 @@ export default function ChatWindow() {
                       </button>
                       {isMine && (
                         <button
-                          onClick={(e) => openMsgMenu(e, m.id)}
-                          title="More"
-                          className="msg-menu-btn absolute -top-2 right-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#151D28] border border-white/10 text-zinc-500 hover:text-white transition-colors"
+                          title="More options"
+                          onClick={(e) => openMsgMenu(e, m.id, true)}
+                          className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#1e2a3a] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
                         >
-                          <MoreVertical size={11} />
+                          <MoreVertical size={12} />
                         </button>
                       )}
                     </>
                   )}
+
                   {m.replyTo && (
                     <div
                       onClick={() => scrollToMessage(m.replyTo.id)}
@@ -636,6 +839,7 @@ export default function ChatWindow() {
                       )}
                     </div>
                   )}
+
                   <div
                     className={`text-sm leading-relaxed overflow-hidden ${
                       isMine
@@ -765,7 +969,6 @@ export default function ChatWindow() {
                     )}
                   </div>
 
-                  {/* Timestamp */}
                   {!m.deleted && (
                     <div
                       className={`text-[10px] text-zinc-600 mt-0.5 ${
@@ -776,7 +979,6 @@ export default function ChatWindow() {
                     </div>
                   )}
 
-                  {/* Reaction pills */}
                   {hasReactions && !m.deleted && (
                     <div
                       className={`flex flex-wrap gap-1 mt-1 ${
@@ -805,7 +1007,8 @@ export default function ChatWindow() {
           })}
           <div ref={bottomRef} />
         </div>
-        {/* Input */}
+
+        {/* Input area */}
         <div className="flex-none border-t border-white/[0.06] bg-[#0F1620]">
           {typingUsers.length > 0 && (
             <div className="px-4 pt-2 flex items-center gap-1.5 text-xs text-zinc-500">

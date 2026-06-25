@@ -10,6 +10,7 @@ export interface CustomTheme {
   text: string;
   msgBg: string;
   chatBg: string;
+  sideBarBg: string;
 }
 
 export const DEFAULT_DARK: CustomTheme = {
@@ -17,6 +18,7 @@ export const DEFAULT_DARK: CustomTheme = {
   text: "#ffffff",
   msgBg: "#111827",
   chatBg: "#0B0F14",
+  sideBarBg: "#0F1620",
 };
 
 export const DEFAULT_LIGHT: CustomTheme = {
@@ -24,6 +26,7 @@ export const DEFAULT_LIGHT: CustomTheme = {
   text: "#111111",
   msgBg: "#ffffff",
   chatBg: "#e5e7eb",
+  sideBarBg: "#fff",
 };
 
 interface ThemeStore {

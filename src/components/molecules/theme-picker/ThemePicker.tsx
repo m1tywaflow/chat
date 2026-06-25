@@ -21,6 +21,7 @@ const COLOR_FIELDS: { key: keyof CustomTheme; label: string }[] = [
   { key: "chatBg", label: "Chat background" },
   { key: "msgBg", label: "Message background" },
   { key: "text", label: "Text color" },
+  { key: "sideBarBg", label: "Sidebar background" },
 ];
 
 export default function ThemePicker() {
