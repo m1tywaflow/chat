@@ -329,8 +329,9 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                 common: "linear-gradient(160deg, #3f3f46, #27272a)",
                 rare: "linear-gradient(160deg, #1e3a5f, #1e2a4a)",
                 epic: "linear-gradient(160deg, #3b1f6e, #2d1a5a)",
-                legendary: "linear-gradient(160deg, #78350f, #451a03)",
-                unreal: "linear-gradient(160deg, #5a0f0f, #2d0000)",
+                legendary: "linear-gradient(160deg, #D9A827, #9E7510)",
+                unreal: "linear-gradient(160deg, #D90CED, #520661)",
+                divine: "linear-gradient(160deg, #FFF8DC)",
               };
 
               return (
@@ -687,7 +688,21 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                     <div className="text-[10px] text-white/35 uppercase tracking-[0.2em] text-center mb-3">
                       Gifts
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div
+                      className={`grid grid-cols-2 gap-4 ${
+                        gifts.length > 4
+                          ? "max-h-[380px] overflow-y-auto pr-1"
+                          : ""
+                      }`}
+                      style={
+                        gifts.length > 4
+                          ? {
+                              scrollbarWidth: "thin",
+                              scrollbarColor: "#A78BFA40 transparent",
+                            }
+                          : {}
+                      }
+                    >
                       {gifts.map((giftId, i) => {
                         const gift = GIFTS[giftId];
                         if (!gift) return null;
