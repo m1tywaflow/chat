@@ -1,11 +1,11 @@
 export default function Header() {
   return (
-    <header className="relative w-full h-16 flex items-center px-8 bg-[#0b1019]">
+    <header className="relative w-full h-16 flex items-center px-8 bg-[#0d0b14]">
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, rgba(167,139,250,0.4) 40%, rgba(167,139,250,0.4) 60%, transparent 100%)",
+            "linear-gradient(90deg, rgba(167,139,250,0.4) 0%, rgba(167,139,250,0.4) 100%)",
         }}
       />
       <div className="flex items-center gap-2.5">

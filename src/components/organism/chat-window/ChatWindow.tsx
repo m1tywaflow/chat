@@ -507,7 +507,7 @@ export default function ChatWindow() {
       {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
         <div
           ref={msgMenuRef}
-          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#151D28] border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden"
+          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0b14] border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden"
           style={
             msgMenu.openUpward
               ? {
@@ -685,7 +685,7 @@ export default function ChatWindow() {
                 />
               )}
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#151D28] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
                     onClick={() => {
                       setGalleryOpen(true);

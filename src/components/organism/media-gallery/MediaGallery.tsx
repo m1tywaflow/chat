@@ -53,7 +53,7 @@ export default function MediaGallery({ chatId, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg mx-4 rounded-2xl bg-[#0F1620] border border-white/[0.08] shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg mx-4 rounded-2xl bg-[#0d0b14] border border-white/[0.08] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
@@ -74,7 +74,7 @@ export default function MediaGallery({ chatId, onClose }: Props) {
           </button>
         </div>
 
-        <div className="p-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 max-h-[70vh] overflow-y-auto scrollbar-purple">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-5 h-5 border-2 border-white/20 border-t-[#A78BFA] rounded-full animate-spin" />

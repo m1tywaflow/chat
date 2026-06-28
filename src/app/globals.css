@@ -30,3 +30,25 @@ body {
   --color-msg-bg: #111827;
   --color-chat-bg: #0b0f14;
 }
+.scrollbar-purple {
+  scrollbar-width: thin;
+  scrollbar-color: #7c3aed #1e1a2e;
+}
+
+.scrollbar-purple::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-purple::-webkit-scrollbar-track {
+  background: #1e1a2e;
+  border-radius: 999px;
+}
+
+.scrollbar-purple::-webkit-scrollbar-thumb {
+  background: #7c3aed;
+  border-radius: 999px;
+}
+
+.scrollbar-purple::-webkit-scrollbar-thumb:hover {
+  background: #a78bfa;
+}

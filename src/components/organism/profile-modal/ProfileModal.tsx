@@ -8,6 +8,7 @@ import { auth, db } from "@/lib/firebase";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import { Gem, X, Pencil, Check, Upload, Pipette } from "lucide-react";
 import ImageCropper from "../image-cropper/ImageCropper";
+import { AVATAR_DECORATIONS } from "@/lib/avatarDecorations";
 
 const BANNER_PRESETS = [
   { id: "purple-blue", value: "linear-gradient(135deg, #A78BFA, #60A5FA)" },
@@ -97,6 +98,8 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<CropTarget>(null);
   const [giftModal, setGiftModal] = useState<string | null>(null);
+  const [avatarDecoration, setAvatarDecoration] = useState<string | null>(null);
+  const [draftDecoration, setDraftDecoration] = useState<string | null>(null);
 
   const currentUser = auth.currentUser;
   const targetUid = userId ?? currentUser?.uid;
@@ -123,6 +126,9 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
         setDraftBannerIsImage(isImg);
         setDraftBorder(ab);
         setDraftCardColor(cc);
+        const dec = data.avatarDecoration || null;
+        setAvatarDecoration(dec);
+        setDraftDecoration(dec);
       }
     });
     if (userId) return;
@@ -142,6 +148,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     setDraftAvatar(null);
     setBannerLocalPreview(null);
     setAvatarLocalPreview(null);
+    setDraftDecoration(avatarDecoration);
     setEditing(true);
   }
 
@@ -240,6 +247,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
         bannerIsImage: draftBannerIsImage,
         avatarBorder: draftBorder,
         cardColor: draftCardColor,
+        avatarDecoration: draftDecoration,
       };
       if (draftAvatar) updates.avatar = draftAvatar;
       await updateDoc(doc(db, "users", user.uid), updates);
@@ -254,6 +262,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
       setBannerLocalPreview(null);
       setAvatarLocalPreview(null);
       setDraftAvatar(null);
+      setAvatarDecoration(draftDecoration);
     }
   }
 
@@ -269,6 +278,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     ? !!bannerLocalPreview || draftBannerIsImage
     : bannerIsImage;
   const activeBorder = editing ? draftBorder : avatarBorder;
+  const activeDecoration = editing ? draftDecoration : avatarDecoration;
   const activeAvatar = editing
     ? avatarLocalPreview || draftAvatar || avatar
     : avatar;
@@ -463,10 +473,44 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
 
           <div className="w-full flex flex-col items-center px-8 pb-7 relative">
             {/* avatar */}
-            <div className="relative z-10 -mt-9 mb-3 shrink-0">
+            <div
+              className="relative z-10 -mt-9 mb-3 shrink-0 flex items-center justify-center"
+              style={{ width: 122, height: 102, overflow: "visible" }}
+            >
+              {activeDecoration &&
+                (() => {
+                  const dec = AVATAR_DECORATIONS.find(
+                    (d) => d.url === activeDecoration
+                  );
+                  return (
+                    <img
+                      src={activeDecoration}
+                      alt=""
+                      className="absolute pointer-events-none select-none"
+                      style={{
+                        width: 160,
+                        height: 160,
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        objectFit: "contain",
+                        zIndex: 10,
+                        mixBlendMode: (dec?.blendMode as any) || "normal",
+                      }}
+                    />
+                  );
+                })()}
+
               <div
-                className="w-[72px] h-[72px] rounded-full p-[2.5px]"
-                style={{ background: activeBorder }}
+                className="rounded-full p-[2.5px] absolute"
+                style={{
+                  background: activeBorder,
+                  width: 72,
+                  height: 72,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
               >
                 <div
                   className="w-full h-full rounded-full flex items-center justify-center overflow-hidden"
@@ -489,10 +533,19 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                   )}
                 </div>
               </div>
+
               {editing && (
                 <button
                   onClick={() => avatarInputRef.current?.click()}
-                  className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
+                  className="absolute rounded-full flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
+                  style={{
+                    width: 72,
+                    height: 72,
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 20,
+                  }}
                 >
                   <Upload
                     size={14}
@@ -619,7 +672,40 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                     ))}
                   </div>
                 </div>
-
+                <div>
+                  <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
+                    Decoration
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {AVATAR_DECORATIONS.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setDraftDecoration(d.url)}
+                        className="relative w-14 h-14 rounded-full flex items-center justify-center transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          outline:
+                            draftDecoration === d.url
+                              ? "2px solid #A78BFA"
+                              : "2px solid transparent",
+                          outlineOffset: "2px",
+                        }}
+                      >
+                        {d.url ? (
+                          <img
+                            src={d.url}
+                            alt={d.label}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-white/30 text-[10px]">
+                            None
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
                     Card color
