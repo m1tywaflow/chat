@@ -16,6 +16,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc } from "firebase/firestore";
+
 import {
   X,
   CornerUpLeft,
@@ -164,6 +165,7 @@ export default function ChatWindow() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteChatConfirm, setDeleteChatConfirm] = useState(false);
+  const [wallpaper, setWallpaper] = useState<any>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -206,6 +208,7 @@ export default function ChatWindow() {
         setTypingUsers(typingList);
       }
       setPinnedMessage(data?.pinnedMessage || null);
+      setWallpaper(data?.wallpaper || null);
     });
     return () => unsub();
   }, [chatId, myUid]);
@@ -456,11 +459,52 @@ export default function ChatWindow() {
       </div>
     );
   }
+  async function handleWallpaperChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !chatId) return;
+
+    const url = await uploadWallpaper(file);
+    await setChatWallpaper(chatId, url);
+  }
 
   const canSend = (text.trim() || imageFile) && !uploading;
   const currentMsgMenu = msgMenu
     ? messages.find((m) => m.id === msgMenu.id)
     : null;
+
+  async function uploadWallpaper(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", "jhravxtb");
+    formData.append("folder", "chat_wallpapers");
+
+    const res = await fetch(
+      "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const data = await res.json();
+    return data.secure_url;
+  }
+
+  async function setChatWallpaper(chatId: string, url: string) {
+    await updateDoc(doc(db, "chats", chatId), {
+      wallpaper: {
+        url,
+        type: "image",
+      },
+    });
+  }
+  async function removeWallpaper() {
+    if (!chatId) return;
+
+    await updateDoc(doc(db, "chats", chatId), {
+      wallpaper: null,
+    });
+  }
 
   return (
     <>
@@ -643,9 +687,11 @@ export default function ChatWindow() {
       )}
 
       <div
-        className="flex flex-col w-full h-full overflow-hidden"
+        className="relative flex flex-col w-full h-full overflow-hidden"
         style={{
-          background: "var(--color-chat-bg)",
+          background: wallpaper?.url
+            ? `url(${wallpaper.url}) center/cover no-repeat`
+            : "var(--color-chat-bg)",
           color: "var(--color-text)",
         }}
       >
@@ -706,6 +752,18 @@ export default function ChatWindow() {
                   >
                     <Trash2 size={14} />
                     Delete chat
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                  >
+                    Change wallpaper
+                  </button>
+                  <button
+                    onClick={removeWallpaper}
+                    className="w-full px-4 py-2 text-sm text-red-400 hover:bg-white/5"
+                  >
+                    Remove wallpaper
                   </button>
                 </div>
               )}
@@ -1107,6 +1165,13 @@ export default function ChatWindow() {
               placeholder="Message…"
               className="flex-1 h-11 px-4 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 focus:bg-white/[0.07] transition-all"
               style={{ caretColor: "#A78BFA" }}
+            />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleWallpaperChange}
             />
 
             <button
