@@ -650,7 +650,7 @@ export default function ChatWindow() {
         }}
       >
         {/* Header */}
-        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0F1620]">
+        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a]">
           <div className="h-14 flex items-center justify-between px-5">
             <button
               onClick={() => setProfileOpen(true)}
@@ -848,7 +848,7 @@ export default function ChatWindow() {
                   <div
                     className={`text-sm leading-relaxed overflow-hidden ${
                       isMine
-                        ? "bg-[#A78BFA] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
+                        ? "bg-[#655c85] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
                         : "border border-white/[0.08] rounded-2xl rounded-bl-md"
                     } ${
                       !m.text && m.imageUrl && !m.deleted ? "p-1" : "px-4 py-2"
@@ -1014,9 +1014,9 @@ export default function ChatWindow() {
         </div>
 
         {/* Input area */}
-        <div className="flex-none border-t border-white/[0.06] bg-[#0F1620]">
+        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14]">
           {typingUsers.length > 0 && (
-            <div className="px-4 pt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+            <div className="px-5 pt-2.5 flex items-center gap-1.5 text-xs text-zinc-600">
               <span>typing</span>
               <span className="flex gap-0.5 items-center">
                 <span className="dot" />
@@ -1025,60 +1025,63 @@ export default function ChatWindow() {
               </span>
             </div>
           )}
+
           {replyMessage && (
-            <div className="mx-3 mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+            <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-[#A78BFA]/[0.06] border border-[#A78BFA]/20">
               <div className="w-0.5 h-7 rounded-full bg-[#A78BFA] shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
                   Replying
                 </div>
                 {replyMessage.imageUrl && !replyMessage.text ? (
-                  <div className="flex items-center gap-1 text-xs text-zinc-400">
+                  <div className="flex items-center gap-1 text-xs text-zinc-500">
                     <ImageIcon size={11} />
                     <span>Photo</span>
                   </div>
                 ) : (
-                  <div className="text-xs text-zinc-400 truncate">
+                  <div className="text-xs text-zinc-500 truncate">
                     {replyMessage.text}
                   </div>
                 )}
               </div>
               <button
                 onClick={() => setReplyMessage(null)}
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-zinc-600 hover:text-white hover:bg-white/10 transition-colors"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-600 hover:text-white hover:bg-white/[0.1] transition-all"
               >
-                <X size={12} />
+                <X size={11} />
               </button>
             </div>
           )}
+
           {imagePreview && (
-            <div className="mx-3 mt-2 relative inline-block">
+            <div className="mx-3 mt-3 relative inline-block">
               {isFileVideo ? (
                 <video
                   src={imagePreview}
-                  className="h-24 rounded-xl border border-white/10 bg-black"
+                  className="h-24 rounded-2xl border border-white/[0.08] bg-black"
                   muted
                 />
               ) : (
                 <img
                   src={imagePreview}
                   alt="preview"
-                  className="h-24 rounded-xl object-cover border border-white/10"
+                  className="h-24 rounded-2xl object-cover border border-white/[0.08]"
                 />
               )}
               <button
                 onClick={removeImagePreview}
-                className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-[#0F1620] border border-white/20 text-zinc-400 hover:text-white transition-colors"
+                className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-[#0F1620] border border-white/[0.12] text-zinc-500 hover:text-white transition-colors"
               >
                 <X size={11} />
               </button>
               {uploading && (
-                <div className="absolute inset-0 rounded-xl bg-black/50 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 </div>
               )}
             </div>
           )}
+
           <div className="px-3 py-3 flex items-center gap-2">
             <input
               ref={fileInputRef}
@@ -1087,30 +1090,42 @@ export default function ChatWindow() {
               className="hidden"
               onChange={handleFileChange}
             />
+
             <button
               onClick={() => fileInputRef.current?.click()}
               title="Attach file"
-              className="shrink-0 cursor-pointer w-9 h-9 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.06] transition-colors"
+              className="shrink-0 cursor-pointer w-9 h-9 flex items-center justify-center rounded-xl text-zinc-600 hover:text-[#A78BFA] hover:bg-[#A78BFA]/[0.08] transition-all hover:scale-105 active:scale-95"
             >
               <Paperclip size={16} />
             </button>
+
             <input
               ref={inputRef}
               value={text}
               onChange={handleTyping}
               onKeyDown={handleKeyDown}
               placeholder="Message…"
-              className="flex-1 h-10 px-4 rounded-xl bg-white/[0.06] border border-white/[0.07] text-sm text-white placeholder:text-zinc-600 outline-none focus:border-[#A78BFA]/40 focus:bg-white/[0.09] transition-colors"
+              className="flex-1 h-11 px-4 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 focus:bg-white/[0.07] transition-all"
+              style={{ caretColor: "#A78BFA" }}
             />
+
             <button
               onClick={send}
               disabled={!canSend}
-              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#A78BFA] hover:bg-[#34D399] disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-[#A78BFA] transition-colors"
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-2xl transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-105 active:scale-90"
+              style={{
+                background: "linear-gradient(135deg, #A78BFA, #7c3aed)",
+                boxShadow: canSend ? "0 4px 20px rgba(124,58,237,0.5)" : "none",
+              }}
             >
               {uploading ? (
                 <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send size={15} className="text-white" />
+                <Send
+                  size={14}
+                  className="text-white"
+                  style={{ transform: "translateX(1px)" }}
+                />
               )}
             </button>
           </div>

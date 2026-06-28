@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import MainSection from "@/components/organism/main/mainSec";
+import AppLoader from "@/components/UI/AppLoader";
 
 export default function Home() {
   const router = useRouter();
@@ -16,12 +17,7 @@ export default function Home() {
   }, [loading, isAuthenticated, router]);
 
   if (loading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen flex flex-col gap-4 items-center justify-center bg-zinc-950">
-        <img src="/logo.png" alt="loader" width={60} height={60} />
-        <h1 className="text-xl font-bold">Loading...</h1>
-      </div>
-    );
+    return <AppLoader />;
   }
 
   return <MainSection />;

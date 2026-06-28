@@ -14,11 +14,11 @@ export interface CustomTheme {
 }
 
 export const DEFAULT_DARK: CustomTheme = {
-  bg: "#080c12",
+  bg: "#0d0b14",
   text: "#ffffff",
-  msgBg: "#111827",
-  chatBg: "#0B0F14",
-  sideBarBg: "#0F1620",
+  msgBg: "#13111e",
+  chatBg: "#0d0b14",
+  sideBarBg: "#0d0b14",
 };
 
 export const DEFAULT_LIGHT: CustomTheme = {
