@@ -55,6 +55,13 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782317827/gif_y3kzrj.gif",
     rarity: "divine",
   },
+  ceo: {
+    id: "ceo",
+    name: "Ceo",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782692370/ceo-netta_dmor0c.gif",
+    rarity: "divine",
+  },
 };
 
 export const RARITY_COLORS = {
