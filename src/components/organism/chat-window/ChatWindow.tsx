@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
+import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 
@@ -707,8 +708,21 @@ export default function ChatWindow() {
               onClick={() => setProfileOpen(true)}
               className="flex flex-col items-start cursor-pointer group"
             >
-              <span className="text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
                 {otherUser?.username ?? "..."}
+                {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+                  <img
+                    src={GIFTS[otherUser.featuredGift].imageUrl}
+                    alt={GIFTS[otherUser.featuredGift].name}
+                    title={GIFTS[otherUser.featuredGift].name}
+                    className="shrink-0 w-4 h-4 object-contain"
+                    style={{
+                      filter: `drop-shadow(0 0 3px ${
+                        RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
+                      }90)`,
+                    }}
+                  />
+                )}
               </span>
               {otherUser && (
                 <span className="text-[11px] leading-tight">
