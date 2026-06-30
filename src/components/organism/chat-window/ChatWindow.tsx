@@ -2024,7 +2024,7 @@ export default function ChatWindow() {
                 />
               )}
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-1000">
                   <button
                     onClick={() => {
                       setGalleryOpen(true);
