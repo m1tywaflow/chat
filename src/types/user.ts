@@ -4,4 +4,5 @@ export interface User {
   avatar: string;
   online: boolean;
   bio?: string;
+  featuredGift?: string | null;
 }
