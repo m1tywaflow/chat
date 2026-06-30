@@ -505,7 +505,7 @@ export default function SideBar() {
         <div>
           <Link
             href="/settings"
-            className="flex items-center gap-3 p-4 border-t transition-colors"
+            className="flex font-bold items-center gap-3 p-4 border-t transition-colors"
             style={{ borderColor: border, color: theme.text }}
             onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
             onMouseLeave={(e) =>
@@ -517,7 +517,7 @@ export default function SideBar() {
           </Link>
           <button
             onClick={() => setShowProfile(true)}
-            className="flex items-center gap-3 p-4 border-t transition-colors w-full text-left"
+            className="flex items-center gap-3 p-2 border-t cursor-pointer transition-colors w-full text-left"
             style={{ borderColor: border, color: theme.text }}
             onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
             onMouseLeave={(e) =>
@@ -530,7 +530,7 @@ export default function SideBar() {
             >
               <UserCircle size={18} style={{ color: accent }} />
             </div>
-            <span className="text-sm">Your profile</span>
+            <span className="text-sm font-bold">Your profile</span>
           </button>
         </div>
       </section>
