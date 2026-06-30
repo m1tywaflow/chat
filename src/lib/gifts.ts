@@ -2,7 +2,15 @@ export type Gift = {
   id: string;
   name: string;
   imageUrl: string;
-  rarity: "common" | "rare" | "epic" | "legendary" | "unreal" | "divine";
+  rarity:
+    | "common"
+    | "rare"
+    | "epic"
+    | "legendary"
+    | "unreal"
+    | "divine"
+    | "unusual";
+  bgColor?: string;
 };
 
 export const GIFTS: Record<string, Gift> = {
@@ -62,6 +70,14 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782692370/ceo-netta_dmor0c.gif",
     rarity: "divine",
   },
+  fluttershy: {
+    id: "fluttershy",
+    name: "Fluttershy",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782779438/41db1a69a157396fb9937366b48d45b6_nwljxf.gif",
+    rarity: "unusual",
+    bgColor: "#7d5279",
+  },
 };
 
 export const RARITY_COLORS = {
@@ -71,4 +87,5 @@ export const RARITY_COLORS = {
   legendary: "#FBBF24",
   unreal: "#A607B3",
   divine: "#FFF3B0",
+  unusual: "#7d5279",
 };

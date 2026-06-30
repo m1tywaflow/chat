@@ -342,6 +342,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                 legendary: "linear-gradient(160deg, #D9A827, #9E7510)",
                 unreal: "linear-gradient(160deg, #D90CED, #520661)",
                 divine: "linear-gradient(160deg, #FFF8DC)",
+                unusual: "linear-gradient(160deg, #7d5279, #7d5279)",
               };
 
               return (
@@ -367,7 +368,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                     <img
                       src={gift.imageUrl}
                       alt={gift.name}
-                      className="w-40 h-40 object-contain drop-shadow-2xl relative z-10"
+                      className="w-56 h-56 object-contain drop-shadow-2xl relative z-10"
                       style={{ filter: `drop-shadow(0 0 32px ${color}60)` }}
                     />
                     <button
