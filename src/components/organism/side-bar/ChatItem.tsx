@@ -93,6 +93,7 @@ import {
   DEFAULT_DARK,
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
+import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 
 interface Props {
   chat: Chat;
@@ -205,12 +206,31 @@ export default function ChatItem({ chat, pinned }: Props) {
             {pinned && (
               <Pin size={9} className="shrink-0" style={{ color: "#A78BFA" }} />
             )}
+
             <h3
               className="text-[13.5px] font-semibold truncate leading-none transition-colors"
               style={{ color: isActive ? "#A78BFA" : nameColor }}
             >
               {chat.participant.username}
             </h3>
+            {chat.participant.featuredGift &&
+              (() => {
+                const gift = GIFTS[chat.participant.featuredGift!];
+                if (!gift) return null;
+                return (
+                  <img
+                    src={gift.imageUrl}
+                    alt={gift.name}
+                    title={gift.name}
+                    className="shrink-0 w-4 h-4 object-contain"
+                    style={{
+                      filter: `drop-shadow(0 0 3px ${
+                        RARITY_COLORS[gift.rarity]
+                      }90)`,
+                    }}
+                  />
+                );
+              })()}
           </div>
           <span
             className="text-[11px] shrink-0 tabular-nums"

@@ -100,6 +100,10 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [giftModal, setGiftModal] = useState<string | null>(null);
   const [avatarDecoration, setAvatarDecoration] = useState<string | null>(null);
   const [draftDecoration, setDraftDecoration] = useState<string | null>(null);
+  const [featuredGift, setFeaturedGift] = useState<string | null>(null);
+  const [draftFeaturedGift, setDraftFeaturedGift] = useState<string | null>(
+    null
+  );
 
   const currentUser = auth.currentUser;
   const targetUid = userId ?? currentUser?.uid;
@@ -129,6 +133,8 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
         const dec = data.avatarDecoration || null;
         setAvatarDecoration(dec);
         setDraftDecoration(dec);
+        setFeaturedGift(data.featuredGift || null);
+        setDraftFeaturedGift(data.featuredGift || null);
       }
     });
     if (userId) return;
@@ -150,6 +156,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     setAvatarLocalPreview(null);
     setDraftDecoration(avatarDecoration);
     setEditing(true);
+    setDraftFeaturedGift(featuredGift);
   }
 
   function handleBannerFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -248,6 +255,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
         avatarBorder: draftBorder,
         cardColor: draftCardColor,
         avatarDecoration: draftDecoration,
+        featuredGift: draftFeaturedGift ?? null,
       };
       if (draftAvatar) updates.avatar = draftAvatar;
       await updateDoc(doc(db, "users", user.uid), updates);
@@ -263,6 +271,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
       setAvatarLocalPreview(null);
       setDraftAvatar(null);
       setAvatarDecoration(draftDecoration);
+      setFeaturedGift(draftFeaturedGift);
     }
   }
 
@@ -580,9 +589,29 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
 
             {/* Username / joined / badge */}
             <div className="flex flex-col items-center gap-1 mb-4">
-              <span className="text-white font-semibold text-lg tracking-[0.03em]">
-                {username}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold text-lg tracking-[0.03em]">
+                  {username}
+                </span>
+                {featuredGift &&
+                  (() => {
+                    const gift = GIFTS[featuredGift];
+                    if (!gift) return null;
+                    return (
+                      <img
+                        src={gift.imageUrl}
+                        alt={gift.name}
+                        title={gift.name}
+                        className="w-6 h-6 object-contain shrink-0"
+                        style={{
+                          filter: `drop-shadow(0 0 4px ${
+                            RARITY_COLORS[gift.rarity]
+                          }90)`,
+                        }}
+                      />
+                    );
+                  })()}
+              </div>
               <span className="text-[10px] text-white/22 tracking-widest uppercase">
                 joined {joined}
               </span>
@@ -707,6 +736,59 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                     ))}
                   </div>
                 </div>
+                {gifts.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
+                      Featured gift
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => setDraftFeaturedGift(null)}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-[10px] border transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.04)",
+                          borderColor: "rgba(255,255,255,0.1)",
+                          color: "rgba(255,255,255,0.3)",
+                          outline:
+                            draftFeaturedGift === null
+                              ? "2px solid #A78BFA"
+                              : "2px solid transparent",
+                          outlineOffset: "2px",
+                        }}
+                      >
+                        ✕
+                      </button>
+                      {gifts.map((giftId) => {
+                        const gift = GIFTS[giftId];
+                        if (!gift) return null;
+                        return (
+                          <button
+                            key={giftId}
+                            onClick={() => setDraftFeaturedGift(giftId)}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+                            style={{
+                              background: `${RARITY_COLORS[gift.rarity]}15`,
+                              border: `1px solid ${
+                                RARITY_COLORS[gift.rarity]
+                              }40`,
+                              outline:
+                                draftFeaturedGift === giftId
+                                  ? "2px solid #A78BFA"
+                                  : "2px solid transparent",
+                              outlineOffset: "2px",
+                            }}
+                          >
+                            <img
+                              src={gift.imageUrl}
+                              alt={gift.name}
+                              className="w-7 h-7 object-contain"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
                     Card color
