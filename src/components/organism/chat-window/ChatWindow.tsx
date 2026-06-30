@@ -176,6 +176,7 @@ export default function ChatWindow() {
   const msgMenuRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const isNearBottom = useRef(true);
+  const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -695,8 +696,12 @@ export default function ChatWindow() {
           color: "var(--color-text)",
         }}
       >
+        {/* Wallpaper overlay */}
+        {wallpaper?.url && (
+          <div className="absolute inset-0 z-0 pointer-events-none bg-black/40" />
+        )}
         {/* Header */}
-        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a]">
+        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a] relative z-10">
           <div className="h-14 flex items-center justify-between px-5">
             <button
               onClick={() => setProfileOpen(true)}
@@ -754,7 +759,7 @@ export default function ChatWindow() {
                     Delete chat
                   </button>
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => wallpaperInputRef.current?.click()}
                     className="w-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
                   >
                     Change wallpaper
@@ -799,7 +804,7 @@ export default function ChatWindow() {
         {/* Messages */}
         <div
           ref={chatScrollRef}
-          className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0"
+          className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0"
         >
           {messages.map((m) => {
             const isMine = m.senderId === myUid;
@@ -857,7 +862,7 @@ export default function ChatWindow() {
                         title="Reply"
                         className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
                           isMine ? "-left-16" : "-right-16"
-                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/5 transition-colors`}
+                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
                       >
                         <CornerUpLeft size={13} />
                       </button>
@@ -866,7 +871,7 @@ export default function ChatWindow() {
                         title="React"
                         className={`react-btn absolute top-1/2 -translate-y-1/2 ${
                           isMine ? "-left-8" : "-right-8"
-                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/5 transition-colors text-base leading-none`}
+                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
                       >
                         <span>😊</span>
                       </button>
@@ -1034,7 +1039,7 @@ export default function ChatWindow() {
 
                   {!m.deleted && (
                     <div
-                      className={`text-[10px] text-zinc-600 mt-0.5 ${
+                      className={`text-[10px] text-zinc-400 mt-0.5 ${
                         isMine ? "text-right" : "text-left"
                       }`}
                     >
@@ -1054,8 +1059,8 @@ export default function ChatWindow() {
                           onClick={() => handleReact(m.id, emoji)}
                           className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
                             mine
-                              ? "bg-[#A78BFA]/20 border-[#A78BFA]/50 text-[#A78BFA]"
-                              : "bg-white/[0.06] border-white/[0.10] text-zinc-400 hover:border-white/20"
+                              ? "bg-[#A78BFA]/30 border-[#A78BFA]/60 text-[#A78BFA] backdrop-blur-sm"
+                              : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
                           }`}
                         >
                           <span className="text-sm leading-none">{emoji}</span>
@@ -1072,7 +1077,7 @@ export default function ChatWindow() {
         </div>
 
         {/* Input area */}
-        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14]">
+        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14] relative z-10 ">
           {typingUsers.length > 0 && (
             <div className="px-5 pt-2.5 flex items-center gap-1.5 text-xs text-zinc-600">
               <span>typing</span>
@@ -1085,7 +1090,7 @@ export default function ChatWindow() {
           )}
 
           {replyMessage && (
-            <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-[#A78BFA]/[0.06] border border-[#A78BFA]/20">
+            <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-[#A78BFA]/[0.06] border border-[#A78BFA]/20 ">
               <div className="w-0.5 h-7 rounded-full bg-[#A78BFA] shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
@@ -1170,7 +1175,7 @@ export default function ChatWindow() {
               type="file"
               accept="image/*"
               className="hidden"
-              ref={fileInputRef}
+              ref={wallpaperInputRef}
               onChange={handleWallpaperChange}
             />
 
