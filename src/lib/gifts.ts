@@ -78,6 +78,13 @@ export const GIFTS: Record<string, Gift> = {
     rarity: "unusual",
     bgColor: "#7d5279",
   },
+  cat: {
+    id: "cat",
+    name: "White Cat",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782808797/9893dc57cd2e5960840bf9b9f1ae21fb_gmfm6u.gif",
+    rarity: "unreal",
+  },
 };
 
 export const RARITY_COLORS = {
