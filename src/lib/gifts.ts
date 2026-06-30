@@ -92,6 +92,13 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782818975/katana_jnzip7.gif",
     rarity: "divine",
   },
+  melody: {
+    id: "melody",
+    name: "My Melody",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1782819266/6b7e92fc0474eb2443d72c61b58433d1_gda4he.gif",
+    rarity: "unreal",
+  },
 };
 
 export const RARITY_COLORS = {
