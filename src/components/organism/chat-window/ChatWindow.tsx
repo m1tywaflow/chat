@@ -1976,7 +1976,7 @@ export default function ChatWindow() {
           <div className="absolute inset-0 z-0 pointer-events-none bg-black/40" />
         )}
         {/* Header */}
-        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a] relative z-10">
+        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a] relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
             <button
               onClick={() => setProfileOpen(true)}
@@ -2024,7 +2024,7 @@ export default function ChatWindow() {
                 />
               )}
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-1000">
+                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
                     onClick={() => {
                       setGalleryOpen(true);
