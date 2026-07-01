@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { searchUsers, createOrGetChat } from "@/lib/firestore/chats";
+import { User } from "lucide-react";
 
 export default function UserSearch({ myUid }: { myUid: string }) {
   const [users, setUsers] = useState<any[]>([]);
@@ -51,7 +52,7 @@ export default function UserSearch({ myUid }: { myUid: string }) {
               borderRadius: 6,
             }}
           >
-            👤 {u.username}
+            <User size={14} /> {u.username}
           </div>
         ))}
       </div>
