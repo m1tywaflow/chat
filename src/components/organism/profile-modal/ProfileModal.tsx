@@ -954,6 +954,7 @@ import { Gem, X, Pencil, Check, Upload, Pipette } from "lucide-react";
 import ImageCropper from "../image-cropper/ImageCropper";
 import { AVATAR_DECORATIONS } from "@/lib/avatarDecorations";
 import FullProfileView from "./Fullprofileview";
+import { BADGE } from "@/lib/badge";
 
 const BANNER_PRESETS = [
   { id: "purple-blue", value: "linear-gradient(135deg, #A78BFA, #60A5FA)" },
@@ -1021,6 +1022,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [joined, setJoined] = useState("");
   const [bio, setBio] = useState("");
   const [gifts, setGifts] = useState<string[]>([]);
+  const [badges, setBadges] = useState<string[]>([]);
   const [bannerGradient, setBannerGradient] = useState(BANNER_PRESETS[0].value);
   const [avatarBorder, setAvatarBorder] = useState(AVATAR_BORDERS[0].value);
   const [cardColor, setCardColor] = useState("#0f1520");
@@ -1064,6 +1066,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
         setAvatar(data.avatar || "");
         setBio(data.bio || "");
         setGifts(data.gifts || []);
+        setBadges(data.badges || []);
         const bg = data.bannerGradient || BANNER_PRESETS[0].value;
         const isImg = data.bannerIsImage || false;
         const ab = data.avatarBorder || AVATAR_BORDERS[0].value;
@@ -1577,32 +1580,42 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
               <span className="text-[10px] text-white/22 tracking-widest uppercase">
                 joined {joined}
               </span>
-              <div className="mt-1 px-3 py-1.5 flex items-center gap-2 rounded-xl relative overflow-hidden border border-amber-400/20 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10">
-                <span
-                  className="text-xs font-semibold tracking-wide"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, #FBBF24, #A78BFA, #FBBF24)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Early Member
-                </span>
-                <Gem
-                  size={13}
-                  className="shrink-0 text-amber-400"
-                  style={{ animation: "gemBob 2.5s ease-in-out infinite" }}
-                />
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background:
-                      "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.07) 50%, transparent 60%)",
-                    animation: "shimmer 2.8s ease-in-out infinite",
-                  }}
-                />
-              </div>
+              {badges.map((badgeId) => {
+                const badgeData = BADGE.find((b) => b.id === badgeId);
+
+                if (!badgeData) return null;
+
+                return (
+                  <div
+                    key={badgeData.id}
+                    className="mt-1 px-2 py-1.5 flex items-center gap-2 rounded-xl relative overflow-hidden"
+                    style={{
+                      background: `linear-gradient(135deg, ${badgeData.colors?.[0]}, ${badgeData.colors?.[1]})`,
+                    }}
+                  >
+                    <span className="text-xs font-bold tracking-wide text-white">
+                      {badgeData.label}
+                    </span>
+
+                    {badgeData.url && (
+                      <img
+                        src={badgeData.url}
+                        alt={badgeData.label}
+                        className="w-6 h-6 object-contain"
+                      />
+                    )}
+
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background:
+                          "linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.15) 50%, transparent 65%)",
+                        animation: "shimmer 3s ease-in-out infinite",
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             {bio && !editing && (
