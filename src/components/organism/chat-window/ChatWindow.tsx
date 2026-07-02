@@ -2636,7 +2636,7 @@ export default function ChatWindow() {
                 <Smile size={16} />
               </button>
               {emojiPanelOpen && (
-                <div className="reaction-picker absolute z-30 bottom-full mb-2 left-0 grid grid-cols-4 gap-1.5 p-2.5 w-[220px] rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
+                <div className="reaction-picker chat-scroll absolute z-30 bottom-full mb-2 left-0 grid grid-cols-4 gap-1.5 p-2.5 w-[220px] max-h-[210px] overflow-y-auto rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
                   {CUSTOM_EMOJIS.map((e) => (
                     <button
                       key={e.id}
