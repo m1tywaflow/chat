@@ -1419,6 +1419,9 @@ export default function ChatWindow() {
   const [wallpaper, setWallpaper] = useState<any>(null);
   const [pickerExpanded, setPickerExpanded] = useState(false);
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
+  const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -1431,6 +1434,9 @@ export default function ChatWindow() {
   const isNearBottom = useRef(true);
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
+  const unreadComputedForChat = useRef<string | null>(null);
+  const initializedChatRef = useRef<string | null>(null);
+  const dragCounter = useRef(0);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -1447,10 +1453,28 @@ export default function ChatWindow() {
   }, [chatId, myUid]);
 
   useEffect(() => {
-    if (!chatId) return;
-    const unsub = subscribeToMessages(chatId, setMessages);
-    return () => unsub();
+    setMessages([]);
+    setFirstUnreadId(null);
+    setShowScrollButton(false);
+    initializedChatRef.current = null;
+    unreadComputedForChat.current = null;
+    isNearBottom.current = true;
   }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const unsub = subscribeToMessages(chatId, (msgs) => {
+      setMessages(msgs);
+      if (unreadComputedForChat.current !== chatId) {
+        unreadComputedForChat.current = chatId;
+        const firstUnread = msgs.find(
+          (m) => m.senderId !== myUid && !(m.readBy || []).includes(myUid)
+        );
+        setFirstUnreadId(firstUnread ? firstUnread.id : null);
+      }
+    });
+    return () => unsub();
+  }, [chatId, myUid]);
 
   useEffect(() => {
     if (!chatId || !myUid) return;
@@ -1483,20 +1507,44 @@ export default function ChatWindow() {
   }, [messages, chatId, myUid]);
 
   useEffect(() => {
-    const el = chatScrollRef.current;
-    if (!el) return;
-    function onScroll() {
-      isNearBottom.current =
-        el!.scrollHeight - el!.scrollTop - el!.clientHeight < 80;
-    }
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+    const root = chatScrollRef.current;
+    const target = bottomRef.current;
+    if (!root || !target) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const nearBottom = entry.isIntersecting;
+        isNearBottom.current = nearBottom;
+        setShowScrollButton(!nearBottom);
+      },
+      { root, threshold: 0 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [chatId, messages.length]);
 
   useEffect(() => {
-    if (!isNearBottom.current) return;
-    bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [messages]);
+    if (!chatId || messages.length === 0) return;
+    if (initializedChatRef.current === chatId) {
+      if (isNearBottom.current) {
+        bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      }
+      return;
+    }
+    initializedChatRef.current = chatId;
+    if (firstUnreadId) {
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`msg-${firstUnreadId}`)
+          ?.scrollIntoView({ behavior: "instant", block: "center" });
+      });
+      isNearBottom.current = false;
+      setShowScrollButton(true);
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      isNearBottom.current = true;
+      setShowScrollButton(false);
+    }
+  }, [chatId, messages, firstUnreadId]);
 
   useEffect(() => {
     const isModalOpen = profileOpen || !!lightboxUrl;
@@ -1563,13 +1611,63 @@ export default function ChatWindow() {
     }, 1200);
   }
 
+  function setFileForPreview(file: File) {
+    setIsFileVideo(file.type.startsWith("video/"));
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    setIsFileVideo(file.type.startsWith("video/"));
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setFileForPreview(file);
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          setFileForPreview(file);
+        }
+        break;
+      }
+    }
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) {
+      dragCounter.current++;
+      setIsDraggingFile(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setIsDraggingFile(false);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDraggingFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (
+      file &&
+      (file.type.startsWith("image/") || file.type.startsWith("video/"))
+    ) {
+      setFileForPreview(file);
+    }
   }
 
   function removeImagePreview() {
@@ -1970,10 +2068,26 @@ export default function ChatWindow() {
             : "var(--color-chat-bg)",
           color: "var(--color-text)",
         }}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         {/* Wallpaper overlay */}
         {wallpaper?.url && (
           <div className="absolute inset-0 z-0 pointer-events-none bg-black/40" />
+        )}
+
+        {/* Drag & drop overlay */}
+        {isDraggingFile && (
+          <div className="absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#A78BFA] bg-[#0d0b14]/85 backdrop-blur-sm pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-[#A78BFA]">
+              <ImageIcon size={32} />
+              <span className="text-sm font-semibold">
+                Drop image or video to send
+              </span>
+            </div>
+          </div>
         )}
         {/* Header */}
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a] relative z-20">
@@ -2111,296 +2225,320 @@ export default function ChatWindow() {
               !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
 
             return (
-              <div
-                key={m.id}
-                id={`msg-${m.id}`}
-                className={`msg-row flex ${
-                  isMine ? "justify-end" : "justify-start"
-                } ${hasReactions ? "mb-2" : ""}`}
-                onContextMenu={(e) => {
-                  if (isMine && !m.deleted) openMsgMenu(e, m.id, true);
-                  else {
-                    e.preventDefault();
-                    handleReply(m);
-                  }
-                }}
-              >
-                <div className="relative group max-w-[72%] min-w-0">
-                  {isPickerOpen && (
-                    <div
-                      className={`reaction-picker absolute z-30 bottom-full mb-2 ${
-                        isMine ? "right-0" : "left-0"
-                      } rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 ${
-                        pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
-                      }`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {!pickerExpanded ? (
-                        <div className="flex items-center gap-1">
-                          {REACTION_EMOJIS.map((token) => (
-                            <button
-                              key={token}
-                              onClick={() => handleReact(m.id, token)}
-                              className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                            >
-                              <ReactionGlyph token={token} size={26} />
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => setPickerExpanded(true)}
-                            title="More reactions"
-                            className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
-                          >
-                            <ChevronDown size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-6 gap-1">
-                          {REACTION_OPTIONS.map((token) => (
-                            <button
-                              key={token}
-                              onClick={() => handleReact(m.id, token)}
-                              className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                            >
-                              <ReactionGlyph token={token} size={26} />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!m.deleted && (
-                    <>
-                      <button
-                        onClick={() => handleReply(m)}
-                        title="Reply"
-                        className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
-                          isMine ? "-left-16" : "-right-16"
-                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
-                      >
-                        <CornerUpLeft size={13} />
-                      </button>
-                      <button
-                        onClick={(e) => openPicker(e, m.id)}
-                        title="React"
-                        className={`react-btn absolute top-1/2 -translate-y-1/2 ${
-                          isMine ? "-left-8" : "-right-8"
-                        } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
-                      >
-                        <span>😊</span>
-                      </button>
-                      {isMine && (
-                        <button
-                          title="More options"
-                          onClick={(e) => openMsgMenu(e, m.id, true)}
-                          className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#1e2a3a] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
-                        >
-                          <MoreVertical size={12} />
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {m.replyTo && (
-                    <div
-                      onClick={() => scrollToMessage(m.replyTo.id)}
-                      className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#A78BFA] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
-                    >
-                      <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
-                        Reply
-                      </div>
-                      {m.replyTo.imageUrl && !m.replyTo.text ? (
-                        <div className="flex items-center gap-1 text-xs text-zinc-400">
-                          <ImageIcon size={11} />
-                          <span>Photo</span>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-zinc-400 truncate">
-                          {m.replyTo.text}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div
-                    className={
-                      isStickerMsg
-                        ? "leading-none"
-                        : `text-sm leading-relaxed overflow-hidden ${
-                            isMine
-                              ? "bg-[#655c85] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
-                              : "border border-white/[0.08] rounded-2xl rounded-bl-md"
-                          } ${
-                            !m.text && m.imageUrl && !m.deleted
-                              ? "p-1"
-                              : "px-4 py-2"
-                          } ${isPinned ? "ring-1 ring-[#A78BFA]/40" : ""}`
+              <div key={m.id}>
+                {firstUnreadId === m.id && (
+                  <div className="flex items-center gap-3 my-3 px-1">
+                    <div className="flex-1 h-px bg-[#A78BFA]/40" />
+                    <span className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide">
+                      Unread messages
+                    </span>
+                    <div className="flex-1 h-px bg-[#A78BFA]/40" />
+                  </div>
+                )}
+                <div
+                  id={`msg-${m.id}`}
+                  className={`msg-row flex ${
+                    isMine ? "justify-end" : "justify-start"
+                  } ${hasReactions ? "mb-2" : ""}`}
+                  onContextMenu={(e) => {
+                    if (isMine && !m.deleted) openMsgMenu(e, m.id, true);
+                    else {
+                      e.preventDefault();
+                      handleReply(m);
                     }
-                    style={
-                      !isMine && !isStickerMsg
-                        ? {
-                            background: "var(--color-msg-bg)",
-                            color: "var(--color-text)",
-                          }
-                        : undefined
-                    }
-                  >
-                    {m.deleted ? (
-                      <span className="deleted-msg text-white text-xs">
-                        Message deleted
-                      </span>
-                    ) : isStickerMsg ? (
-                      <img
-                        src={m.imageUrl}
-                        alt="sticker"
-                        className="w-32 h-32 object-contain"
-                      />
-                    ) : (
-                      <>
-                        {m.imageUrl &&
-                          (msgIsVideo ? (
-                            <div
-                              className="video-thumb"
-                              onClick={() => setLightboxUrl(m.imageUrl)}
-                            >
-                              <video
-                                src={m.imageUrl}
-                                className="chat-video"
-                                preload="metadata"
-                              />
-                              <div className="play-overlay">
-                                <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                                  <Play
-                                    size={18}
-                                    className="text-white ml-0.5"
-                                    fill="white"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <img
-                              src={m.imageUrl}
-                              alt="image"
-                              className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
-                              onClick={() => setLightboxUrl(m.imageUrl)}
-                            />
-                          ))}
-                        {isEditing ? (
-                          <div className="flex items-center gap-2 py-0.5">
-                            <input
-                              ref={editInputRef}
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") submitEdit();
-                                if (e.key === "Escape") {
-                                  setEditingId(null);
-                                  setEditText("");
-                                }
-                              }}
-                              className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-                            />
+                  }}
+                >
+                  <div className="relative group max-w-[72%] min-w-0">
+                    {isPickerOpen && (
+                      <div
+                        className={`reaction-picker absolute z-30 bottom-full mb-2 ${
+                          isMine ? "right-0" : "left-0"
+                        } rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 ${
+                          pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {!pickerExpanded ? (
+                          <div className="flex items-center gap-1">
+                            {REACTION_EMOJIS.map((token) => (
+                              <button
+                                key={token}
+                                onClick={() => handleReact(m.id, token)}
+                                className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                              >
+                                <ReactionGlyph token={token} size={26} />
+                              </button>
+                            ))}
                             <button
-                              onClick={submitEdit}
-                              className="shrink-0 text-white/60 hover:text-white transition-colors"
+                              onClick={() => setPickerExpanded(true)}
+                              title="More reactions"
+                              className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
                             >
-                              <Check size={14} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditText("");
-                              }}
-                              className="shrink-0 text-white/40 hover:text-white transition-colors"
-                            >
-                              <X size={14} />
+                              <ChevronDown size={22} />
                             </button>
                           </div>
                         ) : (
-                          m.text && (
-                            <span
-                              className={
-                                m.imageUrl ? "block px-3 pb-1 pt-2" : ""
-                              }
-                            >
-                              {m.text}
-                              {m.edited && (
-                                <span className="text-[10px] ml-1 opacity-50">
-                                  (edited)
-                                </span>
-                              )}
-                              {isMine && isLastMine && (
-                                <span
-                                  className={`inline-flex items-center ml-2 relative top-[2px] transition-colors ${
-                                    isRead ? "text-white/70" : "text-white/40"
-                                  }`}
-                                >
-                                  {isRead ? (
-                                    <CheckCheck size={16} />
-                                  ) : (
-                                    <Check size={16} />
-                                  )}
-                                </span>
-                              )}
-                            </span>
-                          )
-                        )}
-                        {!m.text && m.imageUrl && isMine && isLastMine && (
-                          <div
-                            className={`flex justify-end px-2 pb-1 transition-colors ${
-                              isRead ? "text-white/70" : "text-white/40"
-                            }`}
-                          >
-                            {isRead ? (
-                              <CheckCheck size={16} />
-                            ) : (
-                              <Check size={16} />
-                            )}
+                          <div className="grid grid-cols-6 gap-1">
+                            {REACTION_OPTIONS.map((token) => (
+                              <button
+                                key={token}
+                                onClick={() => handleReact(m.id, token)}
+                                className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                              >
+                                <ReactionGlyph token={token} size={26} />
+                              </button>
+                            ))}
                           </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!m.deleted && (
+                      <>
+                        <button
+                          onClick={() => handleReply(m)}
+                          title="Reply"
+                          className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
+                            isMine ? "-left-16" : "-right-16"
+                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
+                        >
+                          <CornerUpLeft size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => openPicker(e, m.id)}
+                          title="React"
+                          className={`react-btn absolute top-1/2 -translate-y-1/2 ${
+                            isMine ? "-left-8" : "-right-8"
+                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
+                        >
+                          <span>😊</span>
+                        </button>
+                        {isMine && (
+                          <button
+                            title="More options"
+                            onClick={(e) => openMsgMenu(e, m.id, true)}
+                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#1e2a3a] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
+                          >
+                            <MoreVertical size={12} />
+                          </button>
                         )}
                       </>
                     )}
+
+                    {m.replyTo && (
+                      <div
+                        onClick={() => scrollToMessage(m.replyTo.id)}
+                        className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#A78BFA] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
+                      >
+                        <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-0.5">
+                          Reply
+                        </div>
+                        {m.replyTo.imageUrl && !m.replyTo.text ? (
+                          <div className="flex items-center gap-1 text-xs text-zinc-400">
+                            <ImageIcon size={11} />
+                            <span>Photo</span>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-400 truncate">
+                            {m.replyTo.text}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div
+                      className={
+                        isStickerMsg
+                          ? "leading-none"
+                          : `text-sm leading-relaxed overflow-hidden ${
+                              isMine
+                                ? "bg-[#655c85] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
+                                : "border border-white/[0.08] rounded-2xl rounded-bl-md"
+                            } ${
+                              !m.text && m.imageUrl && !m.deleted
+                                ? "p-1"
+                                : "px-4 py-2"
+                            } ${isPinned ? "ring-1 ring-[#A78BFA]/40" : ""}`
+                      }
+                      style={
+                        !isMine && !isStickerMsg
+                          ? {
+                              background: "var(--color-msg-bg)",
+                              color: "var(--color-text)",
+                            }
+                          : undefined
+                      }
+                    >
+                      {m.deleted ? (
+                        <span className="deleted-msg text-white text-xs">
+                          Message deleted
+                        </span>
+                      ) : isStickerMsg ? (
+                        <img
+                          src={m.imageUrl}
+                          alt="sticker"
+                          className="w-32 h-32 object-contain"
+                        />
+                      ) : (
+                        <>
+                          {m.imageUrl &&
+                            (msgIsVideo ? (
+                              <div
+                                className="video-thumb"
+                                onClick={() => setLightboxUrl(m.imageUrl)}
+                              >
+                                <video
+                                  src={m.imageUrl}
+                                  className="chat-video"
+                                  preload="metadata"
+                                />
+                                <div className="play-overlay">
+                                  <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                    <Play
+                                      size={18}
+                                      className="text-white ml-0.5"
+                                      fill="white"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <img
+                                src={m.imageUrl}
+                                alt="image"
+                                className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                onClick={() => setLightboxUrl(m.imageUrl)}
+                              />
+                            ))}
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 py-0.5">
+                              <input
+                                ref={editInputRef}
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") submitEdit();
+                                  if (e.key === "Escape") {
+                                    setEditingId(null);
+                                    setEditText("");
+                                  }
+                                }}
+                                className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
+                              />
+                              <button
+                                onClick={submitEdit}
+                                className="shrink-0 text-white/60 hover:text-white transition-colors"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingId(null);
+                                  setEditText("");
+                                }}
+                                className="shrink-0 text-white/40 hover:text-white transition-colors"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            m.text && (
+                              <span
+                                className={
+                                  m.imageUrl ? "block px-3 pb-1 pt-2" : ""
+                                }
+                              >
+                                {m.text}
+                                {m.edited && (
+                                  <span className="text-[10px] ml-1 opacity-50">
+                                    (edited)
+                                  </span>
+                                )}
+                                {isMine && isLastMine && (
+                                  <span
+                                    className={`inline-flex items-center ml-2 relative top-[2px] transition-colors ${
+                                      isRead ? "text-white/70" : "text-white/40"
+                                    }`}
+                                  >
+                                    {isRead ? (
+                                      <CheckCheck size={16} />
+                                    ) : (
+                                      <Check size={16} />
+                                    )}
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          )}
+                          {!m.text && m.imageUrl && isMine && isLastMine && (
+                            <div
+                              className={`flex justify-end px-2 pb-1 transition-colors ${
+                                isRead ? "text-white/70" : "text-white/40"
+                              }`}
+                            >
+                              {isRead ? (
+                                <CheckCheck size={16} />
+                              ) : (
+                                <Check size={16} />
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {!m.deleted && (
+                      <div
+                        className={`text-[10px] text-zinc-400 mt-0.5 ${
+                          isMine ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {formatTime(m.createdAt)}
+                      </div>
+                    )}
+
+                    {hasReactions && !m.deleted && (
+                      <div
+                        className={`flex flex-wrap gap-1 mt-1 ${
+                          isMine ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        {reactionSummary.map(({ token, count, mine }) => (
+                          <button
+                            key={token}
+                            onClick={() => handleReact(m.id, token)}
+                            className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
+                              mine
+                                ? "bg-[#A78BFA]/30 border-[#A78BFA]/60 text-[#A78BFA] backdrop-blur-sm"
+                                : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
+                            }`}
+                          >
+                            <ReactionGlyph token={token} size={15} />
+                            <span className="font-medium">{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-
-                  {!m.deleted && (
-                    <div
-                      className={`text-[10px] text-zinc-400 mt-0.5 ${
-                        isMine ? "text-right" : "text-left"
-                      }`}
-                    >
-                      {formatTime(m.createdAt)}
-                    </div>
-                  )}
-
-                  {hasReactions && !m.deleted && (
-                    <div
-                      className={`flex flex-wrap gap-1 mt-1 ${
-                        isMine ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      {reactionSummary.map(({ token, count, mine }) => (
-                        <button
-                          key={token}
-                          onClick={() => handleReact(m.id, token)}
-                          className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
-                            mine
-                              ? "bg-[#A78BFA]/30 border-[#A78BFA]/60 text-[#A78BFA] backdrop-blur-sm"
-                              : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
-                          }`}
-                        >
-                          <ReactionGlyph token={token} size={15} />
-                          <span className="font-medium">{count}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             );
           })}
           <div ref={bottomRef} />
+
+          {showScrollButton && (
+            <button
+              onClick={() => {
+                bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                isNearBottom.current = true;
+                setShowScrollButton(false);
+              }}
+              title="Scroll to bottom"
+              className="absolute z-20 bottom-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-[#151D28] border border-white/[0.10] shadow-lg shadow-black/40 text-[#A78BFA] hover:bg-[#1b2531] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            >
+              <ChevronDown size={18} />
+            </button>
+          )}
         </div>
 
         {/* Input area */}
@@ -2521,6 +2659,7 @@ export default function ChatWindow() {
               value={text}
               onChange={handleTyping}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="Message…"
               className="flex-1 h-11 px-4 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 focus:bg-white/[0.07] transition-all"
               style={{ caretColor: "#A78BFA" }}

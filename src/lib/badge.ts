@@ -16,4 +16,10 @@ export const BADGE: {
     url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1782907105/51b40a57c4cd4925d63d4a4322e45dd0_l0sio8.gif",
     colors: ["#FFA8EC", "#F075D5"],
   },
+  {
+    id: "bug",
+    label: "CEO",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1782816916/bug_jyclbt.png",
+    colors: ["#281145", "#281145"],
+  },
 ];
