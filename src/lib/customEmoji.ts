@@ -100,6 +100,22 @@ export const CUSTOM_EMOJIS: CustomEmoji[] = [
     id: "bow",
     url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1782816916/bow_gwjn5j.png",
   },
+  {
+    id: "first-smile",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1783002782/Sprite-0007_e3qb5m.png",
+  },
+  {
+    id: "second-smile",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1783002783/0_btuin6.png",
+  },
+  {
+    id: "third-smile",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1783002783/0001_b3zfsx.png",
+  },
+  {
+    id: "fourth-smile",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1783002783/001_bh3v9q.png",
+  },
 ];
 
 export function getCustomEmoji(id: string): CustomEmoji | undefined {
