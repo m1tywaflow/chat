@@ -919,7 +919,7 @@ export default function SideBar() {
                     }
                   >
                     <Plus size={14} />
-                    Создать канал
+                    Create a channel
                   </button>
                   <button
                     onClick={() => {
@@ -936,7 +936,7 @@ export default function SideBar() {
                     }
                   >
                     <Search size={14} />
-                    Найти канал
+                    Find a channel
                   </button>
                 </div>
               )}
