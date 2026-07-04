@@ -22,7 +22,7 @@ import {
   documentId,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Channel, ChannelPost } from "@/types/channel";
+import { Channel, ChannelPost, ChannelSubscriber } from "@/types/channel";
 
 export async function createChannel(
   ownerId: string,
@@ -101,6 +101,60 @@ export async function unsubscribeFromChannel(channelId: string, uid: string) {
   const channelSnap = await getDoc(doc(db, "channels", channelId));
   if (channelSnap.exists() && channelSnap.data().ownerId === uid)
     throw new Error("Owner cannot unsubscribe from own channel");
+  const subRef = doc(db, "channels", channelId, "subscribers", uid);
+  const channelRef = doc(db, "channels", channelId);
+  await runTransaction(db, async (tx) => {
+    const subSnap = await tx.get(subRef);
+    if (!subSnap.exists()) return;
+    tx.delete(subRef);
+    tx.update(channelRef, { subscriberCount: increment(-1) });
+  });
+}
+
+export async function getChannelSubscribers(
+  channelId: string
+): Promise<ChannelSubscriber[]> {
+  const subsSnap = await getDocs(
+    query(
+      collection(db, "channels", channelId, "subscribers"),
+      orderBy("subscribedAt", "desc")
+    )
+  );
+  const uids = subsSnap.docs.map((d) => d.id);
+  if (uids.length === 0) return [];
+
+  const userDocs = await Promise.all(
+    uids.map((uid) => getDoc(doc(db, "users", uid)))
+  );
+  const usersMap = new Map<string, any>();
+  userDocs.forEach((snap) => {
+    if (snap.exists()) usersMap.set(snap.id, snap.data());
+  });
+
+  return subsSnap.docs.map((d) => {
+    const data = d.data();
+    const user = usersMap.get(d.id);
+    return {
+      uid: d.id,
+      subscribedAt: data.subscribedAt,
+      username: user?.username || "Unknown",
+      avatarUrl: user?.avatar || null,
+    };
+  });
+}
+
+export async function getChannelByOwner(uid: string): Promise<Channel | null> {
+  const q = query(collection(db, "channels"), where("ownerId", "==", uid), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() } as Channel;
+}
+
+export async function removeSubscriber(channelId: string, uid: string) {
+  const channelSnap = await getDoc(doc(db, "channels", channelId));
+  if (channelSnap.exists() && channelSnap.data().ownerId === uid)
+    throw new Error("Cannot remove the channel owner");
   const subRef = doc(db, "channels", channelId, "subscribers", uid);
   const channelRef = doc(db, "channels", channelId);
   await runTransaction(db, async (tx) => {

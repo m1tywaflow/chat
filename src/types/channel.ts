@@ -25,3 +25,9 @@ export interface ChannelPost {
   edited?: boolean;
   reactions?: Record<string, string[]>;
 }
+export interface ChannelSubscriber {
+  uid: string;
+  username: string;
+  avatarUrl: string | null;
+  subscribedAt: any;
+}
