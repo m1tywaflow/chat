@@ -633,6 +633,8 @@ import {
   Trash2,
   X,
   Smile,
+  MessageCircle,
+  Plus,
 } from "lucide-react";
 import { useChannelStore } from "@/store/channel-store";
 import { CUSTOM_EMOJIS, isCustomEmojiUrl } from "@/lib/customEmoji";
@@ -662,6 +664,32 @@ async function uploadPostImage(file: File): Promise<string> {
   return data.secure_url;
 }
 
+function ReactionPill({
+  token,
+  count,
+  mine,
+  onClick,
+}: {
+  token: string;
+  count: number;
+  mine: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border transition-colors ${
+        mine
+          ? "bg-[#A78BFA]/20 border-[#A78BFA]/50 text-[#A78BFA]"
+          : "bg-black/20 border-white/15 text-zinc-400 hover:border-white/25"
+      }`}
+    >
+      <span className="leading-none">{token}</span>
+      <span className="font-medium leading-none">{count}</span>
+    </button>
+  );
+}
+
 export default function ChannelWindow({
   channelId,
   myUid,
@@ -670,6 +698,7 @@ export default function ChannelWindow({
   myUid: string;
 }) {
   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
+  const openPostComments = useChannelStore((s) => s.openPostComments);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [posts, setPosts] = useState<ChannelPost[]>([]);
   const [isSub, setIsSub] = useState(false);
@@ -792,6 +821,58 @@ export default function ChannelWindow({
         mine: uids.includes(myUid),
       }));
   }
+
+  function PostActionsBar({ post }: { post: ChannelPost }) {
+    const reactionSummary = getReactionSummary(post.reactions);
+    const isPickerOpen = pickerOpenId === post.id;
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {reactionSummary.map(({ token, count, mine }) => (
+          <ReactionPill
+            key={token}
+            token={token}
+            count={count}
+            mine={mine}
+            onClick={() => togglePostReaction(channelId, post.id, token, myUid)}
+          />
+        ))}
+        <button
+          onClick={() => openPostComments(post.id)}
+          className="flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border bg-black/20 border-white/15 text-zinc-400 hover:text-[#A78BFA] hover:border-[#A78BFA]/40 transition-colors"
+        >
+          <MessageCircle size={12} />
+          <span className="font-medium leading-none">
+            {post.commentCount || 0}
+          </span>
+        </button>
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpenId(isPickerOpen ? null : post.id)}
+            className="w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.05] transition-colors cursor-pointer"
+          >
+            <Plus size={13} />
+          </button>
+          {isPickerOpen && (
+            <div className="absolute z-30 bottom-full mb-2 left-0 flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
+              {REACTION_EMOJIS.map((token) => (
+                <button
+                  key={token}
+                  onClick={() => {
+                    togglePostReaction(channelId, post.id, token, myUid);
+                    setPickerOpenId(null);
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg"
+                >
+                  {token}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   function ConfirmDialog({
     icon,
     title,
@@ -853,6 +934,7 @@ export default function ChannelWindow({
       </div>
     );
   }
+
   async function confirmDelete() {
     if (!channelId || !deleteConfirmId) return;
     await deleteChannelPost(channelId, deleteConfirmId);
@@ -867,6 +949,7 @@ export default function ChannelWindow({
     useChannelStore.getState().setActiveChannel(null);
     setDeleteChannelConfirm(false);
   }
+
   if (!channel) return null;
 
   return (
@@ -880,6 +963,7 @@ export default function ChannelWindow({
         .chat-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
       `}</style>
+
       <div className="flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0c121a]">
         <div
           onClick={() => setInfoModalOpen(true)}
@@ -968,8 +1052,6 @@ export default function ChannelWindow({
 
       <div className="chat-scroll flex-1 overflow-y-auto px-3 py-4 space-y-4">
         {posts.map((p) => {
-          const reactionSummary = getReactionSummary(p.reactions);
-          const isPickerOpen = pickerOpenId === p.id;
           const isSticker =
             !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
 
@@ -977,7 +1059,7 @@ export default function ChannelWindow({
             return (
               <div
                 key={p.id}
-                className="relative group max-w-[420px] flex flex-col items-start gap-1"
+                className="relative group max-w-[420px] flex flex-col items-start gap-1.5"
               >
                 <img
                   src={p.imageUrl!}
@@ -997,49 +1079,8 @@ export default function ChannelWindow({
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-1 px-1 flex-wrap">
-                  {reactionSummary.map(({ token, count, mine }) => (
-                    <button
-                      key={token}
-                      onClick={() =>
-                        togglePostReaction(channelId, p.id, token, myUid)
-                      }
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
-                        mine
-                          ? "bg-[#A78BFA]/20 border-[#A78BFA]/50 text-[#A78BFA]"
-                          : "bg-black/20 border-white/15 text-zinc-400"
-                      }`}
-                    >
-                      <span>{token}</span>
-                      <span className="font-medium">{count}</span>
-                    </button>
-                  ))}
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        setPickerOpenId(isPickerOpen ? null : p.id)
-                      }
-                      className="w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.05] transition-colors cursor-pointer text-sm"
-                    >
-                      +
-                    </button>
-                    {isPickerOpen && (
-                      <div className="absolute z-30 bottom-full mb-2 left-0 flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
-                        {REACTION_EMOJIS.map((token) => (
-                          <button
-                            key={token}
-                            onClick={() => {
-                              togglePostReaction(channelId, p.id, token, myUid);
-                              setPickerOpenId(null);
-                            }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg"
-                          >
-                            {token}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="px-1">
+                  <PostActionsBar post={p} />
                 </div>
               </div>
             );
@@ -1082,49 +1123,8 @@ export default function ChannelWindow({
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-1 mt-2 flex-wrap">
-                  {reactionSummary.map(({ token, count, mine }) => (
-                    <button
-                      key={token}
-                      onClick={() =>
-                        togglePostReaction(channelId, p.id, token, myUid)
-                      }
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
-                        mine
-                          ? "bg-[#A78BFA]/20 border-[#A78BFA]/50 text-[#A78BFA]"
-                          : "bg-black/20 border-white/15 text-zinc-400"
-                      }`}
-                    >
-                      <span>{token}</span>
-                      <span className="font-medium">{count}</span>
-                    </button>
-                  ))}
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        setPickerOpenId(isPickerOpen ? null : p.id)
-                      }
-                      className="w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.05] transition-colors cursor-pointer text-sm"
-                    >
-                      +
-                    </button>
-                    {isPickerOpen && (
-                      <div className="absolute z-30 bottom-full mb-2 left-0 flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
-                        {REACTION_EMOJIS.map((token) => (
-                          <button
-                            key={token}
-                            onClick={() => {
-                              togglePostReaction(channelId, p.id, token, myUid);
-                              setPickerOpenId(null);
-                            }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg"
-                          >
-                            {token}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="mt-2">
+                  <PostActionsBar post={p} />
                 </div>
               </div>
             </div>
