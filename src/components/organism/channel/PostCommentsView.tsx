@@ -126,10 +126,10 @@ export default function PostCommentsView({
         </button>
         <div className="min-w-0">
           <div className="text-sm font-semibold text-white truncate">
-            Комментарии
+            Comments
           </div>
           <div className="text-[11px] text-zinc-500 truncate">
-            к посту в {channel.name}
+            to the post in {channel.name}
           </div>
         </div>
       </div>
