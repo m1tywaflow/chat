@@ -38,12 +38,15 @@ export async function sendMessage(
 
 export function subscribeToMessages(
   chatId: string,
-  callback: (messages: Message[]) => void
+  callback: (messages: Message[]) => void,
+  onNewMessage?: (message: Message) => void
 ) {
   const q = query(
     collection(db, "chats", chatId, "messages"),
     orderBy("createdAt", "asc")
   );
+
+  let isFirstSnapshot = true;
 
   return onSnapshot(q, (snapshot) => {
     const messages = snapshot.docs.map((d) => ({
@@ -51,5 +54,14 @@ export function subscribeToMessages(
       ...d.data(),
     })) as Message[];
     callback(messages);
+
+    if (!isFirstSnapshot && onNewMessage) {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          onNewMessage({ id: change.doc.id, ...change.doc.data() } as Message);
+        }
+      });
+    }
+    isFirstSnapshot = false;
   });
 }

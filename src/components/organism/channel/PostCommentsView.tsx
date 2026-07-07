@@ -241,7 +241,7 @@ export default function PostCommentsView({
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            className="w-[320px] rounded-2xl bg-[#151D28] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+            className="w-80 rounded-2xl bg-gray-900 border border-white/10 shadow-2xl shadow-black/60 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 pt-6 pb-4">
