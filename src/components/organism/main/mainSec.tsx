@@ -42,7 +42,7 @@ export default function MainSection() {
   const { firebaseUser } = useCurrentUser();
 
   return (
-    <section className=" w-7xl mx-auto h-screen flex flex-col">
+    <section className="w-full mx-auto h-screen flex flex-col">
       <Header />
 
       <div className="flex flex-1 h-screen overflow-hidden">
