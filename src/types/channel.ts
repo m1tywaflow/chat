@@ -46,6 +46,7 @@ export interface Channel {
   deleted?: {
     [uid: string]: boolean;
   };
+  pinnedPostId?: string | null;
 }
 
 export interface ChannelPost {
