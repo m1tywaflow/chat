@@ -99,6 +99,13 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782819266/6b7e92fc0474eb2443d72c61b58433d1_gda4he.gif",
     rarity: "unreal",
   },
+  fatcat: {
+    id: "fatcat",
+    name: "Fat",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1783539424/04869e09851353129379e535502d87e4_ri1q73.gif",
+    rarity: "common",
+  },
 };
 
 export const RARITY_COLORS = {

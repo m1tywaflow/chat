@@ -21,7 +21,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     });
   },
 
-
   openChatFromNotification(chatId) {
     ipcRenderer.send("open-chat-request", chatId);
   },
