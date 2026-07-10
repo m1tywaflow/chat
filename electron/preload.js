@@ -24,4 +24,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openChatFromNotification(chatId) {
     ipcRenderer.send("open-chat-request", chatId);
   },
+
+  notifyToastCountChanged(count) {
+    ipcRenderer.send("toast-count-changed", count);
+  },
+
+  notifyNotificationMouseEnter() {
+    ipcRenderer.send("notification-mouse-enter");
+  },
+
+  notifyNotificationMouseLeave() {
+    ipcRenderer.send("notification-mouse-leave");
+  },
 });
