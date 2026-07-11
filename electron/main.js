@@ -347,6 +347,7 @@ ipcMain.on("new-message", (_, data) => {
 
   if (!notificationWindow || notificationWindow.isDestroyed()) return;
 
+  notificationWindow.setIgnoreMouseEvents(true, { forward: true });
   positionNotificationWindow();
   notificationWindow.show();
   notificationWindow.webContents.send("show-notification", data);
@@ -356,6 +357,7 @@ ipcMain.on("toast-count-changed", (_, count) => {
   if (!notificationWindow || notificationWindow.isDestroyed()) return;
 
   if (count <= 0) {
+    notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     notificationWindow.hide();
   } else {
     positionNotificationWindow();

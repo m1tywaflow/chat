@@ -53,7 +53,7 @@ export default function NotificationPage() {
       setMessage(null);
       setClosing(false);
       window.electronAPI?.notifyToastCountChanged(0);
-    }, 200);
+    }, 180);
   };
 
   const handleOpenChat = () => {
@@ -76,18 +76,19 @@ export default function NotificationPage() {
   }
 
   return (
-    <div className="w-screen h-screen flex items-end justify-end p-4">
+    <div className="w-screen h-screen">
       <div
         onClick={handleOpenChat}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`group relative w-[380px] rounded-lg bg-[#151D28]/95 backdrop-blur-xl text-white shadow-2xl shadow-black/50 border border-white/[0.08] p-3.5 flex items-center gap-3 cursor-pointer select-none transition-all duration-200 ease-out ${
+        className={`group relative w-full h-full rounded-[14px] bg-[#1B1D2A] text-white flex items-center gap-3 px-3.5 cursor-pointer select-none border border-white/[0.06] transition-[opacity,transform] duration-200 ease-out ${
           closing
-            ? "opacity-0 translate-x-4 scale-95"
+            ? "opacity-0 translate-x-3 scale-[0.97]"
             : "opacity-100 translate-x-0 scale-100 animate-slide-in"
         }`}
+        style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.4)" }}
       >
-        <div className="w-11 h-11 rounded-full bg-[#A78BFA]/15 overflow-hidden flex items-center justify-center shrink-0 text-[#A78BFA] font-semibold text-lg">
+        <div className="w-10 h-10 rounded-full bg-[#8B5CF6]/20 overflow-hidden flex items-center justify-center shrink-0 text-[#A78BFA] font-medium text-[15px]">
           {message.avatar ? (
             <img
               src={message.avatar}
@@ -95,15 +96,15 @@ export default function NotificationPage() {
               alt=""
             />
           ) : (
-            <span>{(message.title?.[0] ?? "💬").toUpperCase()}</span>
+            <span>{(message.title?.[0] ?? "?").toUpperCase()}</span>
           )}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-[14px] leading-tight truncate pr-4">
+          <div className="font-medium text-[13.5px] leading-tight truncate pr-4">
             {message.title || "New message"}
           </div>
-          <div className="text-[13px] text-white/60 mt-0.5 line-clamp-1 leading-tight">
+          <div className="text-[12.5px] text-white/50 mt-0.5 truncate leading-tight">
             {message.body}
           </div>
         </div>
@@ -114,9 +115,9 @@ export default function NotificationPage() {
             handleClose();
           }}
           aria-label="Close"
-          className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-white/10 transition-all duration-150"
+          className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-white/10 transition-opacity duration-150"
         >
-          <X size={13} strokeWidth={2.5} />
+          <X size={12} strokeWidth={2.5} />
         </button>
       </div>
     </div>
