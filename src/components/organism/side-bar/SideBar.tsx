@@ -1182,6 +1182,7 @@ import {
   DEFAULT_DARK,
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
+import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 
 interface CtxMenu {
   chatId: string;
@@ -1224,20 +1225,24 @@ export default function SideBar() {
   const channelMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    window.electronAPI?.onWindowVisibilityChange((visible) => {
+      useWindowVisibilityStore.getState().setVisible(visible);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!firebaseUser) return;
     const unsub = subscribeToUserChats(
       firebaseUser.uid,
       setChats,
       (payload) => {
-        console.log("NEW MESSAGE", payload);
         const { activeChatId } = useChatStore.getState();
 
         const isThisChatOpen = activeChatId === payload.chatId;
 
-        const isWindowFocused =
-          typeof document !== "undefined" && !document.hidden;
+        const isWindowVisible = useWindowVisibilityStore.getState().isVisible;
 
-        if (isThisChatOpen && isWindowFocused) {
+        if (isThisChatOpen && isWindowVisible) {
           return;
         }
 
@@ -1246,7 +1251,7 @@ export default function SideBar() {
         audio.volume = 0.8;
 
         audio.play().catch(() => {});
-        console.log("NOTIFY", payload);
+
         window.electronAPI?.notifyNewMessage({
           title: payload.senderName,
           body: payload.text,

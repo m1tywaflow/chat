@@ -222,6 +222,8 @@ export default function ChatWindow() {
   const dragCounter = useRef(0);
   const prevMsgCountRef = useRef(0);
 
+  const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
+
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
   }, []);
@@ -291,7 +293,7 @@ export default function ChatWindow() {
   // chat is already the open one (Telegram never lets the counter tick up
   // while you're sitting inside the conversation)
   useEffect(() => {
-    if (!chatId || !myUid) return;
+    if (!chatId || !myUid || !isWindowVisible) return;
     if (messages.length > prevMsgCountRef.current) {
       updateDoc(doc(db, "chats", chatId), {
         [`unreadCount.${myUid}`]: 0,
@@ -301,12 +303,17 @@ export default function ChatWindow() {
   }, [messages.length, chatId, myUid]);
 
   useEffect(() => {
-    if (!chatId || !myUid || messages.length === 0) return;
+    if (!chatId || !myUid || messages.length === 0 || !isWindowVisible) return;
     messages.forEach((m) => {
       if (m.senderId !== myUid && !(m.readBy || []).includes(myUid))
         markMessageRead(chatId, m.id, myUid);
     });
   }, [messages, chatId, myUid]);
+  useEffect(() => {
+    window.electronAPI?.onWindowVisibilityChange((visible) => {
+      useWindowVisibilityStore.getState().setVisible(visible);
+    });
+  }, []);
 
   // track scroll position directly (no IntersectionObserver) so we always
   // know, in real time, whether the user was sitting at the bottom
