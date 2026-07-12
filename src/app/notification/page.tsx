@@ -76,12 +76,12 @@ export default function NotificationPage() {
   }
 
   return (
-    <div className="w-screen h-screen">
+    <div className="w-full h-full pointer-events-none">
       <div
         onClick={handleOpenChat}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`group relative w-full h-full rounded-[14px] bg-[#1B1D2A] text-white flex items-center gap-3 px-3.5 cursor-pointer select-none border border-white/[0.06] transition-[opacity,transform] duration-200 ease-out ${
+        className={`group pointer-events-auto relative w-full h-full rounded-[14px] bg-[#1B1D2A] text-white flex items-center gap-3 px-3.5 cursor-pointer select-none border border-white/[0.06] transition-[opacity,transform] duration-200 ease-out ${
           closing
             ? "opacity-0 translate-x-3 scale-[0.97]"
             : "opacity-100 translate-x-0 scale-100 animate-slide-in"
