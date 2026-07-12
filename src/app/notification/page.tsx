@@ -34,6 +34,7 @@ export default function NotificationPage() {
       setClosing(false);
 
       const audio = new Audio("/sound/notifyNew.mp3");
+      audio.volume = 0.3;
       audio.play().catch(() => {});
 
       closeTimerRef.current = setTimeout(() => {
@@ -55,13 +56,6 @@ export default function NotificationPage() {
       window.electronAPI?.notifyToastCountChanged(0);
     }, 180);
   };
-  const handleMouseEnter = () => {
-    window.electronAPI?.notifyNotificationMouseEnter();
-  };
-
-  const handleMouseLeave = () => {
-    window.electronAPI?.notifyNotificationMouseLeave();
-  };
 
   const handleOpenChat = () => {
     if (message?.chatId) {
@@ -77,8 +71,6 @@ export default function NotificationPage() {
   return (
     <div className="w-full h-full ">
       <div
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         onClick={handleOpenChat}
         className={`group pointer-events-auto relative w-full h-full rounded-[14px] bg-[#1B1D2A] text-white flex items-center gap-3 px-3.5 cursor-pointer select-none border border-white/[0.06] transition-[opacity,transform] duration-200 ease-out ${
           closing

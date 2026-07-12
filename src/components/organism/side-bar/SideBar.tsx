@@ -1246,9 +1246,9 @@ export default function SideBar() {
           return;
         }
 
-        const audio = new Audio("/sound/notification.mp3");
+        const audio = new Audio("/sound/notifyNew.mp3");
 
-        audio.volume = 0.8;
+        audio.volume = 0.3;
 
         audio.play().catch(() => {});
 

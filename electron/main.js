@@ -169,6 +169,7 @@ ipcMain.on("new-message", (_, data) => {
   positionNotificationWindow();
   notificationWindow.show();
   notificationWindow.webContents.send("show-notification", data);
+  startMousePolling();
 });
 
 ipcMain.on("toast-count-changed", (_, count) => {
@@ -177,6 +178,7 @@ ipcMain.on("toast-count-changed", (_, count) => {
   if (count <= 0) {
     notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     notificationWindow.hide();
+    stopMousePolling(); 
   } else {
     positionNotificationWindow();
   }
@@ -203,15 +205,33 @@ ipcMain.on("open-chat-request", (_, chatId) => {
   }
 });
 
-ipcMain.on("notification-mouse-enter", () => {
-  if (!notificationWindow || notificationWindow.isDestroyed()) return;
-  notificationWindow.setIgnoreMouseEvents(false);
-});
+let mousePollInterval = null;
 
-ipcMain.on("notification-mouse-leave", () => {
-  if (!notificationWindow || notificationWindow.isDestroyed()) return;
-  notificationWindow.setIgnoreMouseEvents(true, { forward: true });
-});
+function startMousePolling() {
+  if (mousePollInterval) return;
+
+  mousePollInterval = setInterval(() => {
+    if (!notificationWindow || notificationWindow.isDestroyed()) return;
+
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = notificationWindow.getBounds();
+
+    const isInside =
+      cursor.x >= bounds.x &&
+      cursor.x <= bounds.x + bounds.width &&
+      cursor.y >= bounds.y &&
+      cursor.y <= bounds.y + bounds.height;
+
+    notificationWindow.setIgnoreMouseEvents(!isInside, { forward: true });
+  }, 50);
+}
+
+function stopMousePolling() {
+  if (mousePollInterval) {
+    clearInterval(mousePollInterval);
+    mousePollInterval = null;
+  }
+}
 
 app.whenReady().then(() => {
   createWindow();
