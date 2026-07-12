@@ -44,6 +44,7 @@ import {
   getCustomEmoji,
   isCustomEmojiUrl,
 } from "@/lib/customEmoji";
+import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
