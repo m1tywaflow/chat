@@ -34,5 +34,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(visible);
     });
   },
-  getWindowVisibility: () => ipcRenderer.invoke("get-window-visibility"),
+  
 });
