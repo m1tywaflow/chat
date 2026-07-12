@@ -1,6 +1,6 @@
 {
   "name": "chatik",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -37,28 +37,27 @@
     "wait-on": "^9.0.10"
   },
   "build": {
-    "appId": "com.mitywa.chat",
-    "productName": "Chat",
-    "files": [
-      ".next/**/*",
-      "public/**/*",
-      "electron/**/*",
-      "package.json"
-    ],
-    "directories": {
-      "buildResources": "electron/icons"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "electron/icons/icon.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "electron/icons/icon.icns"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "electron/icons/icon.png"
-    }
+  "appId": "com.mitywa.chat",
+  "productName": "pislk",
+  "asar": true,
+  "compression": "maximum",
+  "electronLanguages": ["en", "ru"],
+  "files": [
+    ".next/**/*",
+    "!.next/cache/**/*",
+    "public/**/*",
+    "electron/**/*",
+    "package.json"
+  ],
+  "directories": {
+    "buildResources": "electron/icons"
+  },
+  "win": {
+    "target": "nsis",
+    "icon": "electron/icons/icon.ico"
+  },
+  "nsis": {
+    "differentialPackage": false
   }
+}
 }

@@ -68,7 +68,7 @@ function createWindow() {
   mainWindow.on("hide", broadcastVisibility);
   mainWindow.on("focus", broadcastVisibility);
   mainWindow.on("blur", broadcastVisibility);
-
+  mainWindow.webContents.once("did-finish-load", broadcastVisibility);
   mainWindow.on("close", (e) => {
     if (!app.isQuiting) {
       e.preventDefault();
@@ -178,7 +178,7 @@ ipcMain.on("toast-count-changed", (_, count) => {
   if (count <= 0) {
     notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     notificationWindow.hide();
-    stopMousePolling(); 
+    stopMousePolling();
   } else {
     positionNotificationWindow();
   }
