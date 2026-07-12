@@ -364,16 +364,6 @@ ipcMain.on("toast-count-changed", (_, count) => {
   }
 });
 
-ipcMain.on("notification-mouse-enter", () => {
-  if (!notificationWindow || notificationWindow.isDestroyed()) return;
-  notificationWindow.setIgnoreMouseEvents(false);
-});
-
-ipcMain.on("notification-mouse-leave", () => {
-  if (!notificationWindow || notificationWindow.isDestroyed()) return;
-  notificationWindow.setIgnoreMouseEvents(true, { forward: true });
-});
-
 ipcMain.on("reset-unread", () => {
   unreadCount = 0;
   updateTrayIcon();

@@ -63,24 +63,14 @@ export default function NotificationPage() {
     handleClose();
   };
 
-  const handleMouseEnter = () => {
-    window.electronAPI?.notifyNotificationMouseEnter();
-  };
-
-  const handleMouseLeave = () => {
-    window.electronAPI?.notifyNotificationMouseLeave();
-  };
-
   if (!message) {
     return null;
   }
 
   return (
-    <div className="w-full h-full pointer-events-none">
+    <div className="w-full h-full ">
       <div
         onClick={handleOpenChat}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         className={`group pointer-events-auto relative w-full h-full rounded-[14px] bg-[#1B1D2A] text-white flex items-center gap-3 px-3.5 cursor-pointer select-none border border-white/[0.06] transition-[opacity,transform] duration-200 ease-out ${
           closing
             ? "opacity-0 translate-x-3 scale-[0.97]"

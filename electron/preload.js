@@ -28,12 +28,4 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyToastCountChanged(count) {
     ipcRenderer.send("toast-count-changed", count);
   },
-
-  notifyNotificationMouseEnter() {
-    ipcRenderer.send("notification-mouse-enter");
-  },
-
-  notifyNotificationMouseLeave() {
-    ipcRenderer.send("notification-mouse-leave");
-  },
 });

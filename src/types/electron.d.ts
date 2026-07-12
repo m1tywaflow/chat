@@ -19,8 +19,6 @@ declare global {
       ) => void;
       openChatFromNotification: (chatId: string) => void;
       notifyToastCountChanged: (count: number) => void;
-      notifyNotificationMouseEnter: () => void;
-      notifyNotificationMouseLeave: () => void;
     };
   }
 }
