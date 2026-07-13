@@ -58,6 +58,9 @@ function createWindow() {
   });
 
   mainWindow.loadURL(APP_URL);
+  mainWindow.webContents.once("did-finish-load", () => {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  });
 
   function broadcastVisibility() {
     const visible = mainWindow.isVisible() && mainWindow.isFocused();
