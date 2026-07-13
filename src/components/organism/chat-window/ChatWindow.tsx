@@ -311,10 +311,17 @@ export default function ChatWindow() {
     });
   }, [messages, chatId, myUid]);
   useEffect(() => {
-    window.electronAPI?.onWindowVisibilityChange((visible) => {
+  if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
+    window.electronAPI.onWindowVisibilityChange((visible) => {
       useWindowVisibilityStore.getState().setVisible(visible);
     });
-  }, []);
+  } else {
+    console.warn("electronAPI.onWindowVisibilityChange missing", {
+      hasElectronAPI: !!window.electronAPI,
+      keys: window.electronAPI ? Object.keys(window.electronAPI) : null,
+    });
+  }
+}, []);
 
   // track scroll position directly (no IntersectionObserver) so we always
   // know, in real time, whether the user was sitting at the bottom

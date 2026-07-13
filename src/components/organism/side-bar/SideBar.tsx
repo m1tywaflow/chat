@@ -79,9 +79,16 @@ export default function SideBar() {
   const channelMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    window.electronAPI?.onWindowVisibilityChange((visible) => {
-      useWindowVisibilityStore.getState().setVisible(visible);
-    });
+    if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
+      window.electronAPI.onWindowVisibilityChange((visible) => {
+        useWindowVisibilityStore.getState().setVisible(visible);
+      });
+    } else {
+      console.warn("electronAPI.onWindowVisibilityChange missing", {
+        hasElectronAPI: !!window.electronAPI,
+        keys: window.electronAPI ? Object.keys(window.electronAPI) : null,
+      });
+    }
   }, []);
 
   useEffect(() => {

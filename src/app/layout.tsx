@@ -63,6 +63,17 @@ export default function RootLayout({
             `,
           }}
         />
+
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+      window.addEventListener('DOMContentLoaded', function() {
+        console.log('electronAPI present:', !!window.electronAPI);
+        console.log('electronAPI keys:', window.electronAPI ? Object.keys(window.electronAPI) : 'none');
+      });
+    `,
+          }}
+        />
         <AuthProvider>
           <ThemeProvider>
             <FatalErrorBoundary>{children}</FatalErrorBoundary>
