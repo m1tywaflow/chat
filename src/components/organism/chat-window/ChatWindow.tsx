@@ -311,17 +311,17 @@ export default function ChatWindow() {
     });
   }, [messages, chatId, myUid]);
   useEffect(() => {
-  if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
-    window.electronAPI.onWindowVisibilityChange((visible) => {
-      useWindowVisibilityStore.getState().setVisible(visible);
-    });
-  } else {
-    console.warn("electronAPI.onWindowVisibilityChange missing", {
-      hasElectronAPI: !!window.electronAPI,
-      keys: window.electronAPI ? Object.keys(window.electronAPI) : null,
-    });
-  }
-}, []);
+    if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
+      window.electronAPI.onWindowVisibilityChange((visible) => {
+        useWindowVisibilityStore.getState().setVisible(visible);
+      });
+    } else {
+      console.warn("electronAPI.onWindowVisibilityChange missing", {
+        hasElectronAPI: !!window.electronAPI,
+        keys: window.electronAPI ? Object.keys(window.electronAPI) : null,
+      });
+    }
+  }, []);
 
   // track scroll position directly (no IntersectionObserver) so we always
   // know, in real time, whether the user was sitting at the bottom
@@ -758,7 +758,7 @@ export default function ChatWindow() {
       {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
         <div
           ref={msgMenuRef}
-          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0b14] border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden"
+          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0d1d] border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden"
           style={
             msgMenu.openUpward
               ? {
@@ -923,7 +923,7 @@ export default function ChatWindow() {
           </div>
         )}
         {/* Header */}
-        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0c121a] relative z-20">
+        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0d1d] relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
             <button
               onClick={() => setProfileOpen(true)}
@@ -971,7 +971,7 @@ export default function ChatWindow() {
                 />
               )}
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0d1d] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
                     onClick={() => {
                       setGalleryOpen(true);
@@ -1062,11 +1062,11 @@ export default function ChatWindow() {
               <div key={m.id}>
                 {firstUnreadId === m.id && (
                   <div className="flex items-center gap-3 my-3 px-1">
-                    <div className="flex-1 h-px bg-[#A78BFA]/40" />
-                    <span className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide">
+                    <div className="flex-1 h-px bg-[#0d0d1d]/40" />
+                    <span className="text-[10px] font-semibold text-[#0d0d1d]  uppercase tracking-wide">
                       Unread messages
                     </span>
-                    <div className="flex-1 h-px bg-[#A78BFA]/40" />
+                    <div className="flex-1 h-px bg-[#0d0d1d]/40" />
                   </div>
                 )}
                 <div
@@ -1134,7 +1134,7 @@ export default function ChatWindow() {
                           title="Reply"
                           className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
                             isMine ? "-left-16" : "-right-16"
-                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
+                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#0d0d1d]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
                         >
                           <CornerUpLeft size={13} />
                         </button>
@@ -1143,7 +1143,7 @@ export default function ChatWindow() {
                           title="React"
                           className={`react-btn absolute top-1/2 -translate-y-1/2 ${
                             isMine ? "-left-8" : "-right-8"
-                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#1a1a2e]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
+                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#A78BFA] bg-[#0d0d1d]/80 hover:bg-[#A78BFA]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
                         >
                           <span>😊</span>
                         </button>
@@ -1151,7 +1151,7 @@ export default function ChatWindow() {
                           <button
                             title="More options"
                             onClick={(e) => openMsgMenu(e, m.id, true)}
-                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#1e2a3a] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
+                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0d1d] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
                           >
                             <MoreVertical size={12} />
                           </button>
@@ -1186,7 +1186,7 @@ export default function ChatWindow() {
                           ? "leading-none"
                           : `text-sm leading-relaxed overflow-hidden ${
                               isMine
-                                ? "bg-[#655c85] text-white rounded-2xl rounded-br-md shadow-md shadow-purple-900/20"
+                                ? "bg-gradient-to-r from-[#2d1964] via-[#46279a] to-[#522eb5]  text-white rounded-[18px] rounded-br-[8px]shadow-md shadow-purple-900/20"
                                 : "border border-white/[0.08] rounded-2xl rounded-bl-md"
                             } ${
                               !m.text && m.imageUrl && !m.deleted
@@ -1220,11 +1220,20 @@ export default function ChatWindow() {
                                 isRead ? "text-white/90" : "text-white/50"
                               }`}
                             >
-                              {isRead ? (
-                                <CheckCheck size={14} />
-                              ) : (
-                                <Check size={14} />
-                              )}
+                              <span
+                                className="inline-flex items-center ml-2 relative top-[2px]"
+                                style={{
+                                  color: "#d2a8ff",
+                                  filter:
+                                    "drop-shadow(0 0 6px rgba(210,168,255,.45))",
+                                }}
+                              >
+                                {isRead ? (
+                                  <CheckCheck size={16} />
+                                ) : (
+                                  <Check size={16} />
+                                )}
+                              </span>
                             </span>
                           )}
                         </div>
@@ -1306,7 +1315,9 @@ export default function ChatWindow() {
                                 {isMine && isLastMine && (
                                   <span
                                     className={`inline-flex items-center ml-2 relative top-[2px] transition-colors ${
-                                      isRead ? "text-white/70" : "text-white/40"
+                                      isRead
+                                        ? "text-[#cfa8ff]"
+                                        : "text-[#b68cff]"
                                     }`}
                                   >
                                     {isRead ? (
@@ -1510,7 +1521,7 @@ export default function ChatWindow() {
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               placeholder="Message…"
-              className="flex-1 h-11 px-4 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 focus:bg-white/[0.07] transition-all"
+              className="flex-1 h-11 px-4 rounded-full bg-[#0d0d1d] backdrop-blur-xl border border-[#ffffff08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#0d0d1d]/30 focus:bg-white/[0.07] transition-all"
               style={{ caretColor: "#A78BFA" }}
             />
             <input
@@ -1526,7 +1537,8 @@ export default function ChatWindow() {
               disabled={!canSend}
               className="shrink-0 w-10 h-10 flex items-center justify-center rounded-2xl transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-105 active:scale-90"
               style={{
-                background: "linear-gradient(135deg, #A78BFA, #7c3aed)",
+                background: "linear-gradient(180deg,#0d0d1d 0%,#0d0d1d 100%)",
+
                 boxShadow: canSend ? "0 4px 20px rgba(124,58,237,0.5)" : "none",
               }}
             >

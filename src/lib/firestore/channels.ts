@@ -387,3 +387,12 @@ export async function unpinChannelPost(channelId: string) {
     pinnedPostId: null,
   });
 }
+export async function togglePinChannel(
+  uid: string,
+  channelId: string,
+  pinned: boolean
+) {
+  await updateDoc(doc(db, "users", uid), {
+    [`pinnedChannels.${channelId}`]: pinned,
+  });
+}

@@ -1,6 +1,6 @@
 export default function Header() {
   return (
-    <header className="relative w-full h-16 flex items-center px-8 bg-[#0d0b14]">
+    <header className="relative w-full h-16 flex items-center px-8 bg-[#0d0d1d]">
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
         style={{
