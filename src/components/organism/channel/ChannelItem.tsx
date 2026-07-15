@@ -9,8 +9,8 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 
-const ACTIVE_ROW_BG = "#4C3B85";
-const ACTIVE_ROW_HOVER_BG = "#54428F";
+const ACTIVE_ROW_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
+const ACTIVE_ROW_HOVER_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
 
 export default function ChannelItem({
   channel,
@@ -54,7 +54,7 @@ export default function ChannelItem({
       className="w-full min-h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px]  transition-colors duration-150 cursor-pointer overflow-hidden relative group"
       style={{
         background: active ? ACTIVE_ROW_BG : "transparent",
-        width: "calc(100% - 10px)",
+        width: "calc(100% - 9px)",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = active
@@ -87,7 +87,7 @@ export default function ChannelItem({
         <div
           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full flex items-center justify-center border-[2px]"
           style={{
-            background: "#151D28",
+            background: mode === "light" ? "#d1d5db" : "#3f3f46",
             borderColor: active ? ACTIVE_ROW_BG : theme.sideBarBg,
           }}
         >
@@ -101,25 +101,24 @@ export default function ChannelItem({
             {pinned && (
               <Pin size={9} className="shrink-0" style={{ color: pinColor }} />
             )}
+
             <h3
-              className="text-[13.5px] font-semibold truncate leading-none"
+              className="text-[14.5px] font-semibold truncate leading-none"
               style={{ color: nameColor }}
             >
               {channel.name}
             </h3>
           </div>
-          {lastPostTime && (
-            <span
-              className="text-[11px] shrink-0 tabular-nums"
-              style={{ color: timeColor }}
-            >
-              {formatTime(lastPostTime)}
-            </span>
-          )}
+          <span
+            className="text-[11px] shrink-0 tabular-nums"
+            style={{ color: timeColor }}
+          >
+            {lastPostTime ? formatTime(lastPostTime) : ""}
+          </span>
         </div>
 
         <p
-          className="text-[12px] truncate leading-tight"
+          className="text-[13px] font-bold truncate leading-tight"
           style={{ color: lastMsgColor }}
         >
           {channel.lastPostPreview || "No posts"}

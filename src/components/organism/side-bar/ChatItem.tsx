@@ -276,9 +276,8 @@ interface Props {
   pinned?: boolean;
 }
 
-// exact tone from the reference screenshot — solid deep violet, not the pastel accent
-const ACTIVE_ROW_BG = "#4C3B85";
-const ACTIVE_ROW_HOVER_BG = "#54428F";
+const ACTIVE_ROW_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
+const ACTIVE_ROW_HOVER_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
 
 export default function ChatItem({ chat, pinned }: Props) {
   const activeChatId = useChatStore((s) => s.activeChatId);

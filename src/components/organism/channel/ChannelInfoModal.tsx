@@ -71,7 +71,7 @@ export default function ChannelInfoModal({
       onClick={onClose}
     >
       <div
-        className="w-[380px] max-h-[85vh] rounded-2xl bg-[#151D28] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden flex flex-col"
+        className="w-[380px] max-h-[85vh] rounded-2xl bg-[#070B14] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {view === "info" ? (
@@ -80,7 +80,7 @@ export default function ChannelInfoModal({
               <div
                 className="h-20"
                 style={{
-                  background: "linear-gradient(135deg, #A78BFA, #7c3aed)",
+                  background: "#522fb7",
                 }}
               />
               <button

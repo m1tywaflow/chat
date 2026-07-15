@@ -534,7 +534,7 @@ export default function ChannelWindow({
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
       `}</style>
 
-      <div className="flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0c121a]">
+      <div className="flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0d0d1d]">
         <div
           onClick={() => setInfoModalOpen(true)}
           className="flex items-center gap-3 min-w-0 cursor-pointer rounded-lg -mx-2 px-2 py-1 hover:bg-white/[0.04] transition-colors"

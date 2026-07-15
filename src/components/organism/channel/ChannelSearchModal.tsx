@@ -58,7 +58,7 @@ export default function ChannelSearchModal({
       onClick={onClose}
     >
       <div
-        className="w-[380px] max-h-[520px] flex flex-col rounded-2xl bg-[#151D28] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+        className="w-[380px] max-h-[520px] flex flex-col rounded-2xl bg-[#0d0d1d] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
