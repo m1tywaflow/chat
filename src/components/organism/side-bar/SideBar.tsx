@@ -67,7 +67,7 @@ interface DeleteConfirm {
 
 // exact tones lifted from the reference screenshot
 const SEARCH_BG = "#1E1830";
-const SEARCH_BTN_BG = "#241C3A";
+const SEARCH_BTN_BG = "#13101f";
 
 export default function SideBar() {
   const chats = useChatStore((s) => s.chats);
@@ -528,35 +528,56 @@ export default function SideBar() {
         </div>
 
         {/* footer */}
-        <div className="pb-3 divide-y divide-[#522fb7] pt-1">
+        <div className="pt-2 pb-2 space-y-2">
           <Link
             href="/settings"
-            className="flex items-center gap-3 px-5 py-2.5 transition-colors"
+            className="group flex h-12 items-center gap-3 rounded-2xl border border-white/[0.05]
+               bg-white/[0.015] px-4 transition-all duration-200"
             style={{ color: theme.text }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
-          >
-            <Settings size={18} style={{ color: accent }} />
-            <span className="text-sm font-semibold">Settings</span>
-          </Link>
-          <button
-            onClick={() => setShowProfile(true)}
-            className="flex items-center gap-3 px-5 py-2.5 cursor-pointer transition-colors w-full text-left"
-            style={{ color: theme.text }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hoverBg;
+              e.currentTarget.style.borderColor = accent + "40";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.015)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+            }}
           >
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ border: `1.5px solid ${accent}` }}
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{
+                background: `${accent}18`,
+              }}
             >
-              <UserCircle size={18} style={{ color: accent }} />
+              <Settings size={17} style={{ color: accent }} />
             </div>
-            <span className="text-sm font-semibold">Your profile</span>
+
+            <span className="text-[14px] font-medium">Settings</span>
+          </Link>
+
+          <button
+            onClick={() => setShowProfile(true)}
+            className="group flex h-12 w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.015] px-4 text-left transition-all duration-200"
+            style={{ color: theme.text }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hoverBg;
+              e.currentTarget.style.borderColor = accent + "40";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.015)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+            }}
+          >
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{
+                background: `${accent}18`,
+              }}
+            >
+              <UserCircle size={17} style={{ color: accent }} />
+            </div>
+
+            <span className="text-[14px] font-medium">Your profile</span>
           </button>
         </div>
       </section>
