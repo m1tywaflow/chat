@@ -9,8 +9,11 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 
-const ACTIVE_ROW_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
-const ACTIVE_ROW_HOVER_BG = "linear-gradient(135deg, #522fb7 0%, #0d0d1d 100%)";
+const ACTIVE_ROW_BG =
+  "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
+
+const ACTIVE_ROW_HOVER_BG =
+  "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
 
 export default function ChannelItem({
   channel,
