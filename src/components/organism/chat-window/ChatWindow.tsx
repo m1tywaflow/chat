@@ -3113,7 +3113,7 @@ export default function ChatWindow() {
             </div>
           )}
 
-          <div className="px-3 py-3 flex items-center gap-2">
+          {/* <div className="px-3 py-3 flex items-center gap-2 ">
             <input
               ref={fileInputRef}
               type="file"
@@ -3156,7 +3156,6 @@ export default function ChatWindow() {
                 </div>
               )}
             </div>
-
             <input
               ref={inputRef}
               value={text}
@@ -3189,6 +3188,198 @@ export default function ChatWindow() {
                 size={14}
                 className="text-white"
                 style={{ transform: "translateX(1px)" }}
+              />
+            </button>
+          </div> */}
+
+          <div className="px-4 py-3 flex items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {/* Input wrapper */}
+            <div
+              className="
+      flex-1
+      h-[54px]
+      flex
+      items-center
+      gap-3
+      px-4
+      rounded-full
+      bg-[#151528]/80
+      backdrop-blur-xl
+      border border-white/[0.06]
+      shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]
+      transition-all
+      focus-within:border-[#A78BFA]/30
+    "
+            >
+              {/* Attach */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+                className="
+        shrink-0
+        w-7
+        h-7
+        flex
+        items-center
+        justify-center
+        rounded-xl
+        text-zinc-500
+        hover:text-[#A78BFA]
+        hover:bg-[#A78BFA]/10
+        transition-all
+        hover:scale-105
+        active:scale-95
+      "
+              >
+                <Paperclip size={18} />
+              </button>
+              {/* Emoji */}
+              <div className="relative shrink-0" ref={emojiPanelRef}>
+                <button
+                  onClick={() => setEmojiPanelOpen((v) => !v)}
+                  title="Send emoji"
+                  className="
+          w-7
+          h-7
+          flex
+          items-center
+          justify-center
+          rounded-xl
+          text-zinc-500
+          hover:text-[#A78BFA]
+          hover:bg-[#A78BFA]/10
+          transition-all
+          hover:scale-105
+          active:scale-95
+        "
+                >
+                  <Smile size={18} />
+                </button>
+                {emojiPanelOpen && (
+                  <div
+                    className="
+            reaction-picker
+            chat-scroll
+            absolute
+            z-50
+            bottom-full
+            mb-3
+            left-0
+            grid
+            grid-cols-4
+            gap-2
+            p-3
+            w-[230px]
+            max-h-[230px]
+            overflow-y-auto
+            rounded-2xl
+            bg-[#151525]
+            border border-white/[0.10]
+            shadow-xl
+            shadow-black/50
+          "
+                  >
+                    {CUSTOM_EMOJIS.map((e) => (
+                      <button
+                        key={e.id}
+                        onClick={() => sendSticker(e.url)}
+                        className="
+                reaction-emoji-btn
+                w-12
+                h-12
+                flex
+                items-center
+                justify-center
+                rounded-xl
+                hover:bg-white/[0.08]
+                cursor-pointer
+                transition
+                hover:scale-110
+              "
+                      >
+                        <img
+                          src={e.url}
+                          alt={e.id}
+                          className="
+                  w-9
+                  h-9
+                  object-contain
+                "
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Text */}
+              <input
+                ref={inputRef}
+                value={text}
+                onChange={handleTyping}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder="Message…"
+                className="
+        flex-1
+        min-w-0
+        bg-transparent
+        outline-none
+        text-[15px]
+        text-white
+        placeholder:text-zinc-600
+      "
+                style={{
+                  caretColor: "#A78BFA",
+                }}
+              />
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={wallpaperInputRef}
+              onChange={handleWallpaperChange}
+            />
+            {/* Send */}
+            <button
+              onClick={send}
+              disabled={!canSend}
+              className="
+      shrink-0
+      w-[52px]
+      h-[52px]
+      flex
+      items-center
+      justify-center
+      rounded-full
+
+      bg-gradient-to-br
+      from-[#7c3aed]
+      to-[#5b21b6]
+
+      shadow-[0_0_35px_rgba(124,58,237,.45)]
+
+      transition-all
+      hover:scale-105
+      active:scale-95
+
+      disabled:opacity-20
+      disabled:cursor-not-allowed
+    "
+            >
+              <Send
+                size={19}
+                className="text-white"
+                style={{
+                  transform: "translateX(-1px)",
+                }}
               />
             </button>
           </div>
