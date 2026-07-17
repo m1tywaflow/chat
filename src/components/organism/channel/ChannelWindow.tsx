@@ -15,6 +15,7 @@ import {
   updateChannelPostText,
   pinChannelPost,
   unpinChannelPost,
+  markPostViewed,
 } from "@/lib/firestore/channels";
 import {
   Megaphone,
@@ -30,6 +31,7 @@ import {
   PinOff,
   Pencil,
   Check,
+  Eye,
 } from "lucide-react";
 import { useChannelStore } from "@/store/channel-store";
 import { CUSTOM_EMOJIS, isCustomEmojiUrl } from "@/lib/customEmoji";
@@ -44,6 +46,18 @@ function formatTime(ts: any): string {
   if (!ts) return "";
   const date = ts.toDate ? ts.toDate() : new Date(ts);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// Telegram-style compact number: 999, 1.2K, 3.4M
+function formatViews(n: number | undefined): string {
+  const v = n ?? 0;
+  if (v < 1000) return String(v);
+  if (v < 1_000_000) {
+    const k = v / 1000;
+    return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K`;
+  }
+  const m = v / 1_000_000;
+  return `${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
 }
 
 async function uploadPostImage(file: File): Promise<string> {
@@ -83,6 +97,32 @@ function ReactionPill({
       <span className="leading-none">{token}</span>
       <span className="font-medium leading-none">{count}</span>
     </button>
+  );
+}
+
+/**
+ * Telegram-style "time · views" meta row. Single source of truth so the
+ * pin dot, timestamp, and view counter line up identically everywhere a
+ * post's meta is rendered (text posts, media posts, stickers).
+ */
+function PostMeta({
+  time,
+  views,
+  isPinned,
+}: {
+  time: string;
+  views?: number;
+  isPinned?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 select-none">
+      {isPinned && <Pin size={10} className="text-[#A78BFA] shrink-0" />}
+      <span className="tabular-nums">{time}</span>
+      <span className="flex items-center gap-0.5 opacity-80">
+        <Eye size={11} className="shrink-0" strokeWidth={2.25} />
+        <span className="tabular-nums">{formatViews(views)}</span>
+      </span>
+    </div>
   );
 }
 
@@ -158,6 +198,21 @@ export default function ChannelWindow({
   const isInitialLoadRef = useRef(true);
   const isNearBottomRef = useRef(true);
 
+  // Telegram-style view tracking: a post only counts as "viewed" once it
+  // has actually sat on screen for a beat, not the instant it flashes by
+  // during a fast scroll. viewedIds is a client-side cache purely to skip
+  // redundant transaction calls in this session — Firestore's own
+  // per-user "viewers" doc is what guarantees no double-counting.
+  const viewObserverRef = useRef<IntersectionObserver | null>(null);
+  const viewTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+  const viewedIdsRef = useRef<Set<string>>(new Set());
+  const channelIdRef = useRef(channelId);
+  const myUidRef = useRef(myUid);
+  channelIdRef.current = channelId;
+  myUidRef.current = myUid;
+
   const isOwner = channel?.ownerId === myUid;
 
   function scrollToBottomInstant() {
@@ -191,6 +246,62 @@ export default function ChannelWindow({
       clearTimeout(doneTimer);
     };
   }, [channelId]);
+
+  // fresh view-tracking state per channel — a post viewed in one channel
+  // has no bearing on whether it should be re-counted in another
+  useEffect(() => {
+    viewedIdsRef.current = new Set();
+    viewTimersRef.current.forEach(clearTimeout);
+    viewTimersRef.current.clear();
+  }, [channelId]);
+
+  useEffect(() => {
+    const DWELL_MS = 1000;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const postId = entry.target.getAttribute("data-post-id");
+          if (!postId) continue;
+
+          if (entry.isIntersecting) {
+            if (viewedIdsRef.current.has(postId)) continue;
+            if (viewTimersRef.current.has(postId)) continue;
+            const timer = setTimeout(() => {
+              viewTimersRef.current.delete(postId);
+              if (viewedIdsRef.current.has(postId)) return;
+              viewedIdsRef.current.add(postId);
+              const cid = channelIdRef.current;
+              const uid = myUidRef.current;
+              if (!uid) return;
+              markPostViewed(cid, postId, uid).catch((err) =>
+                console.error("View tracking failed:", err)
+              );
+            }, DWELL_MS);
+            viewTimersRef.current.set(postId, timer);
+          } else {
+            const timer = viewTimersRef.current.get(postId);
+            if (timer) {
+              clearTimeout(timer);
+              viewTimersRef.current.delete(postId);
+            }
+          }
+        }
+      },
+      { threshold: 0.6 }
+    );
+    viewObserverRef.current = observer;
+    return () => {
+      observer.disconnect();
+      viewTimersRef.current.forEach(clearTimeout);
+      viewTimersRef.current.clear();
+    };
+  }, [channelId]);
+
+  function observePost(el: HTMLElement | null, postId: string) {
+    if (!el) return;
+    el.setAttribute("data-post-id", postId);
+    viewObserverRef.current?.observe(el);
+  }
 
   useEffect(() => {
     const unsub = subscribeToChannelDoc(channelId, setChannel);
@@ -656,12 +767,14 @@ export default function ChannelWindow({
             !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
           const isEditing = editingPostId === p.id;
           const isPinned = channel.pinnedPostId === p.id;
+          const views = (p as any).views as number | undefined;
 
           if (isSticker) {
             return (
               <div
                 key={p.id}
                 id={`channel-post-${p.id}`}
+                ref={(el) => observePost(el, p.id)}
                 onContextMenu={(e) => openPostMenu(e, p.id)}
                 className="relative group max-w-[420px] flex flex-col items-start gap-1.5"
               >
@@ -674,10 +787,11 @@ export default function ChannelWindow({
                   className="w-32 h-32 object-contain"
                 />
                 <div className="flex items-center gap-2 px-1">
-                  {isPinned && <Pin size={10} className="text-[#A78BFA]" />}
-                  <div className="text-[10px] text-zinc-500">
-                    {formatTime(p.createdAt)}
-                  </div>
+                  <PostMeta
+                    time={formatTime(p.createdAt)}
+                    views={views}
+                    isPinned={isPinned}
+                  />
                   {isOwner && (
                     <button
                       onClick={() => setDeleteConfirmId(p.id)}
@@ -698,6 +812,7 @@ export default function ChannelWindow({
             <div
               key={p.id}
               id={`channel-post-${p.id}`}
+              ref={(el) => observePost(el, p.id)}
               onContextMenu={(e) => openPostMenu(e, p.id)}
               className={`relative group max-w-[420px] rounded-2xl border overflow-hidden ${
                 isPinned ? "border-[#A78BFA]/30" : "border-white/[0.08]"
@@ -755,14 +870,11 @@ export default function ChannelWindow({
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-1.5">
-                        {isPinned && (
-                          <Pin size={10} className="text-[#A78BFA]" />
-                        )}
-                        <div className="text-[10px] text-zinc-500">
-                          {formatTime(p.createdAt)}
-                        </div>
-                      </div>
+                      <PostMeta
+                        time={formatTime(p.createdAt)}
+                        views={views}
+                        isPinned={isPinned}
+                      />
                       {isOwner && (
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
@@ -854,13 +966,13 @@ export default function ChannelWindow({
       )}
 
       {isOwner && (
-        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14] px-3 py-3">
+        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14] relative z-10">
           {imagePreview && (
-            <div className="mb-2 relative inline-block">
+            <div className="mx-3 mt-3 relative inline-block">
               <img
                 src={imagePreview}
                 alt="preview"
-                className="h-20 rounded-xl object-cover border border-white/[0.08]"
+                className="h-24 rounded-2xl object-cover border border-white/[0.08]"
               />
               <button
                 onClick={() => {
@@ -873,7 +985,8 @@ export default function ChannelWindow({
               </button>
             </div>
           )}
-          <div className="flex items-center gap-2">
+
+          <div className="px-4 py-3 flex items-center gap-3">
             <input
               ref={fileRef}
               type="file"
@@ -881,63 +994,172 @@ export default function ChannelWindow({
               className="hidden"
               onChange={handleFileChange}
             />
-            <button
-              onClick={() => fileRef.current?.click()}
-              title="Attach photo"
-              className="shrink-0 cursor-pointer w-9 h-9 flex items-center justify-center rounded-xl text-zinc-600 hover:text-[#A78BFA] hover:bg-[#A78BFA]/[0.08] transition-all hover:scale-105 active:scale-95"
+            {/* Input wrapper — matches ChatWindow composer exactly */}
+            <div
+              className="
+                flex-1
+                h-[54px]
+                flex
+                items-center
+                gap-3
+                px-4
+                rounded-full
+                bg-[#151528]/80
+                backdrop-blur-xl
+                border border-white/[0.06]
+                shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]
+                transition-all
+                focus-within:border-[#A78BFA]/30
+              "
             >
-              <Paperclip size={16} />
-            </button>
-
-            <div className="relative shrink-0" ref={emojiPanelRef}>
+              {/* Attach */}
               <button
-                onClick={() => setEmojiPanelOpen((v) => !v)}
-                title="Send a sticker"
-                className="cursor-pointer w-9 h-9 flex items-center justify-center rounded-xl text-zinc-600 hover:text-[#A78BFA] hover:bg-[#A78BFA]/[0.08] transition-all hover:scale-105 active:scale-95"
+                onClick={() => fileRef.current?.click()}
+                title="Attach photo"
+                className="
+                  shrink-0
+                  w-7
+                  h-7
+                  flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  text-zinc-500
+                  hover:text-[#A78BFA]
+                  hover:bg-[#A78BFA]/10
+                  transition-all
+                  hover:scale-105
+                  active:scale-95
+                "
               >
-                <Smile size={16} />
+                <Paperclip size={18} />
               </button>
-              {emojiPanelOpen && (
-                <div className="chat-scroll absolute z-30 bottom-full mb-2 left-0 grid grid-cols-4 gap-1.5 p-2.5 w-[220px] max-h-[210px] overflow-y-auto rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
-                  {CUSTOM_EMOJIS.map((e) => (
-                    <button
-                      key={e.id}
-                      onClick={() => sendSticker(e.url)}
-                      className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                    >
-                      <img
-                        src={e.url}
-                        alt={e.id}
-                        className="w-9 h-9 object-contain"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
+
+              {/* Emoji / sticker */}
+              <div className="relative shrink-0" ref={emojiPanelRef}>
+                <button
+                  onClick={() => setEmojiPanelOpen((v) => !v)}
+                  title="Send a sticker"
+                  className="
+                    w-7
+                    h-7
+                    flex
+                    items-center
+                    justify-center
+                    rounded-xl
+                    text-zinc-500
+                    hover:text-[#A78BFA]
+                    hover:bg-[#A78BFA]/10
+                    transition-all
+                    hover:scale-105
+                    active:scale-95
+                  "
+                >
+                  <Smile size={18} />
+                </button>
+                {emojiPanelOpen && (
+                  <div
+                    className="
+                      chat-scroll
+                      absolute
+                      z-50
+                      bottom-full
+                      mb-3
+                      left-0
+                      grid
+                      grid-cols-4
+                      gap-2
+                      p-3
+                      w-[230px]
+                      max-h-[230px]
+                      overflow-y-auto
+                      rounded-2xl
+                      bg-[#151525]
+                      border border-white/[0.10]
+                      shadow-xl
+                      shadow-black/50
+                    "
+                  >
+                    {CUSTOM_EMOJIS.map((e) => (
+                      <button
+                        key={e.id}
+                        onClick={() => sendSticker(e.url)}
+                        className="
+                          w-12
+                          h-12
+                          flex
+                          items-center
+                          justify-center
+                          rounded-xl
+                          hover:bg-white/[0.08]
+                          cursor-pointer
+                          transition
+                          hover:scale-110
+                        "
+                      >
+                        <img
+                          src={e.url}
+                          alt={e.id}
+                          className="w-9 h-9 object-contain"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Text */}
+              <input
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder="Write a post…"
+                className="
+                  flex-1
+                  min-w-0
+                  bg-transparent
+                  outline-none
+                  text-[15px]
+                  text-white
+                  placeholder:text-zinc-600
+                "
+                style={{ caretColor: "#A78BFA" }}
+              />
             </div>
 
-            <input
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder="Write a post…"
-              className="flex-1 h-11 px-4 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 transition-all"
-            />
-
+            {/* Send */}
             <button
               onClick={handlePost}
               disabled={(!text.trim() && !imageFile) || uploading}
-              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-2xl transition-all disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
-              style={{
-                background: "linear-gradient(135deg, #A78BFA, #7c3aed)",
-              }}
+              className="
+                shrink-0
+                w-[42px]
+                h-[42px]
+                flex
+                items-center
+                justify-center
+                rounded-full
+                bg-gradient-to-br
+                from-[#7c3aed]
+                to-[#5b21b6]
+                shadow-[0_0_35px_rgba(124,58,237,.45)]
+                transition-all
+                hover:scale-105
+                active:scale-95
+                disabled:opacity-20
+                disabled:cursor-not-allowed
+              "
             >
               {uploading ? (
                 <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send size={14} className="text-white" />
+                <Send
+                  size={19}
+                  className="text-white"
+                  style={{ transform: "translateX(-1px)" }}
+                />
               )}
             </button>
           </div>

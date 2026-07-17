@@ -256,6 +256,7 @@ export async function createChannelPost(
     createdAt: serverTimestamp(),
     reactions: {},
     commentCount: 0,
+    views: 0,
   });
   await updateDoc(doc(db, "channels", channelId), {
     lastPostAt: serverTimestamp(),
@@ -277,6 +278,40 @@ export async function togglePostReaction(
   const has = current.includes(uid);
   await updateDoc(postRef, {
     [`reactions.${token}`]: has ? arrayRemove(uid) : arrayUnion(uid),
+  });
+}
+
+/**
+ * Registers a view for a post, Telegram-style: counted once per user,
+ * ever — never decrements, never double-counts even if the same person
+ * scrolls past it a hundred times. Guarded by a per-user "viewers" doc
+ * inside a transaction so concurrent calls can't race past the check.
+ *
+ * A subcollection (rather than an array field on the post) is used
+ * deliberately: posts in a big channel can accumulate far more viewers
+ * than comfortably fit in a single 1MB document, and subcollection
+ * writes don't require reading/rewriting the whole viewer list.
+ */
+export async function markPostViewed(
+  channelId: string,
+  postId: string,
+  uid: string
+) {
+  const viewerRef = doc(
+    db,
+    "channels",
+    channelId,
+    "posts",
+    postId,
+    "viewers",
+    uid
+  );
+  const postRef = doc(db, "channels", channelId, "posts", postId);
+  await runTransaction(db, async (tx) => {
+    const viewerSnap = await tx.get(viewerRef);
+    if (viewerSnap.exists()) return;
+    tx.set(viewerRef, { uid, viewedAt: serverTimestamp() });
+    tx.update(postRef, { views: increment(1) });
   });
 }
 
