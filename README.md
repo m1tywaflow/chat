@@ -6,7 +6,7 @@ A real-time, Telegram-inspired chat application built with Next.js, TypeScript, 
 
 - **Real-time messaging** — 1-on-1 and group chats powered by Firestore subscriptions
 - **Authentication** — username-based auth with Firebase Auth
-- **Message tools** — editing, deletion, pinning, emoji reactions, and read receipts
+- **Message tools** — editing, forward, deletion, pinning, emoji reactions, and read receipts
 - **Media sharing** — images, GIFs, and videos via Cloudinary, with an in-chat media gallery
 - **Custom profiles** — editable avatars and banners with image cropping, avatar borders, avatar decorations, and a custom card color
 - **Gift system** — a collectible gift/sticker system with rarity tiers, animated gift details, and a Telegram-style floating "gift cloud" on the full profile view
