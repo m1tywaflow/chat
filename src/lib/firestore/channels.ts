@@ -431,3 +431,34 @@ export async function togglePinChannel(
     [`pinnedChannels.${channelId}`]: pinned,
   });
 }
+export async function forwardMessageToChannel(
+  channelId: string,
+  myUid: string,
+  original: {
+    text: string;
+    imageUrl?: string | null;
+    senderId: string;
+    senderName?: string;
+    chatId: string;
+  }
+) {
+  const postRef = doc(collection(db, "channels", channelId, "posts"));
+  await setDoc(postRef, {
+    authorId: myUid,
+    text: original.text || "",
+    imageUrl: original.imageUrl || null,
+    createdAt: serverTimestamp(),
+    reactions: {},
+    commentCount: 0,
+    views: 0,
+    forwardedFrom: {
+      chatId: original.chatId,
+      senderId: original.senderId,
+      senderName: original.senderName || null,
+    },
+  });
+  await updateDoc(doc(db, "channels", channelId), {
+    lastPostAt: serverTimestamp(),
+    lastPostPreview: original.text ? original.text.slice(0, 80) : "📷 Photo",
+  });
+}

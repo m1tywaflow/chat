@@ -12,7 +12,9 @@ import {
   editMessage,
   deleteMessage,
   pinMessage,
+  forwardMessageToChat,
 } from "@/lib/firestore/chats";
+import { forwardMessageToChannel } from "@/lib/firestore/channels";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc } from "firebase/firestore";
@@ -36,9 +38,11 @@ import {
   Copy,
   ChevronDown,
   Smile,
+  Forward,
 } from "lucide-react";
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
+import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import {
   CUSTOM_EMOJIS,
@@ -195,6 +199,7 @@ interface MsgMenuState {
   x: number;
   y: number;
   openUpward: boolean;
+  isMine: boolean;
 }
 
 function ConfirmDialog({
@@ -293,6 +298,7 @@ export default function ChatWindow() {
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [forwardData, setForwardData] = useState<any | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -721,10 +727,12 @@ export default function ChatWindow() {
     setEmojiPanelOpen(false);
   }
 
+  // isMine is now purely informational for the menu (which items to show),
+  // it no longer gates whether the menu can open at all — every message,
+  // yours or theirs, can be opened for Reply/Copy/Pin/Forward
   function openMsgMenu(e: React.MouseEvent, msgId: string, isMine: boolean) {
     e.preventDefault();
     e.stopPropagation();
-    if (!isMine) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? {
       bottom: e.clientY,
       top: e.clientY,
@@ -739,6 +747,7 @@ export default function ChatWindow() {
             x: e.clientX,
             y: openUpward ? rect.top : rect.bottom,
             openUpward,
+            isMine,
           }
     );
     setPickerOpenId(null);
@@ -805,6 +814,15 @@ export default function ChatWindow() {
         count: uids.length,
         mine: myUid ? uids.includes(myUid) : false,
       }));
+  }
+
+  // works out the display name of whoever actually wrote the message being
+  // forwarded — not just "the other person in this chat", since you can
+  // forward your own messages too, and the source chat isn't always this one
+  function resolveForwardSenderName(m: any): string {
+    if (!m) return "user";
+    if (m.senderId === myUid) return "You";
+    return otherUser?.username || "user";
   }
 
   if (!chatId) {
@@ -924,15 +942,17 @@ export default function ChatWindow() {
           }
           onClick={(e) => e.stopPropagation()}
         >
-          {currentMsgMenu.text && !currentMsgMenu.imageUrl && (
-            <button
-              className="ctx-item text-zinc-300"
-              onClick={() => startEdit(currentMsgMenu)}
-            >
-              <Pencil size={14} className="text-zinc-500" />
-              Edit message
-            </button>
-          )}
+          {msgMenu.isMine &&
+            currentMsgMenu.text &&
+            !currentMsgMenu.imageUrl && (
+              <button
+                className="ctx-item text-zinc-300"
+                onClick={() => startEdit(currentMsgMenu)}
+              >
+                <Pencil size={14} className="text-zinc-500" />
+                Edit message
+              </button>
+            )}
           <button
             className="ctx-item text-zinc-300"
             onClick={() => {
@@ -963,14 +983,28 @@ export default function ChatWindow() {
             )}
             {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
           </button>
-          <div className="ctx-divider" />
           <button
-            className="ctx-item text-red-400"
-            onClick={() => handleDelete(currentMsgMenu.id)}
+            className="ctx-item text-zinc-300"
+            onClick={() => {
+              setForwardData(currentMsgMenu);
+              setMsgMenu(null);
+            }}
           >
-            <Trash2 size={14} className="text-red-400/60" />
-            Delete
+            <Forward size={14} className="text-zinc-500" />
+            Forward
           </button>
+          {msgMenu.isMine && (
+            <>
+              <div className="ctx-divider" />
+              <button
+                className="ctx-item text-red-400"
+                onClick={() => handleDelete(currentMsgMenu.id)}
+              >
+                <Trash2 size={14} className="text-red-400/60" />
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -1045,6 +1079,34 @@ export default function ChatWindow() {
           onCancel={() => setDeleteChatConfirm(false)}
           onConfirm={confirmDeleteChat}
           confirmLabel="Delete"
+        />
+      )}
+
+      {/* Forward message */}
+      {forwardData && myUid && (
+        <ForwardPicker
+          myUid={myUid}
+          onClose={() => setForwardData(null)}
+          onSelectChat={async (targetChatId) => {
+            await forwardMessageToChat(targetChatId, myUid, {
+              text: forwardData.text,
+              imageUrl: forwardData.imageUrl,
+              senderId: forwardData.senderId,
+              senderName: resolveForwardSenderName(forwardData),
+              chatId: chatId!,
+            });
+            setForwardData(null);
+          }}
+          onSelectChannel={async (channelId) => {
+            await forwardMessageToChannel(channelId, myUid, {
+              text: forwardData.text,
+              imageUrl: forwardData.imageUrl,
+              senderId: forwardData.senderId,
+              senderName: resolveForwardSenderName(forwardData),
+              chatId: chatId!,
+            });
+            setForwardData(null);
+          }}
         />
       )}
 
@@ -1228,12 +1290,7 @@ export default function ChatWindow() {
                     isMine ? "justify-end" : "justify-start"
                   } ${hasReactions ? "mb-2" : ""}`}
                   onContextMenu={(e) => {
-                    if (isMine && !m.deleted && !m.pending)
-                      openMsgMenu(e, m.id, true);
-                    else if (!m.pending) {
-                      e.preventDefault();
-                      handleReply(m);
-                    }
+                    if (!m.deleted && !m.pending) openMsgMenu(e, m.id, isMine);
                   }}
                 >
                   <div className="relative group max-w-[72%] min-w-0">
@@ -1301,16 +1358,20 @@ export default function ChatWindow() {
                         >
                           <span>😊</span>
                         </button>
-                        {isMine && (
-                          <button
-                            title="More options"
-                            onClick={(e) => openMsgMenu(e, m.id, true)}
-                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0d1d] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
-                          >
-                            <MoreVertical size={12} />
-                          </button>
-                        )}
+                        <button
+                          title="More options"
+                          onClick={(e) => openMsgMenu(e, m.id, isMine)}
+                          className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0d1d] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#A78BFA]/40 hover:bg-[#252f42] transition-all shadow-sm"
+                        >
+                          <MoreVertical size={12} />
+                        </button>
                       </>
+                    )}
+
+                    {m.forwardedFrom && (
+                      <div className="mb-1 text-[10px] font-semibold text-[#A78BFA]/80 uppercase tracking-wide px-1">
+                        Forwarded from {m.forwardedFrom.senderName || "user"}
+                      </div>
                     )}
 
                     {m.replyTo && (

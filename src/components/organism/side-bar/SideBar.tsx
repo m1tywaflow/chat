@@ -317,7 +317,7 @@ export default function SideBar() {
   const pinnedList = sortConversationItems(pinnedItemsRaw, order);
   const mergedList = sortConversationItems(unpinnedItemsRaw, order);
 
-  const accent = "#A78BFA";
+  const accent = "#522fb7";
   const border = mode === "light" ? "#d1d5db" : "#1F2A37";
   const hoverBg = mode === "light" ? "#e5e7eb" : "rgba(255,255,255,0.04)";
   const subText = mode === "light" ? "#6b7280" : "#a1a1aa";

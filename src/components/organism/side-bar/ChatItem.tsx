@@ -32,8 +32,8 @@ export default function ChatItem({ chat, pinned }: Props) {
     mode === "dark"
       ? DEFAULT_DARK
       : mode === "light"
-        ? DEFAULT_LIGHT
-        : customTheme;
+      ? DEFAULT_LIGHT
+      : customTheme;
   const isActive = activeChatId === chat.id;
   const online = isOnline(chat.participant);
 
@@ -48,8 +48,8 @@ export default function ChatItem({ chat, pinned }: Props) {
   const avatarFallbackBg = isActive
     ? "rgba(255,255,255,0.18)"
     : mode === "light"
-      ? "#ddd6fe"
-      : "#1e2a3a";
+    ? "#ddd6fe"
+    : "#1e2a3a";
   const avatarFallbackColor = isActive ? "#ffffff" : accent;
 
   return (
@@ -94,8 +94,8 @@ export default function ChatItem({ chat, pinned }: Props) {
             background: online
               ? "#34D399"
               : mode === "light"
-                ? "#d1d5db"
-                : "#3f3f46",
+              ? "#d1d5db"
+              : "#3f3f46",
             borderColor: isActive ? ACTIVE_ROW_BG : theme.sideBarBg,
           }}
         />
@@ -143,12 +143,24 @@ export default function ChatItem({ chat, pinned }: Props) {
           </span>
         </div>
 
-        <p
-          className="text-[13px] font-bold truncate leading-tight"
-          style={{ color: lastMsgColor }}
-        >
-          {chat.lastMessage || "No messages yet"}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="text-[13px] font-bold truncate leading-tight"
+            style={{ color: lastMsgColor }}
+          >
+            {chat.lastMessage || "No messages yet"}
+          </p>
+          {!!chat.unreadCount && (
+            <span
+              className="shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{
+                background: isActive ? "rgba(255,255,255,0.25)" : "#7c3aed",
+              }}
+            >
+              {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );
