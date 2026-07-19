@@ -25,11 +25,10 @@ export default function ChatPage() {
 
   // MESSAGES
   useEffect(() => {
-    if (!chatId) return;
-
+    if (!chatId || !myUid) return; // wait auth
     const unsub = subscribeToMessages(chatId as string, setMessages);
     return () => unsub();
-  }, [chatId]);
+  }, [chatId, myUid]);
 
   // SEND MESSAGE
   async function send() {

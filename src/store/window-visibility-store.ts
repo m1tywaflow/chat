@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { useEffect } from "react";
 interface WindowVisibilityState {
   isVisible: boolean;
   setVisible: (v: boolean) => void;

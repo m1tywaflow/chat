@@ -315,7 +315,6 @@ export default function ChatWindow() {
   const initializedChatRef = useRef<string | null>(null);
   const mineMsgCountRef = useRef(0);
   const dragCounter = useRef(0);
-  const prevMsgCountRef = useRef(0);
 
   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
@@ -342,7 +341,6 @@ export default function ChatWindow() {
     initializedChatRef.current = null;
     unreadComputedForChat.current = null;
     isNearBottom.current = true;
-    prevMsgCountRef.current = 0;
     mineMsgCountRef.current = 0;
   }, [chatId]);
 
@@ -353,7 +351,6 @@ export default function ChatWindow() {
       const mineCount = msgs.filter((m) => m.senderId === myUid).length;
 
       if (isFirstLoadForThisChat) {
-        // opening a chat: just record the baseline, nothing to reconcile
         mineMsgCountRef.current = mineCount;
         unreadComputedForChat.current = chatId;
         const firstUnread = msgs.find(
@@ -361,10 +358,6 @@ export default function ChatWindow() {
         );
         setFirstUnreadId(firstUnread ? firstUnread.id : null);
       } else if (mineCount > mineMsgCountRef.current) {
-        // N of our messages just got confirmed by Firestore — drop that
-        // many of the OLDEST optimistic bubbles (FIFO). No text/time
-        // comparison needed, so duplicate texts and serverTimestamp()
-        // resolving late can never leave a bubble stuck on "Sending…"
         const confirmed = mineCount - mineMsgCountRef.current;
         mineMsgCountRef.current = mineCount;
         setPendingMessages((prev) => prev.slice(confirmed));
@@ -373,9 +366,17 @@ export default function ChatWindow() {
       }
 
       setMessages(msgs);
+
+      if (myUid && isWindowVisible) {
+        msgs.forEach((m) => {
+          if (m.senderId !== myUid && !(m.readBy || []).includes(myUid)) {
+            markMessageRead(chatId, m.id, myUid).catch(() => {});
+          }
+        });
+      }
     });
     return () => unsub();
-  }, [chatId, myUid]);
+  }, [chatId, myUid, isWindowVisible]);
 
   useEffect(() => {
     if (!chatId || !myUid) return;
@@ -389,9 +390,16 @@ export default function ChatWindow() {
       }
       setPinnedMessage(data?.pinnedMessage || null);
       setWallpaper(data?.wallpaper || null);
+
+      const unread = data?.unreadCount?.[myUid] || 0;
+      if (unread > 0 && isWindowVisible) {
+        updateDoc(doc(db, "chats", chatId), {
+          [`unreadCount.${myUid}`]: 0,
+        }).catch(() => {});
+      }
     });
     return () => unsub();
-  }, [chatId, myUid]);
+  }, [chatId, myUid, isWindowVisible]);
 
   // reset unread badge the moment the chat is opened
   useEffect(() => {
@@ -405,23 +413,7 @@ export default function ChatWindow() {
   // keep resetting the unread badge whenever a NEW message lands while this
   // chat is already the open one (Telegram never lets the counter tick up
   // while you're sitting inside the conversation)
-  useEffect(() => {
-    if (!chatId || !myUid || !isWindowVisible) return;
-    if (messages.length > prevMsgCountRef.current) {
-      updateDoc(doc(db, "chats", chatId), {
-        [`unreadCount.${myUid}`]: 0,
-      }).catch(() => {});
-    }
-    prevMsgCountRef.current = messages.length;
-  }, [messages.length, chatId, myUid]);
 
-  useEffect(() => {
-    if (!chatId || !myUid || messages.length === 0 || !isWindowVisible) return;
-    messages.forEach((m) => {
-      if (m.senderId !== myUid && !(m.readBy || []).includes(myUid))
-        markMessageRead(chatId, m.id, myUid);
-    });
-  }, [messages, chatId, myUid]);
   useEffect(() => {
     if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
       window.electronAPI.onWindowVisibilityChange((visible) => {

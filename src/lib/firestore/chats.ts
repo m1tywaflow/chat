@@ -219,7 +219,11 @@ export async function markMessageRead(
   uid: string
 ) {
   const ref = doc(db, "chats", chatId, "messages", messageId);
-  await updateDoc(ref, { readBy: arrayUnion(uid) });
+  try {
+    await updateDoc(ref, { readBy: arrayUnion(uid) });
+  } catch (err: any) {
+    if (err?.code !== "not-found") console.warn("markMessageRead failed:", err);
+  }
 }
 export async function toggleReaction(
   chatId: string,

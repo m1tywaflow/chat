@@ -37,28 +37,34 @@
     "wait-on": "^9.0.10"
   },
   "build": {
-  "appId": "com.mitywa.chat",
-  "productName": "pislk",
-  "asar": true,
-  "compression": "maximum",
-  "electronLanguages": ["en", "ru"],
-  "files": [
-    ".next/**/*",
-  "!.next/cache/**/*",
-  "public/**/*",
-  "electron/**/*",
-  "package.json",
-  "node_modules/**/*"
-  ],
-  "directories": {
-    "buildResources": "electron/icons"
-  },
-  "win": {
-    "target": "nsis",
-    "icon": "electron/icons/icon.ico"
-  },
-  "nsis": {
-    "differentialPackage": false
+    "appId": "com.mitywa.chat",
+    "productName": "pislk",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en", "ru"],
+    "publish": {
+      "provider": "github",
+      "owner": "m1tywaflow",
+      "repo": "chat",
+      "draft": false
+    },
+    "files": [
+      ".next/**/*",
+      "!.next/cache/**/*",
+      "public/**/*",
+      "electron/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "electron/icons"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "electron/icons/icon.ico"
+    },
+    "nsis": {
+      "differentialPackage": false
+    }
   }
-}
 }

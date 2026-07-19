@@ -9,6 +9,8 @@ import { updateUser } from "@/lib/firestore/users";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import ThemePicker from "@/components/molecules/theme-picker/ThemePicker";
+import Link from "next/link";
+import { Download } from "lucide-react";
 
 export default function SettingsPage() {
   const [uid, setUid] = useState<string | null>(null);
@@ -145,6 +147,29 @@ export default function SettingsPage() {
         <div className="mb-5">
           <ThemePicker />
         </div>
+        <div className="h-px bg-white/[0.06] mb-5" />
+
+        <div className="mb-5">
+          <ThemePicker />
+        </div>
+
+        <div className="h-px bg-white/[0.06] mb-5" />
+
+        <Link
+          href="/download"
+          className="w-full flex items-center justify-center gap-2 py-3 mb-3 text-[13px] text-white/40 hover:text-[#A78BFA] border border-white/[0.08] hover:border-[#A78BFA]/30 rounded-md transition-colors"
+        >
+          <Download size={15} />
+          Download desktop app
+        </Link>
+
+        <button
+          onClick={save}
+          disabled={saving}
+          className="w-full py-3 cursor-pointer bg-[#522fb7] hover:bg-[#8B5CF6] text-black text-sm font-semibold transition-colors disabled:opacity-50 mb-3"
+        >
+          {saving ? "Saving..." : "Save changes"}
+        </button>
 
         <div className="h-px bg-white/[0.06] mb-5" />
 
