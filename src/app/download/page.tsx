@@ -3,7 +3,12 @@ import Image from "next/image";
 async function getLatestRelease() {
   const res = await fetch(
     "https://api.github.com/repos/m1tywaflow/chat/releases/latest",
-    { next: { revalidate: 3600 } }
+    {
+      next: { revalidate: 3600 },
+      headers: process.env.GITHUB_TOKEN
+        ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+        : {},
+    }
   );
 
   if (!res.ok) return null;
