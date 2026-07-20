@@ -147,11 +147,6 @@ export default function SettingsPage() {
         <div className="mb-5">
           <ThemePicker />
         </div>
-        <div className="h-px bg-white/[0.06] mb-5" />
-
-        <div className="mb-5">
-          <ThemePicker />
-        </div>
 
         <div className="h-px bg-white/[0.06] mb-5" />
 
@@ -162,16 +157,6 @@ export default function SettingsPage() {
           <Download size={15} />
           Download desktop app
         </Link>
-
-        <button
-          onClick={save}
-          disabled={saving}
-          className="w-full py-3 cursor-pointer bg-[#522fb7] hover:bg-[#8B5CF6] text-black text-sm font-semibold transition-colors disabled:opacity-50 mb-3"
-        >
-          {saving ? "Saving..." : "Save changes"}
-        </button>
-
-        <div className="h-px bg-white/[0.06] mb-5" />
 
         <button
           onClick={save}

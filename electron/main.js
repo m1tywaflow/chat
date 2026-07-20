@@ -10,6 +10,7 @@ const {
 
 const path = require("path");
 
+
 app.disableHardwareAcceleration();
 
 let mainWindow;
