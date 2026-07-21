@@ -90,7 +90,7 @@ function ReactionPill({
       onClick={onClick}
       className={`flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border transition-colors ${
         mine
-          ? "bg-[#A78BFA]/20 border-[#A78BFA]/50 text-[#A78BFA]"
+          ? "bg-[#7c5cff]/20 border-[#7c5cff]/50 text-[#a893ff]"
           : "bg-black/20 border-white/15 text-zinc-400 hover:border-white/25"
       }`}
     >
@@ -116,7 +116,7 @@ function PostMeta({
 }) {
   return (
     <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 select-none">
-      {isPinned && <Pin size={10} className="text-[#A78BFA] shrink-0" />}
+      {isPinned && <Pin size={10} className="text-[#a893ff] shrink-0" />}
       <span className="tabular-nums">{time}</span>
       <span className="flex items-center gap-0.5 opacity-80">
         <Eye size={11} className="shrink-0" strokeWidth={2.25} />
@@ -515,7 +515,7 @@ export default function ChannelWindow({
         ))}
         <button
           onClick={() => openPostComments(post.id)}
-          className="flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border bg-black/20 border-white/15 text-zinc-400 hover:text-[#A78BFA] hover:border-[#A78BFA]/40 transition-colors"
+          className="flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border bg-black/20 border-white/15 text-zinc-400 hover:text-[#a893ff] hover:border-[#7c5cff]/40 transition-colors"
         >
           <MessageCircle size={12} />
           <span className="font-medium leading-none">
@@ -525,12 +525,12 @@ export default function ChannelWindow({
         <div className="relative">
           <button
             onClick={() => setPickerOpenId(isPickerOpen ? null : post.id)}
-            className="w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#A78BFA] hover:bg-white/[0.05] transition-colors cursor-pointer"
+            className="w-6 h-6 flex items-center justify-center rounded-full text-zinc-500 hover:text-[#a893ff] hover:bg-white/[0.05] transition-colors cursor-pointer"
           >
             <Plus size={13} />
           </button>
           {isPickerOpen && (
-            <div className="absolute z-30 bottom-full mb-2 left-0 flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50">
+            <div className="absolute z-30 bottom-full mb-2 left-0 flex items-center gap-1 px-2.5 py-2 rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50">
               {REACTION_EMOJIS.map((token) => (
                 <button
                   key={token}
@@ -579,7 +579,7 @@ export default function ChannelWindow({
         onClick={onCancel}
       >
         <div
-          className="w-80 rounded-2xl bg-gray-900 border border-white/10 shadow-2xl shadow-black/60 overflow-hidden"
+          className="w-80 rounded-2xl bg-[#0d0b17] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-6 pt-6 pb-4">
@@ -635,22 +635,28 @@ export default function ChannelWindow({
 
   return (
     <div
-      className="flex flex-col w-full h-full"
+      className="relative flex flex-col w-full h-full overflow-hidden"
       style={{ background: "var(--color-chat-bg)", color: "var(--color-text)" }}
     >
       <style>{`
         .chat-scroll::-webkit-scrollbar { width: 4px; }
         .chat-scroll::-webkit-scrollbar-track { background: transparent; }
-        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
-        .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(124,92,255,0.25); border-radius: 999px; }
+        .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(124,92,255,0.5); }
       `}</style>
 
-      <div className="flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0d0d1d]">
+      {/* Ambient violet glow field — same signature as ChatWindow / settings */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
+        <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
+      </div>
+
+      <div className="relative z-10 flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl">
         <div
           onClick={() => setInfoModalOpen(true)}
           className="flex items-center gap-3 min-w-0 cursor-pointer rounded-lg -mx-2 px-2 py-1 hover:bg-white/[0.04] transition-colors"
         >
-          <div className="shrink-0 w-9 h-9 rounded-full bg-[#A78BFA]/15 flex items-center justify-center overflow-hidden text-[#A78BFA] text-sm font-semibold">
+          <div className="shrink-0 w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-sm font-semibold text-white bg-gradient-to-br from-[#7c5cff] to-[#4028b0]">
             {channel.avatarUrl ? (
               <img
                 src={channel.avatarUrl}
@@ -664,7 +670,7 @@ export default function ChannelWindow({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm font-semibold text-white truncate">
               {channel.name}
-              <Megaphone size={12} className="text-[#A78BFA] shrink-0" />
+              <Megaphone size={12} className="text-[#a893ff] shrink-0" />
             </div>
             <div className="text-[11px] text-zinc-500">
               {channel.subscriberCount} subscribers
@@ -678,7 +684,7 @@ export default function ChannelWindow({
               className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
                 isSub
                   ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
-                  : "bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/25 hover:bg-[#A78BFA]/25"
+                  : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
               }`}
             >
               {isSub ? "Unsubscribe" : "Subscribe"}
@@ -693,7 +699,7 @@ export default function ChannelWindow({
                 <MoreVertical size={16} />
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b14] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -734,9 +740,9 @@ export default function ChannelWindow({
       {pinnedPost && (
         <div
           onClick={() => scrollToPost(pinnedPost.id)}
-          className="flex-none flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-[#0c121a] cursor-pointer hover:bg-white/[0.03] transition-colors"
+          className="relative z-10 flex-none flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors"
         >
-          <Pin size={13} className="text-[#A78BFA] shrink-0" />
+          <Pin size={13} className="text-[#a893ff] shrink-0" />
           <div className="text-[12px] text-zinc-400 truncate flex-1">
             {pinnedPost.text || "Photo"}
           </div>
@@ -760,7 +766,7 @@ export default function ChannelWindow({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="chat-scroll flex-1 overflow-y-auto px-3 py-4 space-y-4"
+        className="chat-scroll relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-4"
       >
         {posts.map((p) => {
           const isSticker =
@@ -815,7 +821,7 @@ export default function ChannelWindow({
               ref={(el) => observePost(el, p.id)}
               onContextMenu={(e) => openPostMenu(e, p.id)}
               className={`relative group max-w-[420px] rounded-2xl border overflow-hidden ${
-                isPinned ? "border-[#A78BFA]/30" : "border-white/[0.08]"
+                isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
               }`}
               style={{ background: "var(--color-msg-bg)" }}
             >
@@ -839,7 +845,7 @@ export default function ChannelWindow({
                       onChange={(e) => setEditText(e.target.value)}
                       onKeyDown={(e) => handleEditKeyDown(e, p.id)}
                       rows={2}
-                      className="w-full resize-none rounded-lg bg-black/20 border border-[#A78BFA]/30 px-2.5 py-2 text-sm text-white outline-none focus:border-[#A78BFA]/60 transition-colors"
+                      className="w-full resize-none rounded-lg bg-black/20 border border-[#7c5cff]/30 px-2.5 py-2 text-sm text-white outline-none focus:border-[#7c5cff]/60 transition-colors"
                     />
                     <div className="flex items-center gap-2 justify-end">
                       <button
@@ -850,7 +856,7 @@ export default function ChannelWindow({
                       </button>
                       <button
                         onClick={() => saveEdit(p.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[#A78BFA] bg-[#A78BFA]/10 hover:bg-[#A78BFA]/20 transition-colors cursor-pointer"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[#a893ff] bg-[#7c5cff]/10 hover:bg-[#7c5cff]/20 transition-colors cursor-pointer"
                       >
                         <Check size={11} />
                         Save
@@ -879,7 +885,7 @@ export default function ChannelWindow({
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => startEdit(p)}
-                            className="text-zinc-600 hover:text-[#A78BFA] cursor-pointer"
+                            className="text-zinc-600 hover:text-[#a893ff] cursor-pointer"
                           >
                             <Pencil size={13} />
                           </button>
@@ -918,7 +924,7 @@ export default function ChannelWindow({
             left: postMenu.x,
             zIndex: 250,
           }}
-          className="w-44 rounded-xl bg-[#151D28] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
+          className="w-44 rounded-xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
         >
           {(() => {
             const post = posts.find((p) => p.id === postMenu.postId);
@@ -966,7 +972,7 @@ export default function ChannelWindow({
       )}
 
       {isOwner && (
-        <div className="flex-none border-t border-white/[0.06] bg-[#0d0b14] relative z-10">
+        <div className="relative z-10 flex-none border-t border-white/[0.06] bg-[#0d0b17]/95 backdrop-blur-xl">
           {imagePreview && (
             <div className="mx-3 mt-3 relative inline-block">
               <img
@@ -1004,12 +1010,12 @@ export default function ChannelWindow({
                 gap-3
                 px-4
                 rounded-full
-                bg-[#151528]/80
+                bg-[#12111f]/80
                 backdrop-blur-xl
-                border border-white/[0.06]
-                shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]
+                border border-white/[0.07]
+                shadow-[inset_0_0_20px_rgba(124,92,255,0.03)]
                 transition-all
-                focus-within:border-[#A78BFA]/30
+                focus-within:border-[#7c5cff]/40
               "
             >
               {/* Attach */}
@@ -1025,8 +1031,8 @@ export default function ChannelWindow({
                   justify-center
                   rounded-xl
                   text-zinc-500
-                  hover:text-[#A78BFA]
-                  hover:bg-[#A78BFA]/10
+                  hover:text-[#a893ff]
+                  hover:bg-[#7c5cff]/10
                   transition-all
                   hover:scale-105
                   active:scale-95
@@ -1048,8 +1054,8 @@ export default function ChannelWindow({
                     justify-center
                     rounded-xl
                     text-zinc-500
-                    hover:text-[#A78BFA]
-                    hover:bg-[#A78BFA]/10
+                    hover:text-[#a893ff]
+                    hover:bg-[#7c5cff]/10
                     transition-all
                     hover:scale-105
                     active:scale-95
@@ -1074,8 +1080,8 @@ export default function ChannelWindow({
                       max-h-[230px]
                       overflow-y-auto
                       rounded-2xl
-                      bg-[#151525]
-                      border border-white/[0.10]
+                      bg-[#12111f]
+                      border border-white/[0.08]
                       shadow-xl
                       shadow-black/50
                     "
@@ -1125,7 +1131,7 @@ export default function ChannelWindow({
                   text-white
                   placeholder:text-zinc-600
                 "
-                style={{ caretColor: "#A78BFA" }}
+                style={{ caretColor: "#7c5cff" }}
               />
             </div>
 
@@ -1142,9 +1148,9 @@ export default function ChannelWindow({
                 justify-center
                 rounded-full
                 bg-gradient-to-br
-                from-[#7c3aed]
-                to-[#5b21b6]
-                shadow-[0_0_35px_rgba(124,58,237,.45)]
+                from-[#7c5cff]
+                to-[#5b3df0]
+                shadow-[0_0_35px_rgba(124,92,255,.45)]
                 transition-all
                 hover:scale-105
                 active:scale-95

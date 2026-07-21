@@ -292,7 +292,7 @@ export default function SettingsPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-[#a893ff]/70 mb-1">
-                  <Sparkles size={11} />
+                  <Sparkles size={12} />
                   account
                 </div>
                 <div className="text-lg font-semibold truncate">
