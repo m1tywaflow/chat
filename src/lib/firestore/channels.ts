@@ -27,6 +27,7 @@ import {
   ChannelPost,
   ChannelSubscriber,
   ChannelComment,
+  ChannelCommentReplyTo,
 } from "@/types/channel";
 
 export async function createChannel(
@@ -281,6 +282,32 @@ export async function togglePostReaction(
   });
 }
 
+export async function toggleCommentReaction(
+  channelId: string,
+  postId: string,
+  commentId: string,
+  token: string,
+  uid: string
+) {
+  const commentRef = doc(
+    db,
+    "channels",
+    channelId,
+    "posts",
+    postId,
+    "comments",
+    commentId
+  );
+  const snap = await getDoc(commentRef);
+  if (!snap.exists()) return;
+  const reactions = snap.data().reactions || {};
+  const current: string[] = reactions[token] || [];
+  const has = current.includes(uid);
+  await updateDoc(commentRef, {
+    [`reactions.${token}`]: has ? arrayRemove(uid) : arrayUnion(uid),
+  });
+}
+
 /**
  * Registers a view for a post, Telegram-style: counted once per user,
  * ever — never decrements, never double-counts even if the same person
@@ -343,7 +370,9 @@ export async function createComment(
   channelId: string,
   postId: string,
   authorId: string,
-  text: string
+  text: string,
+  replyTo: ChannelCommentReplyTo | null = null,
+  imageUrl: string | null = null
 ) {
   const isSub = await checkIsSubscribed(channelId, authorId);
   if (!isSub) throw new Error("Only subscribers can comment");
@@ -352,7 +381,14 @@ export async function createComment(
   );
   const postRef = doc(db, "channels", channelId, "posts", postId);
   await runTransaction(db, async (tx) => {
-    tx.set(commentRef, { authorId, text, createdAt: serverTimestamp() });
+    tx.set(commentRef, {
+      authorId,
+      text,
+      imageUrl: imageUrl || null,
+      createdAt: serverTimestamp(),
+      replyTo: replyTo || null,
+      reactions: {},
+    });
     tx.update(postRef, { commentCount: increment(1) });
   });
 }

@@ -28,11 +28,21 @@ export interface ChannelPost {
   commentCount?: number;
 }
 
+export interface ChannelCommentReplyTo {
+  commentId: string;
+  authorId: string;
+  authorUsername: string;
+  text: string;
+}
+
 export interface ChannelComment {
   id: string;
   authorId: string;
   text: string;
   createdAt: any;
+  imageUrl?: string | null;
+  replyTo?: ChannelCommentReplyTo | null;
+  reactions?: Record<string, string[]>;
 }
 
 export interface ChannelSubscriber {
