@@ -1,3 +1,5 @@
+import type { Timestamp } from "firebase/firestore";
+
 export type GroupRole = "owner" | "admin" | "member";
 export interface Group {
   id: string;

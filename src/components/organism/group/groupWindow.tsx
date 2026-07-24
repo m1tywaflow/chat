@@ -318,7 +318,6 @@ export default function GroupWindow() {
     if (!groupId) return;
     const unsub = subscribeToGroupMessages(groupId, (msgs) => {
       setMessages(msgs);
-      // подтверждаем свои optimistic-сообщения, когда они реально прилетели
       setPendingMessages((prev) =>
         prev.filter(
           (p) =>
@@ -542,6 +541,7 @@ export default function GroupWindow() {
         myUid,
         senderName,
         messageText,
+        undefined,
         currentReply,
         imageUrl
       );
@@ -590,6 +590,7 @@ export default function GroupWindow() {
       myUid,
       myUsername || "Unknown",
       "",
+      undefined,
       replyMessage,
       url
     );
