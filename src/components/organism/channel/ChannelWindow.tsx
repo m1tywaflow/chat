@@ -310,10 +310,8 @@ export default function ChannelWindow({
 
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Основной picker реакций
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null);
 
-  // Picker кастомных эмодзи
   const [reactionPickerOpenId, setReactionPickerOpenId] = useState<
     string | null
   >(null);
@@ -539,7 +537,6 @@ export default function ChannelWindow({
     };
   }, [emojiPanelOpen]);
 
-  // Закрываем кастомный picker при клике вне него
   useEffect(() => {
     if (!reactionPickerOpenId) {
       return;
@@ -617,7 +614,6 @@ export default function ChannelWindow({
 
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
-        {/* Уже добавленные реакции */}
         {reactionSummary.map(({ token, count, mine }) => (
           <ReactionPill
             key={token}
@@ -628,7 +624,7 @@ export default function ChannelWindow({
           />
         ))}
 
-        {/* Комментарии */}
+        {/* comments */}
         <button
           onClick={() => openPostComments(post.id)}
           className="flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border bg-black/20 border-white/15 text-zinc-400 hover:text-[#a893ff] hover:border-[#7c5cff]/40 transition-colors"
@@ -672,7 +668,6 @@ export default function ChannelWindow({
                   </button>
                 ))}
 
-                {/* Стрелка */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -693,8 +688,6 @@ export default function ChannelWindow({
                   />
                 </button>
               </div>
-
-              {/* Все кастомные эмодзи */}
               {isCustomPickerOpen && (
                 <div
                   className="absolute bottom-full right-0 mb-2 w-[230px] max-h-[230px] overflow-y-auto grid grid-cols-4 gap-2 p-3 rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 chat-scroll"
