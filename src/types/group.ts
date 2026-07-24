@@ -21,9 +21,16 @@ export interface Group {
 export interface GroupMessage {
   id: string;
   text: string;
+  imageUrl?: string | null;
   senderId: string;
   senderName: string;
-  senderAvatarUrl?: string;
-  createdAt: Timestamp;
+  senderAvatarUrl?: string | null;
+  replyTo?: {
+    id: string;
+    text: string;
+    imageUrl?: string;
+  } | null;
+  createdAt: any;
   readBy: string[];
+  reactions: Record<string, string[]>;
 }

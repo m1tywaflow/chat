@@ -92,6 +92,7 @@ export async function sendGroupMessage(
   senderId: string,
   senderName: string,
   text: string,
+  senderAvatarUrl?: string,
   replyTo?: { id: string; text: string; imageUrl?: string } | null,
   imageUrl?: string
 ): Promise<string> {
@@ -102,6 +103,7 @@ export async function sendGroupMessage(
     imageUrl: imageUrl ?? null,
     senderId,
     senderName,
+    senderAvatarUrl: senderAvatarUrl ?? null,
     replyTo: replyTo ?? null,
     createdAt: serverTimestamp(),
     readBy: [senderId],
