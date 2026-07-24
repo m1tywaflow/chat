@@ -1,4 +1,4 @@
-# Pislk
+# Nexo
 
 A real-time, Telegram-inspired chat application built with Next.js, TypeScript, and Firebase.
 
