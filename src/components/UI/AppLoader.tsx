@@ -56,7 +56,7 @@ export default function AppLoader() {
 
       <div className="loader-label flex flex-col items-center gap-3 mt-7">
         <span className="loader-name-shimmer text-[22px] font-medium tracking-wide">
-          pislk
+          Nexo
         </span>
         <div className="flex gap-[6px]">
           <div className="loader-dot" />

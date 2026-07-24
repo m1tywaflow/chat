@@ -64,8 +64,8 @@ import ConditionalProviders from "@/components/providers/ConditionalProviders";
 import { FatalErrorBoundary } from "@/components/molecules/ErrorBoundary";
 
 export const metadata: Metadata = {
-  title: "pislk",
-  description: "Chat Pislk",
+  title: "Nexo",
+  description: "Chat Nexo",
 };
 
 export default function RootLayout({

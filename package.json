@@ -38,7 +38,7 @@
   },
   "build": {
     "appId": "com.mitywa.chat",
-    "productName": "pislk",
+    "productName": "Nexo",
     "asar": true,
     "compression": "maximum",
     "electronLanguages": ["en", "ru"],

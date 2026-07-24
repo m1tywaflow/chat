@@ -694,7 +694,7 @@ export default function GroupWindow() {
         className="flex w-full justify-center items-center h-full gap-3 text-zinc-500"
         style={{ background: "var(--color-chat-bg)" }}
       >
-        <span className="text-sm font-bold">Select a group in the pislk</span>
+        <span className="text-sm font-bold">Select a group in the Nexo</span>
       </div>
     );
   }

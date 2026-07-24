@@ -43,7 +43,7 @@ export default async function DownloadPage() {
           className="mb-6 select-none"
         />
 
-        <h1 className="text-5xl font-bold tracking-tight">pislk</h1>
+        <h1 className="text-5xl font-bold tracking-tight">Nexo</h1>
 
         <p className="mt-3 text-zinc-400">Fast native messenger for Windows.</p>
 

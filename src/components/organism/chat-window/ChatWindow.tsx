@@ -824,7 +824,7 @@ export default function ChatWindow() {
         style={{ background: "var(--color-chat-bg)" }}
       >
         <span className="text-sm font-bold">
-          Select a conversation in the pislk
+          Select a conversation in the Nexo
         </span>
       </div>
     );

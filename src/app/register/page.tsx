@@ -167,7 +167,7 @@ export default function RegisterPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="for example, pislk"
+              placeholder="for example, Nexo"
               autoComplete="username"
               className="h-12 w-full rounded-xl border border-zinc-800 bg-[#09090F] px-4 text-white placeholder:text-zinc-500 outline-none transition-all focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20"
             />

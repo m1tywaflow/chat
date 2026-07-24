@@ -48,7 +48,7 @@ export const useThemeStore = create<ThemeStore>()(
         })),
     }),
     {
-      name: "pislk-theme",
+      name: "nexo-theme",
       partialize: (state) => ({
         mode: state.mode,
         customTheme: state.customTheme,
