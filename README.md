@@ -2,7 +2,7 @@
 
 # 🌌 Nexo
 
-**A Telegram-inspired real-time chat app — now with channels, a native desktop client, and auto-updates.**
+**A real-time chat app — now with channels, a native desktop client, and auto-updates.**
 
 Built with Next.js, TypeScript, Firebase, and Electron.
 
