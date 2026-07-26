@@ -43,7 +43,7 @@ export default function VoiceRecordButton({
         <div className="absolute right-14 whitespace-nowrap flex items-center gap-2 text-xs">
           {willCancel ? (
             <span className="flex items-center gap-1 text-red-400 font-medium">
-              <Trash2 size={13} /> Отпусти для отмены
+              <Trash2 size={13} /> Release to cancel
             </span>
           ) : (
             <>
@@ -51,7 +51,7 @@ export default function VoiceRecordButton({
               <span className="text-zinc-300 tabular-nums">
                 {formatTime(elapsed)}
               </span>
-              <span className="text-zinc-600">← свайп</span>
+              <span className="text-zinc-600">swipe to left</span>
             </>
           )}
         </div>

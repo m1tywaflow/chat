@@ -345,7 +345,7 @@ export async function sendVoiceMessage(
   });
 
   await updateDoc(doc(db, "chats", chatId), {
-    lastMessage: "🎤 Voice message",
+    lastMessage: "Voice message",
     lastMessageAt: serverTimestamp(),
   });
 }

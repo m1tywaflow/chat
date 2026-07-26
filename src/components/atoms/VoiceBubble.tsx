@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause } from "lucide-react";
-import { usePlayerStore } from "@/store/player-store";
+import { usePlayerStore } from "@/store/chat-store";
 
 export default function VoiceBubble({
   id,
