@@ -51,6 +51,10 @@ import {
 } from "@/lib/customEmoji";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 
+import VoiceBubble from "@/components/atoms/VoiceBubble";
+import VoiceRecordButton from "@/components/atoms/recordButton";
+import { sendVoiceMessage } from "@/lib/firestore/chats";
+
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
   ...REACTION_EMOJIS,
@@ -682,6 +686,27 @@ export default function ChatWindow() {
       setUploading(false);
     }
   }
+  async function handleVoiceSend(r: {
+    audioUrl: string;
+    duration: number;
+    waveform: number[];
+  }) {
+    if (!chatId || !myUid) return;
+    const currentReply = replyMessage;
+    setReplyMessage(null);
+    try {
+      await sendVoiceMessage(
+        chatId,
+        myUid,
+        currentReply,
+        r.audioUrl,
+        r.duration,
+        r.waveform
+      );
+    } catch (err) {
+      console.error("Voice send failed:", err);
+    }
+  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") send();
@@ -1273,6 +1298,7 @@ export default function ChatWindow() {
             const isStickerMsg =
               !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
             const time = formatTime(m.createdAt);
+            const isVoiceMsg = !!m.voiceUrl;
 
             return (
               <div key={m.id}>
@@ -1427,6 +1453,27 @@ export default function ChatWindow() {
                         <span className="deleted-msg text-white text-xs">
                           Message deleted
                         </span>
+                      ) : isVoiceMsg ? (
+                        <div className="relative">
+                          <VoiceBubble
+                            id={m.id}
+                            audioUrl={m.voiceUrl}
+                            duration={m.duration}
+                            waveform={m.waveform}
+                            isMine={isMine}
+                          />
+                          {isMine && (
+                            <div className="flex justify-end px-1 pb-0.5">
+                              <MessageMeta
+                                time={time}
+                                pending={m.pending}
+                                isMine={isMine}
+                                isRead={isRead}
+                                variant="inline"
+                              />
+                            </div>
+                          )}
+                        </div>
                       ) : isStickerMsg ? (
                         <div className="relative inline-block">
                           <img
@@ -1816,40 +1863,21 @@ export default function ChatWindow() {
               onChange={handleWallpaperChange}
             />
             {/* Send */}
-            <button
-              onClick={send}
-              disabled={!canSend}
-              className="
-      shrink-0
-      w-[42px]
-      h-[42px]
-      flex
-      items-center
-      justify-center
-      rounded-full
-
-      bg-gradient-to-br
-      from-[#7c5cff]
-      to-[#5b3df0]
-
-      shadow-[0_0_35px_rgba(124,92,255,.45)]
-
-      transition-all
-      hover:scale-105
-      active:scale-95
-
-      disabled:opacity-20
-      disabled:cursor-not-allowed
-    "
-            >
-              <Send
-                size={19}
-                className="text-white"
-                style={{
-                  transform: "translateX(-1px)",
-                }}
-              />
-            </button>
+            {canSend ? (
+              <button
+                onClick={send}
+                disabled={!canSend}
+                className="shrink-0 w-[42px] h-[42px] flex items-center justify-center rounded-full bg-gradient-to-br from-[#7c5cff] to-[#5b3df0] shadow-[0_0_35px_rgba(124,92,255,.45)] transition-all hover:scale-105 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed"
+              >
+                <Send
+                  size={19}
+                  className="text-white"
+                  style={{ transform: "translateX(-1px)" }}
+                />
+              </button>
+            ) : (
+              <VoiceRecordButton onSend={handleVoiceSend} />
+            )}
           </div>
         </div>
       </div>

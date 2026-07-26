@@ -7,9 +7,8 @@ const {
   ipcMain,
   screen,
 } = require("electron");
-
+import { session } from "electron";
 const path = require("path");
-
 
 app.disableHardwareAcceleration();
 
@@ -111,6 +110,16 @@ function createWindow() {
     mainWindow.flashFrame(false);
   });
 }
+
+session.defaultSession.setPermissionRequestHandler(
+  (webContents, permission, callback) => {
+    if (permission === "media") {
+      callback(true);
+      return;
+    }
+    callback(false);
+  }
+);
 
 function getActiveDisplay() {
   if (mainWindow && !mainWindow.isDestroyed()) {

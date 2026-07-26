@@ -322,3 +322,30 @@ export async function forwardMessageToChat(
     [`unreadCount.${otherUid}`]: increment(1),
   });
 }
+export async function sendVoiceMessage(
+  chatId: string,
+  senderId: string,
+  replyTo: any | null,
+  voiceUrl: string,
+  duration: number,
+  waveform: number[]
+) {
+  await addDoc(collection(db, "chats", chatId, "messages"), {
+    senderId,
+    text: "",
+    voiceUrl,
+    duration,
+    waveform,
+    replyTo: replyTo
+      ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl }
+      : null,
+    createdAt: serverTimestamp(),
+    readBy: [],
+    reactions: {},
+  });
+
+  await updateDoc(doc(db, "chats", chatId), {
+    lastMessage: "🎤 Voice message",
+    lastMessageAt: serverTimestamp(),
+  });
+}
