@@ -3,6 +3,7 @@
 // import { useEffect, useState, useRef } from "react";
 // import { useChatStore } from "@/store/chat-store";
 // import { useChannelStore } from "@/store/channel-store";
+// import { useGroupStore } from "@/store/group-store";
 // import { useCurrentUser } from "@/hooks/useCurrentUser";
 // import {
 //   subscribeToUserChats,
@@ -16,6 +17,11 @@
 //   unsubscribeFromChannel,
 //   deleteChannel,
 // } from "@/lib/firestore/channels";
+// import {
+//   togglePinGroup,
+//   leaveGroup,
+//   deleteGroup,
+// } from "@/lib/firestore/groups";
 // import { setConversationOrder } from "@/lib/firestore/order";
 // import {
 //   buildConversationItems,
@@ -23,8 +29,10 @@
 //   ConversationItem,
 // } from "@/lib/mergeConversations";
 // import { Channel } from "@/types/channel";
+// import { Group } from "@/types/group";
 // import ChatItem from "./ChatItem";
 // import ChannelItem from "../channel/ChannelItem";
+// import GroupItem from "../group/groupItem";
 // import CreateChannelModal from "../channel/CreateChannelModal";
 // import ChannelSearchModal from "../channel/ChannelSearchModal";
 // import ProfileModal from "../profile-modal/ProfileModal";
@@ -53,7 +61,7 @@
 // import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 
 // interface CtxMenu {
-//   type: "chat" | "channel";
+//   type: "chat" | "channel" | "group";
 //   id: string;
 //   x: number;
 //   y: number;
@@ -62,7 +70,7 @@
 // }
 
 // interface DeleteConfirm {
-//   type: "chat" | "channel";
+//   type: "chat" | "channel" | "group";
 //   id: string;
 //   isOwner?: boolean;
 // }
@@ -77,6 +85,11 @@
 //   const setActiveChat = useChatStore((s) => s.setActiveChat);
 //   const activeChannelId = useChannelStore((s) => s.activeChannelId);
 //   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
+//   const activeGroupId = useGroupStore((s) => s.activeGroupId);
+//   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
+//   const groups = useGroupStore((s) => s.groups);
+//   const initGroups = useGroupStore((s) => s.initGroups);
+//   const disposeGroups = useGroupStore((s) => s.disposeGroups);
 //   const { firebaseUser } = useCurrentUser();
 //   const { mode, customTheme } = useThemeStore();
 
@@ -95,6 +108,7 @@
 //   const [pinnedChannels, setPinnedChannels] = useState<Record<string, boolean>>(
 //     {}
 //   );
+//   const [pinnedGroups, setPinnedGroups] = useState<Record<string, boolean>>({});
 //   const [order, setOrder] = useState<Record<string, number>>({});
 //   const [myUsername, setMyUsername] = useState("");
 //   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
@@ -106,7 +120,6 @@
 //   const [createChannelOpen, setCreateChannelOpen] = useState(false);
 //   const [searchChannelOpen, setSearchChannelOpen] = useState(false);
 
-//   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 //   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
 //   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -114,7 +127,6 @@
 
 //   const ctxRef = useRef<HTMLDivElement | null>(null);
 //   const channelMenuRef = useRef<HTMLDivElement | null>(null);
-//   const groupMenuRef = useRef<HTMLDivElement | null>(null);
 
 //   useEffect(() => {
 //     if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
@@ -163,10 +175,17 @@
 
 //   useEffect(() => {
 //     if (!firebaseUser) return;
+//     initGroups(firebaseUser.uid);
+//     return () => disposeGroups();
+//   }, [firebaseUser, initGroups, disposeGroups]);
+
+//   useEffect(() => {
+//     if (!firebaseUser) return;
 //     const unsub = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
 //       const data = snap.data();
 //       setPinnedChats(data?.pinnedChats || {});
 //       setPinnedChannels(data?.pinnedChannels || {});
+//       setPinnedGroups(data?.pinnedGroups || {});
 //       setOrder(data?.order || {});
 //       setMyUsername(data?.username || "");
 //     });
@@ -222,19 +241,6 @@
 //   }, [channelMenuOpen]);
 
 //   useEffect(() => {
-//     if (!groupMenuOpen) return;
-//     function handleClick(e: MouseEvent) {
-//       if (
-//         groupMenuRef.current &&
-//         !groupMenuRef.current.contains(e.target as Node)
-//       )
-//         setGroupMenuOpen(false);
-//     }
-//     window.addEventListener("click", handleClick);
-//     return () => window.removeEventListener("click", handleClick);
-//   }, [groupMenuOpen]);
-
-//   useEffect(() => {
 //     window.electronAPI?.onOpenChat((chatId: string) => {
 //       setActiveChat(chatId);
 //     });
@@ -244,13 +250,15 @@
 //     if (!firebaseUser) return;
 //     const chatId = await createOrGetChat(firebaseUser.uid, otherUid);
 //     setActiveChat(chatId);
+//     setActiveGroup(null);
+//     setActiveChannel(null);
 //     setQuery("");
 //     setUsers([]);
 //   }
 
 //   function handleCtxMenu(
 //     e: React.MouseEvent,
-//     type: "chat" | "channel",
+//     type: "chat" | "channel" | "group",
 //     id: string,
 //     pinned: boolean,
 //     isOwner?: boolean
@@ -263,8 +271,10 @@
 //     if (!ctxMenu || !firebaseUser) return;
 //     if (ctxMenu.type === "chat") {
 //       await togglePinChat(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
-//     } else {
+//     } else if (ctxMenu.type === "channel") {
 //       await togglePinChannel(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
+//     } else {
+//       await togglePinGroup(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
 //     }
 //     setCtxMenu(null);
 //   }
@@ -285,13 +295,20 @@
 //         [`deleted.${firebaseUser.uid}`]: true,
 //       });
 //       useChatStore.getState().setActiveChat(null);
-//     } else {
+//     } else if (deleteConfirm.type === "channel") {
 //       if (deleteConfirm.isOwner) {
 //         await deleteChannel(deleteConfirm.id);
 //       } else {
 //         await unsubscribeFromChannel(deleteConfirm.id, firebaseUser.uid);
 //       }
 //       if (activeChannelId === deleteConfirm.id) setActiveChannel(null);
+//     } else {
+//       if (deleteConfirm.isOwner) {
+//         await deleteGroup(deleteConfirm.id);
+//       } else {
+//         await leaveGroup(deleteConfirm.id, firebaseUser.uid);
+//       }
+//       if (activeGroupId === deleteConfirm.id) setActiveGroup(null);
 //     }
 
 //     setDeleteConfirm(null);
@@ -299,6 +316,13 @@
 
 //   function openChannel(channelId: string) {
 //     setActiveChannel(channelId);
+//     setActiveGroup(null);
+//   }
+
+//   function openGroup(groupId: string) {
+//     setActiveGroup(groupId);
+//     setActiveChannel(null);
+//     setActiveChat(null);
 //   }
 
 //   async function handleDrop(bucketIds: string[]) {
@@ -324,13 +348,21 @@
 //   }
 
 //   const visibleChats = chats.filter((c) => !c.deleted);
-//   const allItems = buildConversationItems(visibleChats, myChannels);
+//   const allItems = buildConversationItems(visibleChats, myChannels, groups);
 
 //   const pinnedItemsRaw = allItems.filter((it) =>
-//     it.type === "chat" ? pinnedChats[it.id] : pinnedChannels[it.id]
+//     it.type === "chat"
+//       ? pinnedChats[it.id]
+//       : it.type === "channel"
+//       ? pinnedChannels[it.id]
+//       : pinnedGroups[it.id]
 //   );
 //   const unpinnedItemsRaw = allItems.filter((it) =>
-//     it.type === "chat" ? !pinnedChats[it.id] : !pinnedChannels[it.id]
+//     it.type === "chat"
+//       ? !pinnedChats[it.id]
+//       : it.type === "channel"
+//       ? !pinnedChannels[it.id]
+//       : !pinnedGroups[it.id]
 //   );
 
 //   const pinnedList = sortConversationItems(pinnedItemsRaw, order);
@@ -352,6 +384,10 @@
 //       item.type === "channel" &&
 //       (item.data as Channel).ownerId === firebaseUser?.uid;
 
+//     const isGroupOwner =
+//       item.type === "group" &&
+//       (item.data as Group).ownerId === firebaseUser?.uid;
+
 //     return (
 //       <div
 //         key={item.id}
@@ -369,7 +405,9 @@
 //         onContextMenu={(e) =>
 //           item.type === "chat"
 //             ? handleCtxMenu(e, "chat", item.id, pinned)
-//             : handleCtxMenu(e, "channel", item.id, pinned, isChannelOwner)
+//             : item.type === "channel"
+//             ? handleCtxMenu(e, "channel", item.id, pinned, isChannelOwner)
+//             : handleCtxMenu(e, "group", item.id, pinned, isGroupOwner)
 //         }
 //         className="relative"
 //         style={{
@@ -382,12 +420,19 @@
 //       >
 //         {item.type === "chat" ? (
 //           <ChatItem chat={item.data} pinned={pinned} />
-//         ) : (
+//         ) : item.type === "channel" ? (
 //           <ChannelItem
 //             channel={item.data as Channel}
 //             active={activeChannelId === item.id}
 //             pinned={pinned}
 //             onClick={() => openChannel(item.id)}
+//           />
+//         ) : (
+//           <GroupItem
+//             group={item.data as Group}
+//             active={activeGroupId === item.id}
+//             pinned={pinned}
+//             onClick={() => openGroup(item.id)}
 //           />
 //         )}
 //       </div>
@@ -621,6 +666,7 @@
 //           onCreated={(channelId) => setActiveChannel(channelId)}
 //         />
 //       )}
+
 //       {createGroupOpen && firebaseUser && (
 //         <CreateGroupModal
 //           uid={firebaseUser.uid}
@@ -632,7 +678,8 @@
 //           }))}
 //           onClose={() => setCreateGroupOpen(false)}
 //           onCreated={(groupId) => {
-//             console.log("created group:", groupId);
+//             setActiveGroup(groupId);
+//             setCreateGroupOpen(false);
 //           }}
 //         />
 //       )}
@@ -679,10 +726,14 @@
 //             {ctxMenu.pinned
 //               ? ctxMenu.type === "chat"
 //                 ? "Unpin chat"
-//                 : "Unpin channel"
+//                 : ctxMenu.type === "channel"
+//                 ? "Unpin channel"
+//                 : "Unpin group"
 //               : ctxMenu.type === "chat"
 //               ? "Pin chat"
-//               : "Pin channel"}
+//               : ctxMenu.type === "channel"
+//               ? "Pin channel"
+//               : "Pin group"}
 //           </button>
 
 //           {ctxMenu.type === "chat" && (
@@ -724,15 +775,27 @@
 //                 <Trash2 size={13} className="text-red-400/70" />
 //                 Delete chat
 //               </>
+//             ) : ctxMenu.type === "channel" ? (
+//               ctxMenu.isOwner ? (
+//                 <>
+//                   <Trash2 size={13} className="text-red-400/70" />
+//                   Delete channel
+//                 </>
+//               ) : (
+//                 <>
+//                   <LogOut size={13} className="text-red-400/70" />
+//                   Leave channel
+//                 </>
+//               )
 //             ) : ctxMenu.isOwner ? (
 //               <>
 //                 <Trash2 size={13} className="text-red-400/70" />
-//                 Delete channel
+//                 Delete group
 //               </>
 //             ) : (
 //               <>
 //                 <LogOut size={13} className="text-red-400/70" />
-//                 Leave channel
+//                 Leave group
 //               </>
 //             )}
 //           </button>
@@ -751,7 +814,9 @@
 //           >
 //             <div className="px-6 pt-6 pb-4">
 //               <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-//                 {deleteConfirm.type === "channel" && !deleteConfirm.isOwner ? (
+//                 {(deleteConfirm.type === "channel" ||
+//                   deleteConfirm.type === "group") &&
+//                 !deleteConfirm.isOwner ? (
 //                   <LogOut size={18} className="text-red-400" />
 //                 ) : (
 //                   <Trash2 size={18} className="text-red-400" />
@@ -760,16 +825,24 @@
 //               <h3 className="text-[15px] font-semibold text-white mb-1">
 //                 {deleteConfirm.type === "chat"
 //                   ? "Delete chat?"
+//                   : deleteConfirm.type === "channel"
+//                   ? deleteConfirm.isOwner
+//                     ? "Delete channel?"
+//                     : "Leave channel?"
 //                   : deleteConfirm.isOwner
-//                   ? "Delete channel?"
-//                   : "Leave channel?"}
+//                   ? "Delete group?"
+//                   : "Leave group?"}
 //               </h3>
 //               <p className="text-[13px] text-zinc-400 leading-relaxed">
 //                 {deleteConfirm.type === "chat"
 //                   ? "This will permanently delete the entire conversation. This action cannot be undone."
+//                   : deleteConfirm.type === "channel"
+//                   ? deleteConfirm.isOwner
+//                     ? "This will permanently delete the channel for all subscribers. This action cannot be undone."
+//                     : "You will stop receiving posts from this channel. You can subscribe again anytime."
 //                   : deleteConfirm.isOwner
-//                   ? "This will permanently delete the channel for all subscribers. This action cannot be undone."
-//                   : "You will stop receiving posts from this channel. You can subscribe again anytime."}
+//                   ? "This will permanently delete the group for all members. This action cannot be undone."
+//                   : "You will stop receiving messages from this group. You'll need a new invite to rejoin."}
 //               </p>
 //             </div>
 //             <div className="flex border-t border-white/[0.06]">
@@ -783,7 +856,9 @@
 //                 onClick={confirmDelete}
 //                 className="flex-1 py-3.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors font-semibold cursor-pointer"
 //               >
-//                 {deleteConfirm.type === "channel" && !deleteConfirm.isOwner
+//                 {(deleteConfirm.type === "channel" ||
+//                   deleteConfirm.type === "group") &&
+//                 !deleteConfirm.isOwner
 //                   ? "Leave"
 //                   : "Delete"}
 //               </button>
@@ -845,6 +920,7 @@ import {
   ChevronsRight,
   LogOut,
   Users,
+  MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -1242,6 +1318,9 @@ export default function SideBar() {
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
+        .sidebar-search input:focus {
+          box-shadow: 0 0 0 3px rgba(82,47,183,0.18);
+        }
       `}</style>
 
       <section
@@ -1253,7 +1332,10 @@ export default function SideBar() {
         }}
       >
         {/* search */}
-        <div className="p-4 pb-3 border-b border-[#241D57]">
+        <div
+          className="p-4 pb-3 border-b sidebar-search"
+          style={{ borderColor: "rgba(36,29,87,0.6)" }}
+        >
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search
@@ -1265,7 +1347,7 @@ export default function SideBar() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search users..."
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl outline-none border border-transparent focus:border-[#241D57] transition-all text-sm"
+                className="w-full pl-10 pr-3 py-2.5 rounded-2xl outline-none border border-transparent focus:border-[#3b2f78] transition-all duration-200 text-sm"
                 style={{ background: SEARCH_BG, color: "#F3F1FA" }}
               />
             </div>
@@ -1273,7 +1355,7 @@ export default function SideBar() {
               <button
                 onClick={() => setChannelMenuOpen((v) => !v)}
                 title="Channels"
-                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-colors cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-150 cursor-pointer hover:brightness-125"
                 style={{ background: SEARCH_BTN_BG, color: accent }}
               >
                 <Megaphone size={16} />
@@ -1327,7 +1409,7 @@ export default function SideBar() {
               <button
                 onClick={() => setCreateGroupOpen(true)}
                 title="New group"
-                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-colors cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-150 cursor-pointer hover:brightness-125"
                 style={{ background: SEARCH_BTN_BG, color: accent }}
               >
                 <Users size={16} />
@@ -1342,7 +1424,7 @@ export default function SideBar() {
             style={{ borderColor: border }}
           >
             {loading && (
-              <p className="text-xs px-4 py-2" style={{ color: subText }}>
+              <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
                 Searching...
               </p>
             )}
@@ -1378,27 +1460,40 @@ export default function SideBar() {
                 </button>
               ))}
             {!loading && users.length === 0 && (
-              <p className="text-xs px-4 py-2" style={{ color: subText }}>
+              <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
                 No users found
               </p>
             )}
           </div>
         )}
 
+        {/* contacts list — same background as the rest of the sidebar */}
         <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
-          {pinnedList.length === 0 && mergedList.length === 0 && (
-            <p className="text-sm p-4" style={{ color: subText }}>
-              No chats yet. Search users above.
-            </p>
+          {pinnedList.length === 0 && mergedList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2.5 h-full text-center px-6 pb-10">
+              <div
+                className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                style={{ background: `${accent}18` }}
+              >
+                <MessagesSquare size={18} style={{ color: accent }} />
+              </div>
+              <p className="text-sm" style={{ color: subText }}>
+                No chats yet. Search users above to start one.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {pinnedList.map((item) => renderItem(item, true, pinnedList))}
+              {mergedList.map((item) => renderItem(item, false, mergedList))}
+            </div>
           )}
-          <div>
-            {pinnedList.map((item) => renderItem(item, true, pinnedList))}
-            {mergedList.map((item) => renderItem(item, false, mergedList))}
-          </div>
         </div>
 
         {/* footer */}
-        <div className="pt-2 pb-2 space-y-2">
+        <div
+          className="pt-3 pb-2 px-0 space-y-2 border-t"
+          style={{ borderColor: "rgba(36,29,87,0.5)" }}
+        >
           <Link
             href="/settings"
             className="group flex h-12 items-center gap-3 rounded-2xl border border-white/[0.05]
@@ -1597,8 +1692,6 @@ export default function SideBar() {
           </button>
         </div>
       )}
-
-      {/* delete/leave confirm */}
       {deleteConfirm && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
