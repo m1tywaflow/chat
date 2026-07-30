@@ -204,3 +204,33 @@ export async function leaveGroup(groupId: string, uid: string): Promise<void> {
 export async function deleteGroup(groupId: string): Promise<void> {
   await deleteDoc(doc(db, "groups", groupId));
 }
+
+export async function getUserProfiles(
+  uids: string[]
+): Promise<Record<string, any>> {
+  const unique = Array.from(new Set(uids));
+  const results = await Promise.all(
+    unique.map(async (uid) => {
+      const snap = await getDoc(doc(db, "users", uid));
+      return [
+        uid,
+        snap.exists()
+          ? { id: uid, ...snap.data() }
+          : { id: uid, username: "Unknown" },
+      ] as const;
+    })
+  );
+  return Object.fromEntries(results);
+}
+
+export async function setGroupAdmin(
+  groupId: string,
+  uid: string,
+  isAdmin: boolean
+): Promise<void> {
+  await updateDoc(doc(db, "groups", groupId), {
+    admins: isAdmin ? arrayUnion(uid) : arrayRemove(uid),
+  });
+}
+
+export const kickMember = leaveGroup;

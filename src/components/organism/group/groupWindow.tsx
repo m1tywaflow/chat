@@ -45,6 +45,7 @@ import {
   isCustomEmojiUrl,
 } from "@/lib/customEmoji";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+import GroupModal from "./groupModal";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
@@ -278,6 +279,7 @@ export default function GroupWindow() {
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -916,24 +918,30 @@ export default function GroupWindow() {
         {/* Header */}
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
-                {group.avatarUrl ? (
-                  <img
-                    src={group.avatarUrl}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Users size={14} className="text-[#a893ff]" />
-                )}
-              </div>
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-sm font-semibold text-white/80">
-                  {group.name}
-                </span>
-                <span className="text-[11px] text-zinc-500">
-                  {group.memberCount} member{group.memberCount === 1 ? "" : "s"}
-                </span>
+            <div
+              className="flex items-center gap-2.5 cursor-pointer"
+              onClick={() => setShowGroupInfo(true)}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
+                  {group.avatarUrl ? (
+                    <img
+                      src={group.avatarUrl}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Users size={14} className="text-[#a893ff]" />
+                  )}
+                </div>
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-sm font-semibold text-white/80">
+                    {group.name}
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    {group.memberCount} member
+                    {group.memberCount === 1 ? "" : "s"}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="relative items-center" ref={menuRef}>
@@ -1319,8 +1327,15 @@ export default function GroupWindow() {
             </button>
           )}
         </div>
+        {showGroupInfo && (
+          <GroupModal
+            groupId={groupId}
+            myUid={myUid}
+            onClose={() => setShowGroupInfo(false)}
+          />
+        )}
 
-        {/* Input area — идентичен ChatWindow */}
+        {/* Input area */}
         <div className="flex-none border-t border-white/[0.06] bg-[#0d0b17]/95 backdrop-blur-xl relative z-10">
           {replyMessage && (
             <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-[#7c5cff]/[0.06] border border-[#7c5cff]/20">
