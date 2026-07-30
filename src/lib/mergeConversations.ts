@@ -1,8 +1,10 @@
 // import { Channel } from "@/types/channel";
+// import { Group } from "@/types/group";
 
 // export type ConversationItem =
 //   | { type: "chat"; id: string; data: any; sortTime: number }
-//   | { type: "channel"; id: string; data: Channel; sortTime: number };
+//   | { type: "channel"; id: string; data: Channel; sortTime: number }
+//   | { type: "group"; id: string; data: Group; sortTime: number };
 
 // function toMillis(ts: any): number {
 //   if (!ts) return 0;
@@ -13,7 +15,8 @@
 
 // export function buildConversationItems(
 //   chats: any[],
-//   channels: Channel[]
+//   channels: Channel[],
+//   groups: Group[] = []
 // ): ConversationItem[] {
 //   const chatItems: ConversationItem[] = chats.map((c) => ({
 //     type: "chat",
@@ -27,7 +30,13 @@
 //     data: c,
 //     sortTime: toMillis(c.lastPostAt),
 //   }));
-//   return [...chatItems, ...channelItems];
+//   const groupItems: ConversationItem[] = groups.map((g) => ({
+//     type: "group",
+//     id: g.id,
+//     data: g,
+//     sortTime: toMillis(g.lastMessage?.createdAt) || toMillis(g.createdAt),
+//   }));
+//   return [...chatItems, ...channelItems, ...groupItems];
 // }
 
 // export function sortConversationItems(
@@ -47,15 +56,19 @@
 // export function mergeConversations(
 //   chats: any[],
 //   channels: Channel[],
+//   groups: Group[] = [],
 //   orderMap?: Record<string, number>
 // ): ConversationItem[] {
 //   return sortConversationItems(
-//     buildConversationItems(chats, channels),
+//     buildConversationItems(chats, channels, groups),
 //     orderMap
 //   );
 // }
 import { Channel } from "@/types/channel";
 import { Group } from "@/types/group";
+import { useChatStore } from "@/store/chat-store";
+import { useChannelStore } from "@/store/channel-store";
+import { useGroupStore } from "@/store/group-store";
 
 export type ConversationItem =
   | { type: "chat"; id: string; data: any; sortTime: number }
@@ -119,4 +132,17 @@ export function mergeConversations(
     buildConversationItems(chats, channels, groups),
     orderMap
   );
+}
+
+export function openConversation(
+  type: ConversationItem["type"] | null,
+  id: string | null
+) {
+  const { setActiveChat } = useChatStore.getState();
+  const { setActiveGroup } = useGroupStore.getState();
+  const { setActiveChannel } = useChannelStore.getState();
+
+  setActiveChat(type === "chat" ? id : null);
+  setActiveGroup(type === "group" ? id : null);
+  setActiveChannel(type === "channel" ? id : null);
 }

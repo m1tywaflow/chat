@@ -11,6 +11,7 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
+import { openConversation } from "@/lib/mergeConversations";
 
 interface Props {
   chat: Chat;
@@ -54,7 +55,7 @@ export default function ChatItem({ chat, pinned }: Props) {
 
   return (
     <button
-      onClick={() => setActiveChat(chat.id)}
+      onClick={() => openConversation("chat", chat.id)}
       className="w-full min-h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px]  transition-colors duration-150 cursor-pointer overflow-hidden relative group"
       style={{
         background: isActive ? ACTIVE_ROW_BG : "transparent",

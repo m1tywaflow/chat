@@ -931,6 +931,7 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+import { openConversation } from "@/lib/mergeConversations";
 
 interface CtxMenu {
   type: "chat" | "channel" | "group";
@@ -1121,9 +1122,7 @@ export default function SideBar() {
   async function openChat(otherUid: string) {
     if (!firebaseUser) return;
     const chatId = await createOrGetChat(firebaseUser.uid, otherUid);
-    setActiveChat(chatId);
-    setActiveGroup(null);
-    setActiveChannel(null);
+    openConversation("chat", chatId);
     setQuery("");
     setUsers([]);
   }
@@ -1187,14 +1186,11 @@ export default function SideBar() {
   }
 
   function openChannel(channelId: string) {
-    setActiveChannel(channelId);
-    setActiveGroup(null);
+    openConversation("channel", channelId);
   }
 
   function openGroup(groupId: string) {
-    setActiveGroup(groupId);
-    setActiveChannel(null);
-    setActiveChat(null);
+    openConversation("group", groupId);
   }
 
   async function handleDrop(bucketIds: string[]) {
