@@ -1028,7 +1028,7 @@ export default function GroupWindow() {
                   <div className="relative group max-w-[72%] min-w-0">
                     {isPickerOpen && (
                       <div
-                        className={`reaction-picker absolute z-30 bottom-full mb-2 ${
+                        className={`reaction-picker absolute z-30 top-full mb-2 ${
                           isMine ? "right-0" : "left-0"
                         } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${
                           pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
