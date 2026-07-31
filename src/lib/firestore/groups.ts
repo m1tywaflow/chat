@@ -121,6 +121,36 @@ export async function sendGroupMessage(
 
   return msgRef.id;
 }
+export async function sendGroupVoiceMessage(
+  groupId: string,
+  senderId: string,
+  senderName: string,
+  replyTo: any,
+  audioUrl: string,
+  duration: number,
+  waveform: number[]
+) {
+  const messagesRef = collection(db, "groups", groupId, "messages");
+
+  await addDoc(messagesRef, {
+    senderId,
+    senderName,
+    text: "",
+    voiceUrl: audioUrl,
+    duration,
+    waveform,
+    replyTo: replyTo
+      ? {
+          id: replyTo.id,
+          text: replyTo.text || "",
+          imageUrl: replyTo.imageUrl || null,
+        }
+      : null,
+    createdAt: serverTimestamp(),
+    readBy: [],
+    reactions: {},
+  });
+}
 
 export async function markGroupMessageRead(
   groupId: string,
