@@ -1,6 +1,7 @@
 // "use client";
 
 // import { useEffect, useMemo, useState } from "react";
+// import { createPortal } from "react-dom";
 // import { useGroupStore } from "@/store/group-store";
 // import {
 //   getUserProfiles,
@@ -31,6 +32,12 @@
 //   online: boolean;
 //   lastSeen: any;
 //   role: "owner" | "admin" | "member";
+// }
+
+// interface MenuPos {
+//   top: number;
+//   left: number;
+//   openUp: boolean;
 // }
 
 // function ConfirmMini({
@@ -83,6 +90,8 @@
 //   );
 // }
 
+// const MENU_WIDTH = 170;
+
 // export default function GroupModal({ groupId, myUid, onClose }: Props) {
 //   const group = useGroupStore((s) => s.groups.find((g) => g.id === groupId));
 
@@ -92,6 +101,7 @@
 //   const [kickTarget, setKickTarget] = useState<MemberRow | null>(null);
 //   const [busyUid, setBusyUid] = useState<string | null>(null);
 //   const [menuUid, setMenuUid] = useState<string | null>(null);
+//   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
 
 //   const memberIdsKey = useMemo(
 //     () => (group ? [...group.members].sort().join(",") : ""),
@@ -125,11 +135,19 @@
 //     return () => window.removeEventListener("keydown", handler);
 //   }, [kickTarget, zoomUrl, onClose]);
 
+//   function closeMenu() {
+//     setMenuUid(null);
+//     setMenuPos(null);
+//   }
+
 //   useEffect(() => {
 //     if (!menuUid) return;
-//     const close = () => setMenuUid(null);
-//     window.addEventListener("click", close);
-//     return () => window.removeEventListener("click", close);
+//     window.addEventListener("click", closeMenu);
+//     window.addEventListener("resize", closeMenu);
+//     return () => {
+//       window.removeEventListener("click", closeMenu);
+//       window.removeEventListener("resize", closeMenu);
+//     };
 //   }, [menuUid]);
 
 //   if (!group) return null;
@@ -163,12 +181,38 @@
 //     return a.username.localeCompare(b.username);
 //   });
 
+//   const menuRow = menuUid ? rows.find((r) => r.uid === menuUid) ?? null : null;
+
 //   function canKick(target: MemberRow) {
 //     if (!canManage) return false;
 //     if (target.uid === myUid) return false;
 //     if (target.role === "owner") return false;
 //     if (target.role === "admin" && !isOwner) return false;
 //     return true;
+//   }
+
+//   function openMenu(e: React.MouseEvent, uid: string) {
+//     e.stopPropagation();
+
+//     if (menuUid === uid) {
+//       closeMenu();
+//       return;
+//     }
+
+//     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+//     const estimatedMenuHeight = isOwner ? 92 : 46; // 2 пункта у владельца, 1 у обычного админа
+//     const spaceBelow = window.innerHeight - rect.bottom;
+//     const openUp = spaceBelow < estimatedMenuHeight + 12;
+
+//     let left = rect.right - MENU_WIDTH;
+//     left = Math.max(8, Math.min(left, window.innerWidth - MENU_WIDTH - 8));
+
+//     setMenuPos({
+//       top: openUp ? rect.top - 6 : rect.bottom + 6,
+//       left,
+//       openUp,
+//     });
+//     setMenuUid(uid);
 //   }
 
 //   async function handleKickConfirmed() {
@@ -184,7 +228,7 @@
 
 //   async function toggleAdmin(target: MemberRow) {
 //     if (!isOwner || target.role === "owner") return;
-//     setMenuUid(null);
+//     closeMenu();
 //     setBusyUid(target.uid);
 //     try {
 //       await setGroupAdmin(groupId, target.uid, target.role !== "admin");
@@ -200,7 +244,9 @@
 //         .gm-scroll::-webkit-scrollbar-track { background: transparent; }
 //         .gm-scroll::-webkit-scrollbar-thumb { background: rgba(124,92,255,0.25); border-radius: 999px; }
 //         .gm-scroll::-webkit-scrollbar-thumb:hover { background: rgba(124,92,255,0.5); }
-//         .gm-row-menu { animation: gmMenuIn 0.12s cubic-bezier(0.34,1.56,0.64,1); transform-origin: top right; }
+//         .gm-row-menu { animation: gmMenuIn 0.12s cubic-bezier(0.34,1.56,0.64,1); }
+//         .gm-row-menu.open-down { transform-origin: top right; }
+//         .gm-row-menu.open-up { transform-origin: bottom right; }
 //         @keyframes gmMenuIn { from { opacity:0; transform:scale(0.9) translateY(-4px);} to { opacity:1; transform:scale(1) translateY(0);} }
 //         .gm-avatar { cursor: zoom-in; transition: opacity 0.15s; }
 //         .gm-avatar:hover { opacity: 0.85; }
@@ -249,7 +295,10 @@
 //           </div>
 
 //           {/* members list */}
-//           <div className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2">
+//           <div
+//             className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
+//             onScroll={closeMenu}
+//           >
 //             {loadingProfiles && rows.every((r) => r.username === "…") ? (
 //               <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
 //                 <Loader2 size={16} className="animate-spin" />
@@ -317,66 +366,16 @@
 //                   ) : (
 //                     (isOwner || canKick(row)) &&
 //                     row.role !== "owner" && (
-//                       <div className="relative shrink-0">
-//                         <button
-//                           onClick={(e) => {
-//                             e.stopPropagation();
-//                             setMenuUid((prev) =>
-//                               prev === row.uid ? null : row.uid
-//                             );
-//                           }}
-//                           className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer"
-//                         >
-//                           <UserMinus size={14} />
-//                         </button>
-
-//                         {menuUid === row.uid && (
-//                           <div
-//                             className="gm-row-menu  absolute right-0 top-8 z-30 min-w-[160px] rounded-xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50 overflow-hidden"
-//                             onClick={(e) => e.stopPropagation()}
-//                           >
-//                             {isOwner && (
-//                               <button
-//                                 onClick={() => toggleAdmin(row)}
-//                                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-white/[0.05] transition-colors cursor-pointer"
-//                               >
-//                                 {row.role === "admin" ? (
-//                                   <>
-//                                     <ShieldOff
-//                                       size={13}
-//                                       className="text-zinc-500"
-//                                     />
-//                                     Remove admin
-//                                   </>
-//                                 ) : (
-//                                   <>
-//                                     <ShieldCheck
-//                                       size={13}
-//                                       className="text-zinc-500"
-//                                     />
-//                                     Make admin
-//                                   </>
-//                                 )}
-//                               </button>
-//                             )}
-//                             {canKick(row) && (
-//                               <button
-//                                 onClick={() => {
-//                                   setMenuUid(null);
-//                                   setKickTarget(row);
-//                                 }}
-//                                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-red-400 hover:bg-white/[0.05] transition-colors cursor-pointer"
-//                               >
-//                                 <UserMinus
-//                                   size={13}
-//                                   className="text-red-400/70"
-//                                 />
-//                                 Remove from group
-//                               </button>
-//                             )}
-//                           </div>
-//                         )}
-//                       </div>
+//                       <button
+//                         onClick={(e) => openMenu(e, row.uid)}
+//                         className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${
+//                           menuUid === row.uid
+//                             ? "opacity-100 bg-white/[0.08] text-white"
+//                             : "opacity-0 group-hover:opacity-100"
+//                         }`}
+//                       >
+//                         <UserMinus size={14} />
+//                       </button>
 //                     )
 //                   )}
 //                 </div>
@@ -385,6 +384,57 @@
 //           </div>
 //         </div>
 //       </div>
+
+//       {/* контекстное меню участника — рендерится в body, поэтому не растягивает и не обрезается скролл-контейнером */}
+//       {menuUid &&
+//         menuPos &&
+//         menuRow &&
+//         createPortal(
+//           <div
+//             className={`gm-row-menu fixed z-[240] w-[170px] rounded-xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50 overflow-hidden ${
+//               menuPos.openUp ? "open-up" : "open-down"
+//             }`}
+//             style={{
+//               left: menuPos.left,
+//               ...(menuPos.openUp
+//                 ? { bottom: window.innerHeight - menuPos.top }
+//                 : { top: menuPos.top }),
+//             }}
+//             onClick={(e) => e.stopPropagation()}
+//           >
+//             {isOwner && (
+//               <button
+//                 onClick={() => toggleAdmin(menuRow)}
+//                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-white/[0.05] transition-colors cursor-pointer"
+//               >
+//                 {menuRow.role === "admin" ? (
+//                   <>
+//                     <ShieldOff size={13} className="text-zinc-500" />
+//                     Remove admin
+//                   </>
+//                 ) : (
+//                   <>
+//                     <ShieldCheck size={13} className="text-zinc-500" />
+//                     Make admin
+//                   </>
+//                 )}
+//               </button>
+//             )}
+//             {canKick(menuRow) && (
+//               <button
+//                 onClick={() => {
+//                   closeMenu();
+//                   setKickTarget(menuRow);
+//                 }}
+//                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-red-400 hover:bg-white/[0.05] transition-colors cursor-pointer"
+//               >
+//                 <UserMinus size={13} className="text-red-400/70" />
+//                 Remove from group
+//               </button>
+//             )}
+//           </div>,
+//           document.body
+//         )}
 
 //       {zoomUrl && (
 //         <div
@@ -427,6 +477,8 @@ import {
   getUserProfiles,
   setGroupAdmin,
   kickMember,
+  addMembersToGroup,
+  searchUsersByUsername,
 } from "@/lib/firestore/groups";
 import { isOnline, formatLastSeen } from "@/lib/formatLastSeen";
 import {
@@ -436,7 +488,11 @@ import {
   ShieldCheck,
   ShieldOff,
   UserMinus,
+  UserPlus,
   Loader2,
+  ArrowLeft,
+  Search,
+  Check,
 } from "lucide-react";
 
 interface Props {
@@ -523,6 +579,14 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   const [menuUid, setMenuUid] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
 
+  // --- invite state ---
+  const [inviteMode, setInviteMode] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUids, setSelectedUids] = useState<string[]>([]);
+  const [addingMembers, setAddingMembers] = useState(false);
+
   const memberIdsKey = useMemo(
     () => (group ? [...group.members].sort().join(",") : ""),
     [group?.members]
@@ -548,12 +612,13 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
       if (e.key === "Escape") {
         if (kickTarget) setKickTarget(null);
         else if (zoomUrl) setZoomUrl(null);
+        else if (inviteMode) closeInvite();
         else onClose();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [kickTarget, zoomUrl, onClose]);
+  }, [kickTarget, zoomUrl, inviteMode, onClose]);
 
   function closeMenu() {
     setMenuUid(null);
@@ -569,6 +634,27 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
       window.removeEventListener("resize", closeMenu);
     };
   }, [menuUid]);
+
+  // debounce поиска пользователей
+  useEffect(() => {
+    if (!inviteMode) return;
+    const term = searchTerm.trim();
+    if (!term) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchUsersByUsername(term, group?.members ?? []);
+        setSearchResults(res);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchTerm, inviteMode, group?.members]);
 
   if (!group) return null;
 
@@ -657,6 +743,37 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     }
   }
 
+  function openInvite() {
+    setInviteMode(true);
+    setSearchTerm("");
+    setSearchResults([]);
+    setSelectedUids([]);
+  }
+
+  function closeInvite() {
+    setInviteMode(false);
+    setSearchTerm("");
+    setSearchResults([]);
+    setSelectedUids([]);
+  }
+
+  function toggleSelected(uid: string) {
+    setSelectedUids((prev) =>
+      prev.includes(uid) ? prev.filter((u) => u !== uid) : [...prev, uid]
+    );
+  }
+
+  async function handleAddSelected() {
+    if (selectedUids.length === 0) return;
+    setAddingMembers(true);
+    try {
+      await addMembersToGroup(groupId, selectedUids);
+      closeInvite();
+    } finally {
+      setAddingMembers(false);
+    }
+  }
+
   return (
     <>
       <style>{`
@@ -684,6 +801,15 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
             <div className="absolute -top-24 -left-16 w-[280px] h-[280px] rounded-full bg-[#5b3df0]/12 blur-[100px]" />
           </div>
 
+          {inviteMode ? (
+            <button
+              onClick={closeInvite}
+              className="absolute top-3 left-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={15} />
+            </button>
+          ) : null}
+
           <button
             onClick={onClose}
             className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
@@ -691,117 +817,237 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
             <X size={15} />
           </button>
 
-          {/* header */}
-          <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
-            <div
-              className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-3 gm-avatar"
-              onClick={() => group.avatarUrl && setZoomUrl(group.avatarUrl)}
-            >
-              {group.avatarUrl ? (
-                <img
-                  src={group.avatarUrl}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Users size={28} className="text-[#a893ff]" />
-              )}
-            </div>
-            <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
-              {group.name}
-            </h2>
-            <p className="text-[12.5px] text-zinc-500 mt-1">
-              {group.memberCount} member{group.memberCount === 1 ? "" : "s"}
-            </p>
-          </div>
-
-          {/* members list */}
-          <div
-            className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
-            onScroll={closeMenu}
-          >
-            {loadingProfiles && rows.every((r) => r.username === "…") ? (
-              <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
-                <Loader2 size={16} className="animate-spin" />
-                <span className="text-xs">Loading members…</span>
+          {inviteMode ? (
+            <>
+              {/* header: invite mode */}
+              <div className="relative z-10 flex flex-col items-center pt-8 pb-4 px-6 border-b border-white/[0.06]">
+                <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
+                  Add members
+                </h2>
+                <p className="text-[12.5px] text-zinc-500 mt-1">
+                  Search by username
+                </p>
               </div>
-            ) : (
-              rows.map((row) => (
-                <div
-                  key={row.uid}
-                  className="group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors relative"
+
+              <div className="relative z-10 px-4 pt-3 pb-2">
+                <div className="relative">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+                  />
+                  <input
+                    autoFocus
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Username..."
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[13.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#7c5cff]/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-1">
+                {searching ? (
+                  <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span className="text-xs">Searching…</span>
+                  </div>
+                ) : searchTerm.trim() && searchResults.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-zinc-500">
+                    <span className="text-xs">No users found</span>
+                  </div>
+                ) : (
+                  searchResults.map((u) => {
+                    const selected = selectedUids.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        onClick={() => toggleSelected(u.id)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer"
+                      >
+                        <div className="shrink-0 relative">
+                          {u.avatar ? (
+                            <img
+                              src={u.avatar}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
+                              {u.username?.[0]?.toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <span className="flex-1 min-w-0 text-left text-[13.5px] font-medium text-white truncate">
+                          {u.username}
+                        </span>
+                        <div
+                          className={`shrink-0 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                            selected
+                              ? "bg-[#7c5cff] border-[#7c5cff]"
+                              : "border-white/20"
+                          }`}
+                        >
+                          {selected && (
+                            <Check size={12} className="text-white" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="relative z-10 p-3 border-t border-white/[0.06]">
+                <button
+                  onClick={handleAddSelected}
+                  disabled={selectedUids.length === 0 || addingMembers}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#7c5cff] hover:bg-[#8f6bff] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13.5px] font-semibold transition-colors cursor-pointer"
                 >
-                  <div
-                    className="shrink-0 relative gm-avatar"
-                    onClick={() => row.avatar && setZoomUrl(row.avatar)}
-                  >
-                    {row.avatar ? (
-                      <img
-                        src={row.avatar}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
-                        {row.username?.[0]?.toUpperCase()}
-                      </div>
-                    )}
-                    <span
-                      className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
-                      style={{
-                        background: row.online ? "#34D399" : "#3f3f46",
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[13.5px] font-medium text-white truncate">
-                        {row.username}
-                      </span>
-                      {row.role === "owner" && (
-                        <Crown size={12} className="text-yellow-400 shrink-0" />
-                      )}
-                      {row.role === "admin" && (
-                        <ShieldCheck
-                          size={12}
-                          className="text-[#a893ff] shrink-0"
-                        />
-                      )}
-                    </div>
-                    <span className="text-[11.5px] text-zinc-500 truncate block">
-                      {row.role === "owner"
-                        ? "owner"
-                        : row.role === "admin"
-                        ? "admin"
-                        : row.online
-                        ? "online"
-                        : formatLastSeen(row.lastSeen)}
-                    </span>
-                  </div>
-
-                  {busyUid === row.uid ? (
-                    <Loader2
-                      size={15}
-                      className="animate-spin text-zinc-500 shrink-0"
+                  {addingMembers ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <UserPlus size={14} />
+                  )}
+                  {selectedUids.length > 0
+                    ? `Add ${selectedUids.length} member${
+                        selectedUids.length === 1 ? "" : "s"
+                      }`
+                    : "Add members"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* header */}
+              <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
+                <div
+                  className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-3 gm-avatar"
+                  onClick={() => group.avatarUrl && setZoomUrl(group.avatarUrl)}
+                >
+                  {group.avatarUrl ? (
+                    <img
+                      src={group.avatarUrl}
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    (isOwner || canKick(row)) &&
-                    row.role !== "owner" && (
-                      <button
-                        onClick={(e) => openMenu(e, row.uid)}
-                        className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${
-                          menuUid === row.uid
-                            ? "opacity-100 bg-white/[0.08] text-white"
-                            : "opacity-0 group-hover:opacity-100"
-                        }`}
-                      >
-                        <UserMinus size={14} />
-                      </button>
-                    )
+                    <Users size={28} className="text-[#a893ff]" />
                   )}
                 </div>
-              ))
-            )}
-          </div>
+                <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
+                  {group.name}
+                </h2>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <p className="text-[12.5px] text-zinc-500">
+                    {group.memberCount} member
+                    {group.memberCount === 1 ? "" : "s"}
+                  </p>
+                  {canManage && (
+                    <>
+                      <span className="text-zinc-700 text-[12px]">·</span>
+                      <button
+                        onClick={openInvite}
+                        className="flex items-center gap-1 text-[12.5px] text-[#a893ff] hover:text-[#c3b2ff] transition-colors cursor-pointer"
+                      >
+                        <UserPlus size={12} />
+                        Add
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* members list */}
+              <div
+                className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
+                onScroll={closeMenu}
+              >
+                {loadingProfiles && rows.every((r) => r.username === "…") ? (
+                  <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span className="text-xs">Loading members…</span>
+                  </div>
+                ) : (
+                  rows.map((row) => (
+                    <div
+                      key={row.uid}
+                      className="group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors relative"
+                    >
+                      <div
+                        className="shrink-0 relative gm-avatar"
+                        onClick={() => row.avatar && setZoomUrl(row.avatar)}
+                      >
+                        {row.avatar ? (
+                          <img
+                            src={row.avatar}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
+                            {row.username?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <span
+                          className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
+                          style={{
+                            background: row.online ? "#34D399" : "#3f3f46",
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13.5px] font-medium text-white truncate">
+                            {row.username}
+                          </span>
+                          {row.role === "owner" && (
+                            <Crown
+                              size={12}
+                              className="text-yellow-400 shrink-0"
+                            />
+                          )}
+                          {row.role === "admin" && (
+                            <ShieldCheck
+                              size={12}
+                              className="text-[#a893ff] shrink-0"
+                            />
+                          )}
+                        </div>
+                        <span className="text-[11.5px] text-zinc-500 truncate block">
+                          {row.role === "owner"
+                            ? "owner"
+                            : row.role === "admin"
+                            ? "admin"
+                            : row.online
+                            ? "online"
+                            : formatLastSeen(row.lastSeen)}
+                        </span>
+                      </div>
+
+                      {busyUid === row.uid ? (
+                        <Loader2
+                          size={15}
+                          className="animate-spin text-zinc-500 shrink-0"
+                        />
+                      ) : (
+                        (isOwner || canKick(row)) &&
+                        row.role !== "owner" && (
+                          <button
+                            onClick={(e) => openMenu(e, row.uid)}
+                            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${
+                              menuUid === row.uid
+                                ? "opacity-100 bg-white/[0.08] text-white"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
+                            <UserMinus size={14} />
+                          </button>
+                        )
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

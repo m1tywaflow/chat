@@ -50,9 +50,17 @@ export default function GroupItem({
     ? "#ddd6fe"
     : "#1e2a3a";
   const avatarFallbackColor = active ? "#ffffff" : accent;
-
+  function getLastMessageBody(msg: Group["lastMessage"]): string {
+    if (!msg) return "";
+    if (msg.type === "voice") return "🎤 Голосовое сообщение";
+    if (msg.type === "image")
+      return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
+    return msg.text || "";
+  }
   const lastMessagePreview = group.lastMessage
-    ? `${group.lastMessage.senderName}: ${group.lastMessage.text}`
+    ? `${group.lastMessage.senderName}: ${getLastMessageBody(
+        group.lastMessage
+      )}`
     : "No messages yet";
 
   return (

@@ -12,6 +12,7 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Group, GroupMessage } from "@/types/group";
@@ -113,6 +114,8 @@ export async function sendGroupMessage(
   await updateDoc(doc(db, "groups", groupId), {
     lastMessage: {
       text,
+      imageUrl: imageUrl ?? null,
+      type: imageUrl ? "image" : "text",
       senderId,
       senderName,
       createdAt: serverTimestamp(),
@@ -149,6 +152,16 @@ export async function sendGroupVoiceMessage(
     createdAt: serverTimestamp(),
     readBy: [],
     reactions: {},
+  });
+  await updateDoc(doc(db, "groups", groupId), {
+    lastMessage: {
+      text: "",
+      voiceUrl: audioUrl,
+      type: "voice",
+      senderId,
+      senderName,
+      createdAt: serverTimestamp(),
+    },
   });
 }
 
@@ -264,3 +277,23 @@ export async function setGroupAdmin(
 }
 
 export const kickMember = leaveGroup;
+
+export async function searchUsersByUsername(
+  term: string,
+  excludeUids: string[]
+): Promise<any[]> {
+  const trimmed = term.trim();
+  if (!trimmed) return [];
+  const usersCol = collection(db, "users");
+  const q = query(
+    usersCol,
+    orderBy("username"),
+    where("username", ">=", trimmed),
+    where("username", "<=", trimmed + "\uf8ff")
+  );
+
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((u: any) => !excludeUids.includes(u.id));
+}
