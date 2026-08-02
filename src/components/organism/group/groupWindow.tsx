@@ -574,7 +574,7 @@ export default function GroupWindow() {
     duration: number;
     waveform: number[];
   }) {
-    if (!groupId || !myUid) return;
+    if (!groupId || !myUid || !group) return;
 
     const currentReply = replyMessage;
 
