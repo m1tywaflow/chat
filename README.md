@@ -1,11 +1,8 @@
 <div align="center">
 
-<table border="0" cellspacing="0" cellpadding="0">
-<tr>
-<td align="right" valign="middle" width="80"><img src="public/logo.png" width="64" alt="Nexo logo" /></td>
-<td align="left" valign="middle">&nbsp;&nbsp;<b><font size="7">Nexo</font></b></td>
-</tr>
-</table>
+<img src="public/logo.png" width="88" alt="Nexo logo" />
+
+# Nexo
 
 **A real-time chat app — now with channels, a native desktop client, and auto-updates.**
 
