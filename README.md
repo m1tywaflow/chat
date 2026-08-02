@@ -1,9 +1,9 @@
 <div align="center">
 
-<table>
+<table border="0" cellspacing="0" cellpadding="0">
 <tr>
-<td><img src="public/logo.png" width="72" alt="Nexo logo" /></td>
-<td><h1>Nexo</h1></td>
+<td valign="middle"><img src="public/logo.png" width="72" alt="Nexo logo" /></td>
+<td valign="middle" style="padding-left: 12px;"><span style="font-size: 32px; font-weight: 700;">Nexo</span></td>
 </tr>
 </table>
 
