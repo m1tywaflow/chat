@@ -24,6 +24,7 @@ export interface Group {
     createdAt: Timestamp;
   };
   order?: Record<string, number>;
+  unreadCounts?: Record<string, number>;
 }
 
 export interface GroupMessage {

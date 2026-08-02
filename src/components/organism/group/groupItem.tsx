@@ -3,6 +3,7 @@
 import { Group } from "@/types/group";
 import { Users, Pin } from "lucide-react";
 import { formatTime } from "@/lib/format-time";
+import { auth } from "@/lib/firebase";
 import {
   useThemeStore,
   DEFAULT_DARK,
@@ -50,6 +51,10 @@ export default function GroupItem({
     ? "#ddd6fe"
     : "#1e2a3a";
   const avatarFallbackColor = active ? "#ffffff" : accent;
+
+  const myUid = auth.currentUser?.uid;
+  const unreadCount = myUid ? group.unreadCounts?.[myUid] || 0 : 0;
+
   function getLastMessageBody(msg: Group["lastMessage"]): string {
     if (!msg) return "";
     if (msg.type === "voice") return "🎤 Голосовое сообщение";
@@ -132,12 +137,24 @@ export default function GroupItem({
           </span>
         </div>
 
-        <p
-          className="text-[13px] font-bold truncate leading-tight"
-          style={{ color: lastMsgColor }}
-        >
-          {lastMessagePreview}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="text-[13px] font-bold truncate leading-tight"
+            style={{ color: lastMsgColor }}
+          >
+            {lastMessagePreview}
+          </p>
+          {unreadCount > 0 && (
+            <span
+              className="shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{
+                background: active ? "rgba(255,255,255,0.25)" : "#7c3aed",
+              }}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );

@@ -6,6 +6,7 @@ import {
   subscribeToGroupMessages,
   sendGroupMessage,
   markGroupMessageRead,
+  markGroupAsRead,
   toggleGroupReaction,
   editGroupMessage,
   deleteGroupMessage,
@@ -342,13 +343,22 @@ export default function GroupWindow() {
   }, [groupId, myUid, isWindowVisible]);
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !myUid) return;
     const unsub = onSnapshot(doc(db, "groups", groupId), (snap) => {
       const data = snap.data();
       setPinnedMessage(data?.pinnedMessage || null);
+
+      const unread = data?.unreadCounts?.[myUid] || 0;
+      if (unread > 0 && isWindowVisible) {
+        markGroupAsRead(groupId, myUid).catch(() => {});
+      }
     });
     return () => unsub();
-  }, [groupId]);
+  }, [groupId, myUid, isWindowVisible]);
+  useEffect(() => {
+    if (!groupId || !myUid) return;
+    markGroupAsRead(groupId, myUid).catch(() => {});
+  }, [groupId, myUid]);
 
   function handleScroll() {
     const el = chatScrollRef.current;
@@ -546,6 +556,7 @@ export default function GroupWindow() {
         myUid,
         senderName,
         messageText,
+        group.members,
         undefined,
         currentReply,
         imageUrl
@@ -577,7 +588,8 @@ export default function GroupWindow() {
         currentReply,
         r.audioUrl,
         r.duration,
-        r.waveform
+        r.waveform,
+        group.members
       );
     } catch (err) {
       console.error("Group voice send failed:", err);
@@ -614,12 +626,13 @@ export default function GroupWindow() {
   }
 
   async function sendSticker(url: string) {
-    if (!groupId || !myUid) return;
+    if (!groupId || !myUid || !group) return;
     await sendGroupMessage(
       groupId,
       myUid,
       myUsername || "Unknown",
       "",
+      group.members,
       undefined,
       replyMessage,
       url
