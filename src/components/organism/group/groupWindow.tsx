@@ -504,7 +504,7 @@ export default function GroupWindow() {
     const hasText = !!text.trim();
     const hasImage = !!imageFile;
     if (!hasText && !hasImage) return;
-    if (!groupId || !myUid) return;
+    if (!groupId || !myUid || !group) return;
 
     const messageText = text;
     const currentReply = replyMessage;
