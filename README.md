@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌌 Nexo
+# <img src="public/logo.png" width="96" alt="Nexo logo" /> Nexo
 
 **A real-time chat app — now with channels, a native desktop client, and auto-updates.**
 
