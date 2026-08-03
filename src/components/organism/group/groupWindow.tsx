@@ -50,6 +50,7 @@ import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import GroupModal from "./groupModal";
 import VoiceBubble from "@/components/atoms/VoiceBubble";
 import VoiceRecordButton from "@/components/atoms/recordButton";
+import MediaGallery from "../media-gallery/MediaGallery";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
@@ -284,9 +285,8 @@ export default function GroupWindow() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
-  // true только когда скролл-контейнер сообщений реально в DOM
-  // (после того как group подгрузилась и early-return "Select a group" ушёл)
   const [scrollAreaReady, setScrollAreaReady] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -297,10 +297,6 @@ export default function GroupWindow() {
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const isNearBottom = useRef(true);
-  // true пока идёт наш собственный программный scrollIntoView к низу —
-  // handleScroll в этот момент игнорирует событие, иначе он может
-  // пересчитать isNearBottom как false по промежуточной (ещё не устоявшейся
-  // из-за догружающихся картинок) scrollHeight и "залипнуть" не внизу.
   const suppressScrollCheck = useRef(false);
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
   const initializedGroupRef = useRef<string | null>(null);
@@ -1036,8 +1032,25 @@ export default function GroupWindow() {
               >
                 <MoreVertical size={16} />
               </button>
+              {galleryOpen && groupId && (
+                <MediaGallery
+                  groupId={groupId}
+                  onClose={() => setGalleryOpen(false)}
+                />
+              )}
               {menuOpen && (
                 <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                  <button
+                    onClick={() => {
+                      setGalleryOpen(true);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors"
+                  >
+                    <ImageIcon size={14} />
+                    Media gallery
+                  </button>
+                  <div className="h-px bg-white/[0.06]" />
                   <button
                     onClick={() => {
                       setLeaveConfirm(true);

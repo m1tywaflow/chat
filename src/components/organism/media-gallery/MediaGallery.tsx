@@ -7,26 +7,31 @@ import { X, Download, Image as ImageIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { isCustomEmojiUrl } from "@/lib/customEmoji";
 
-interface Props {
-  chatId: string;
-  onClose: () => void;
-}
+type Props =
+  | { chatId: string; groupId?: undefined; onClose: () => void }
+  | { groupId: string; chatId?: undefined; onClose: () => void };
 
-export default function MediaGallery({ chatId, onClose }: Props) {
+export default function MediaGallery({ chatId, groupId, onClose }: Props) {
   const [photos, setPhotos] = useState<
     { id: string; url: string; createdAt: any }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
+  const entityId = groupId ?? chatId;
+
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      const collectionPath = groupId
+        ? (["groups", groupId, "messages"] as const)
+        : (["chats", chatId as string, "messages"] as const);
       const q = query(
-        collection(db, "chats", chatId, "messages"),
+        collection(db, ...collectionPath),
         orderBy("createdAt", "desc")
       );
       const snap = await getDocs(q);
-      const photos = snap.docs
+      const loaded = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as any))
         .filter(
           (d) =>
@@ -35,7 +40,7 @@ export default function MediaGallery({ chatId, onClose }: Props) {
             !(!d.text && isCustomEmojiUrl(d.imageUrl))
         );
       setPhotos(
-        photos.map((d) => ({
+        loaded.map((d) => ({
           id: d.id,
           url: d.imageUrl,
           createdAt: d.createdAt,
@@ -44,11 +49,17 @@ export default function MediaGallery({ chatId, onClose }: Props) {
       setLoading(false);
     }
     load();
-  }, [chatId]);
+  }, [entityId]);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") lightbox ? setLightbox(null) : onClose();
+      if (e.key === "Escape") {
+        if (lightbox) {
+          setLightbox(null);
+        } else {
+          onClose();
+        }
+      }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);

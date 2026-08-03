@@ -28,6 +28,13 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1782017940/plush-pepe-telegram-pepe_p0l96z.gif",
     rarity: "unreal",
   },
+  pepegreen: {
+    id: "pepegreen",
+    name: "Plush Pepe Green",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1785791178/df6ae6bd1c830d993206ff2fafe73c08_dotscp.gif",
+    rarity: "unreal",
+  },
   pusheen: {
     id: "pusheen",
     name: "Pusheen",
@@ -105,6 +112,13 @@ export const GIFTS: Record<string, Gift> = {
     imageUrl:
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1783539424/04869e09851353129379e535502d87e4_ri1q73.gif",
     rarity: "common",
+  },
+  kuromi: {
+    id: "kuromi",
+    name: "Kuromi",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1785790788/879a0b2613e837a4acd16effb5937d78_m7ojma.gif",
+    rarity: "epic",
   },
 };
 

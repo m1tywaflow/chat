@@ -116,6 +116,10 @@ export const CUSTOM_EMOJIS: CustomEmoji[] = [
     id: "fourth-smile",
     url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1783002783/001_bh3v9q.png",
   },
+  {
+    id: "tuff",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1785791173/ec10df93154cc37dbc24eb8c71fc1ebe_weowcq.jpg",
+  },
 ];
 
 export function getCustomEmoji(id: string): CustomEmoji | undefined {
