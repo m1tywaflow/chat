@@ -284,6 +284,9 @@ export default function GroupWindow() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  // true только когда скролл-контейнер сообщений реально в DOM
+  // (после того как group подгрузилась и early-return "Select a group" ушёл)
+  const [scrollAreaReady, setScrollAreaReady] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -292,7 +295,13 @@ export default function GroupWindow() {
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const msgMenuRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const isNearBottom = useRef(true);
+  // true пока идёт наш собственный программный scrollIntoView к низу —
+  // handleScroll в этот момент игнорирует событие, иначе он может
+  // пересчитать isNearBottom как false по промежуточной (ещё не устоявшейся
+  // из-за догружающихся картинок) scrollHeight и "залипнуть" не внизу.
+  const suppressScrollCheck = useRef(false);
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
   const initializedGroupRef = useRef<string | null>(null);
   const dragCounter = useRef(0);
@@ -363,33 +372,68 @@ export default function GroupWindow() {
   function handleScroll() {
     const el = chatScrollRef.current;
     if (!el) return;
+    if (suppressScrollCheck.current) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
     isNearBottom.current = nearBottom;
     setShowScrollButton(!nearBottom);
   }
 
+  function scrollToBottom(smooth = false) {
+    suppressScrollCheck.current = true;
+    bottomRef.current?.scrollIntoView({
+      behavior: smooth ? "smooth" : "auto",
+      block: "end",
+    });
+    // ждём два кадра, чтобы событие scroll от этого вызова успело "потухнуть"
+    // до того, как handleScroll снова начнёт слушать реальные действия юзера
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        suppressScrollCheck.current = false;
+      });
+    });
+  }
+
   useLayoutEffect(() => {
-    if (!groupId || messages.length === 0) return;
+    // scrollAreaReady в зависимостях — критично: если сообщения пришли
+    // раньше, чем group успел загрузиться (bottomRef ещё не в DOM), этот
+    // эффект отработает "вхолостую" один раз, а затем повторно сработает
+    // ровно в момент, когда контейнер реально появится на странице.
+    if (!groupId || messages.length === 0 || !scrollAreaReady) return;
+    if (!bottomRef.current) return;
     if (initializedGroupRef.current === groupId) {
       if (isNearBottom.current) {
-        bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+        scrollToBottom();
       }
       return;
     }
     initializedGroupRef.current = groupId;
-    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    scrollToBottom();
     isNearBottom.current = true;
     setShowScrollButton(false);
-  }, [groupId, messages]);
+  }, [groupId, messages, scrollAreaReady]);
 
   useLayoutEffect(() => {
-    if (!groupId || initializedGroupRef.current !== groupId) return;
+    if (!groupId || !scrollAreaReady || initializedGroupRef.current !== groupId)
+      return;
     if (pendingMessages.length === 0) return;
     if (isNearBottom.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      scrollToBottom();
     }
-  }, [pendingMessages, groupId]);
+  }, [pendingMessages, groupId, scrollAreaReady]);
+
+  useEffect(() => {
+    if (!scrollAreaReady) return;
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (isNearBottom.current) {
+        scrollToBottom();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollAreaReady]);
 
   useEffect(() => {
     if (!lightboxUrl) return;
@@ -542,7 +586,7 @@ export default function GroupWindow() {
     setIsFileVideo(false);
     isNearBottom.current = true;
     requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      scrollToBottom();
     });
 
     try {
@@ -1037,291 +1081,186 @@ export default function GroupWindow() {
 
         {/* Messages */}
         <div
-          ref={chatScrollRef}
+          ref={(node) => {
+            chatScrollRef.current = node;
+            setScrollAreaReady(!!node);
+          }}
           onScroll={handleScroll}
-          className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1 min-h-0"
+          className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 min-h-0"
         >
-          {displayMessages.map((m) => {
-            const isMine = m.senderId === myUid;
-            const reactionSummary = getReactionSummary(m.reactions);
-            const hasReactions = reactionSummary.length > 0;
-            const isPickerOpen = pickerOpenId === m.id;
-            const isPinned = pinnedMessage?.id === m.id;
-            const isEditing = editingId === m.id;
-            const msgIsVideo =
-              m.imageUrl && (m.isLocalVideo || isVideo(m.imageUrl));
-            const isStickerMsg =
-              !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
-            const time = formatTime(m.createdAt);
-            const readCount = (m.readBy || []).length;
-            const isVoiceMsg = !!m.voiceUrl;
+          <div ref={contentRef} className="space-y-1">
+            {displayMessages.map((m) => {
+              const isMine = m.senderId === myUid;
+              const reactionSummary = getReactionSummary(m.reactions);
+              const hasReactions = reactionSummary.length > 0;
+              const isPickerOpen = pickerOpenId === m.id;
+              const isPinned = pinnedMessage?.id === m.id;
+              const isEditing = editingId === m.id;
+              const msgIsVideo =
+                m.imageUrl && (m.isLocalVideo || isVideo(m.imageUrl));
+              const isStickerMsg =
+                !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
+              const time = formatTime(m.createdAt);
+              const readCount = (m.readBy || []).length;
+              const isVoiceMsg = !!m.voiceUrl;
 
-            return (
-              <div key={m.id}>
-                <div
-                  id={`gmsg-${m.id}`}
-                  className={`msg-row flex ${
-                    isMine ? "justify-end" : "justify-start"
-                  } ${hasReactions ? "mb-2" : ""}`}
-                  onContextMenu={(e) => {
-                    if (!m.deleted && !m.pending) openMsgMenu(e, m.id, isMine);
-                  }}
-                >
-                  <div className="relative group max-w-[72%] min-w-0">
-                    {isPickerOpen && (
-                      <div
-                        className={`reaction-picker absolute z-30 top-full mb-2 ${
-                          isMine ? "right-0" : "left-0"
-                        } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${
-                          pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
-                        }`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {!pickerExpanded ? (
-                          <div className="flex items-center gap-1">
-                            {REACTION_EMOJIS.map((token) => (
-                              <button
-                                key={token}
-                                onClick={() => handleReact(m.id, token)}
-                                className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                              >
-                                <ReactionGlyph token={token} size={26} />
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => setPickerExpanded(true)}
-                              title="More reactions"
-                              className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
-                            >
-                              <ChevronDown size={22} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-6 gap-1">
-                            {REACTION_OPTIONS.map((token) => (
-                              <button
-                                key={token}
-                                onClick={() => handleReact(m.id, token)}
-                                className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                              >
-                                <ReactionGlyph token={token} size={26} />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {!m.deleted && !m.pending && (
-                      <>
-                        <button
-                          onClick={() => handleReply(m)}
-                          title="Reply"
-                          className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
-                            isMine ? "-left-16" : "-right-16"
-                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
+              return (
+                <div key={m.id}>
+                  <div
+                    id={`gmsg-${m.id}`}
+                    className={`msg-row flex ${
+                      isMine ? "justify-end" : "justify-start"
+                    } ${hasReactions ? "mb-2" : ""}`}
+                    onContextMenu={(e) => {
+                      if (!m.deleted && !m.pending)
+                        openMsgMenu(e, m.id, isMine);
+                    }}
+                  >
+                    <div className="relative group max-w-[72%] min-w-0">
+                      {isPickerOpen && (
+                        <div
+                          className={`reaction-picker absolute z-30 top-full mb-2 ${
+                            isMine ? "right-0" : "left-0"
+                          } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${
+                            pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
+                          }`}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <CornerUpLeft size={13} />
-                        </button>
-                        <button
-                          onClick={(e) => openPicker(e, m.id)}
-                          title="React"
-                          className={`react-btn absolute top-1/2 -translate-y-1/2 ${
-                            isMine ? "-left-8" : "-right-8"
-                          } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
-                        >
-                          <span>😊</span>
-                        </button>
-                        <button
-                          title="More options"
-                          onClick={(e) => openMsgMenu(e, m.id, isMine)}
-                          className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0b17] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#7c5cff]/40 hover:bg-[#1b1633] transition-all shadow-sm"
-                        >
-                          <MoreVertical size={12} />
-                        </button>
-                      </>
-                    )}
-
-                    {!isMine && (
-                      <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
-                        {m.senderName}
-                      </div>
-                    )}
-
-                    {m.replyTo && (
-                      <div
-                        onClick={() => scrollToMessage(m.replyTo.id)}
-                        className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#7c5cff] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
-                      >
-                        <div className="text-[10px] font-semibold text-[#a893ff] uppercase tracking-wide mb-0.5">
-                          Reply
-                        </div>
-                        {m.replyTo.imageUrl && !m.replyTo.text ? (
-                          <div className="flex items-center gap-1 text-xs text-zinc-400">
-                            <ImageIcon size={11} />
-                            <span>Photo</span>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-zinc-400 truncate">
-                            {m.replyTo.text}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div
-                      className={
-                        isStickerMsg
-                          ? `leading-none ${
-                              m.pending ? "msg-bubble-pending" : ""
-                            }`
-                          : `text-sm leading-relaxed overflow-hidden ${
-                              isMine
-                                ? "bg-gradient-to-r from-[#6b46f0] via-[#5b3df0] to-[#4028b0] text-white rounded-[18px] rounded-br-[8px] shadow-md shadow-[#5b3df0]/20"
-                                : "border border-white/[0.08] rounded-2xl rounded-bl-md"
-                            } ${
-                              !m.text && m.imageUrl && !m.deleted
-                                ? "p-1"
-                                : "px-4 py-2"
-                            } ${isPinned ? "ring-1 ring-[#7c5cff]/40" : ""} ${
-                              m.pending ? "msg-bubble-pending" : ""
-                            }`
-                      }
-                      style={
-                        !isMine && !isStickerMsg
-                          ? {
-                              background: "var(--color-msg-bg)",
-                              color: "var(--color-text)",
-                            }
-                          : undefined
-                      }
-                    >
-                      {m.deleted ? (
-                        <span className="deleted-msg text-white text-xs">
-                          Message deleted
-                        </span>
-                      ) : isVoiceMsg ? (
-                        <div className="relative">
-                          <VoiceBubble
-                            id={m.id}
-                            audioUrl={m.voiceUrl}
-                            duration={m.duration}
-                            waveform={m.waveform}
-                            isMine={isMine}
-                          />
-
-                          {isMine && (
-                            <div className="flex justify-end px-1 pb-0.5">
-                              <MessageMeta
-                                time={time}
-                                pending={m.pending}
-                                isMine={isMine}
-                                isRead={readCount > 1}
-                                variant="inline"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ) : isStickerMsg ? (
-                        <div className="relative inline-block">
-                          <img
-                            src={m.imageUrl}
-                            alt="sticker"
-                            className="w-32 h-32 object-contain"
-                          />
-                          {isMine && (
-                            <span className="absolute bottom-1.5 right-1.5">
-                              <MessageMeta
-                                time={time}
-                                pending={m.pending}
-                                isMine={isMine}
-                                isRead={readCount > 1}
-                                variant="pill"
-                              />
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          {m.imageUrl &&
-                            (msgIsVideo ? (
-                              <div
-                                className="video-thumb"
-                                onClick={() =>
-                                  !m.pending && setLightboxUrl(m.imageUrl)
-                                }
-                              >
-                                <video
-                                  src={m.imageUrl}
-                                  className="chat-video"
-                                  preload="metadata"
-                                />
-                                <div className="play-overlay">
-                                  <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                                    <Play
-                                      size={18}
-                                      className="text-white ml-0.5"
-                                      fill="white"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <img
-                                src={m.imageUrl}
-                                alt="image"
-                                className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
-                                onClick={() =>
-                                  !m.pending && setLightboxUrl(m.imageUrl)
-                                }
-                              />
-                            ))}
-                          {isEditing ? (
-                            <div className="flex items-center gap-2 py-0.5">
-                              <input
-                                ref={editInputRef}
-                                value={editText}
-                                onChange={(e) => setEditText(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") submitEdit();
-                                  if (e.key === "Escape") {
-                                    setEditingId(null);
-                                    setEditText("");
-                                  }
-                                }}
-                                className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-                              />
+                          {!pickerExpanded ? (
+                            <div className="flex items-center gap-1">
+                              {REACTION_EMOJIS.map((token) => (
+                                <button
+                                  key={token}
+                                  onClick={() => handleReact(m.id, token)}
+                                  className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                                >
+                                  <ReactionGlyph token={token} size={26} />
+                                </button>
+                              ))}
                               <button
-                                onClick={submitEdit}
-                                className="shrink-0 text-white/60 hover:text-white transition-colors"
+                                onClick={() => setPickerExpanded(true)}
+                                title="More reactions"
+                                className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
                               >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingId(null);
-                                  setEditText("");
-                                }}
-                                className="shrink-0 text-white/40 hover:text-white transition-colors"
-                              >
-                                <X size={14} />
+                                <ChevronDown size={22} />
                               </button>
                             </div>
                           ) : (
-                            m.text && (
-                              <div
-                                className={`flex items-end gap-2.5 flex-wrap justify-between ${
-                                  m.imageUrl ? "px-3 pb-1 pt-2" : ""
-                                }`}
-                              >
-                                <span className="whitespace-pre-wrap break-words">
-                                  {m.text}
-                                  {m.edited && (
-                                    <span className="text-[10px] ml-1 opacity-50">
-                                      (edited)
-                                    </span>
-                                  )}
-                                </span>
+                            <div className="grid grid-cols-6 gap-1">
+                              {REACTION_OPTIONS.map((token) => (
+                                <button
+                                  key={token}
+                                  onClick={() => handleReact(m.id, token)}
+                                  className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                                >
+                                  <ReactionGlyph token={token} size={26} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {!m.deleted && !m.pending && (
+                        <>
+                          <button
+                            onClick={() => handleReply(m)}
+                            title="Reply"
+                            className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
+                              isMine ? "-left-16" : "-right-16"
+                            } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
+                          >
+                            <CornerUpLeft size={13} />
+                          </button>
+                          <button
+                            onClick={(e) => openPicker(e, m.id)}
+                            title="React"
+                            className={`react-btn absolute top-1/2 -translate-y-1/2 ${
+                              isMine ? "-left-8" : "-right-8"
+                            } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
+                          >
+                            <span>😊</span>
+                          </button>
+                          <button
+                            title="More options"
+                            onClick={(e) => openMsgMenu(e, m.id, isMine)}
+                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0b17] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#7c5cff]/40 hover:bg-[#1b1633] transition-all shadow-sm"
+                          >
+                            <MoreVertical size={12} />
+                          </button>
+                        </>
+                      )}
+
+                      {!isMine && (
+                        <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
+                          {m.senderName}
+                        </div>
+                      )}
+
+                      {m.replyTo && (
+                        <div
+                          onClick={() => scrollToMessage(m.replyTo.id)}
+                          className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#7c5cff] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
+                        >
+                          <div className="text-[10px] font-semibold text-[#a893ff] uppercase tracking-wide mb-0.5">
+                            Reply
+                          </div>
+                          {m.replyTo.imageUrl && !m.replyTo.text ? (
+                            <div className="flex items-center gap-1 text-xs text-zinc-400">
+                              <ImageIcon size={11} />
+                              <span>Photo</span>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-zinc-400 truncate">
+                              {m.replyTo.text}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div
+                        className={
+                          isStickerMsg
+                            ? `leading-none ${
+                                m.pending ? "msg-bubble-pending" : ""
+                              }`
+                            : `text-sm leading-relaxed overflow-hidden ${
+                                isMine
+                                  ? "bg-gradient-to-r from-[#6b46f0] via-[#5b3df0] to-[#4028b0] text-white rounded-[18px] rounded-br-[8px] shadow-md shadow-[#5b3df0]/20"
+                                  : "border border-white/[0.08] rounded-2xl rounded-bl-md"
+                              } ${
+                                !m.text && m.imageUrl && !m.deleted
+                                  ? "p-1"
+                                  : "px-4 py-2"
+                              } ${isPinned ? "ring-1 ring-[#7c5cff]/40" : ""} ${
+                                m.pending ? "msg-bubble-pending" : ""
+                              }`
+                        }
+                        style={
+                          !isMine && !isStickerMsg
+                            ? {
+                                background: "var(--color-msg-bg)",
+                                color: "var(--color-text)",
+                              }
+                            : undefined
+                        }
+                      >
+                        {m.deleted ? (
+                          <span className="deleted-msg text-white text-xs">
+                            Message deleted
+                          </span>
+                        ) : isVoiceMsg ? (
+                          <div className="relative">
+                            <VoiceBubble
+                              id={m.id}
+                              audioUrl={m.voiceUrl}
+                              duration={m.duration}
+                              waveform={m.waveform}
+                              isMine={isMine}
+                            />
+
+                            {isMine && (
+                              <div className="flex justify-end px-1 pb-0.5">
                                 <MessageMeta
                                   time={time}
                                   pending={m.pending}
@@ -1330,56 +1269,167 @@ export default function GroupWindow() {
                                   variant="inline"
                                 />
                               </div>
-                            )
-                          )}
-                          {!m.text && m.imageUrl && isMine && (
-                            <div className="flex justify-end px-1.5 pb-1 pt-1">
-                              <MessageMeta
-                                time={time}
-                                pending={m.pending}
-                                isMine={isMine}
-                                isRead={readCount > 1}
-                                variant="pill"
-                              />
-                            </div>
-                          )}
-                        </>
+                            )}
+                          </div>
+                        ) : isStickerMsg ? (
+                          <div className="relative inline-block">
+                            <img
+                              src={m.imageUrl}
+                              alt="sticker"
+                              className="w-32 h-32 object-contain"
+                            />
+                            {isMine && (
+                              <span className="absolute bottom-1.5 right-1.5">
+                                <MessageMeta
+                                  time={time}
+                                  pending={m.pending}
+                                  isMine={isMine}
+                                  isRead={readCount > 1}
+                                  variant="pill"
+                                />
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {m.imageUrl &&
+                              (msgIsVideo ? (
+                                <div
+                                  className="video-thumb"
+                                  onClick={() =>
+                                    !m.pending && setLightboxUrl(m.imageUrl)
+                                  }
+                                >
+                                  <video
+                                    src={m.imageUrl}
+                                    className="chat-video"
+                                    preload="metadata"
+                                  />
+                                  <div className="play-overlay">
+                                    <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                      <Play
+                                        size={18}
+                                        className="text-white ml-0.5"
+                                        fill="white"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <img
+                                  src={m.imageUrl}
+                                  alt="image"
+                                  className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                  onClick={() =>
+                                    !m.pending && setLightboxUrl(m.imageUrl)
+                                  }
+                                />
+                              ))}
+                            {isEditing ? (
+                              <div className="flex items-center gap-2 py-0.5">
+                                <input
+                                  ref={editInputRef}
+                                  value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") submitEdit();
+                                    if (e.key === "Escape") {
+                                      setEditingId(null);
+                                      setEditText("");
+                                    }
+                                  }}
+                                  className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
+                                />
+                                <button
+                                  onClick={submitEdit}
+                                  className="shrink-0 text-white/60 hover:text-white transition-colors"
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingId(null);
+                                    setEditText("");
+                                  }}
+                                  className="shrink-0 text-white/40 hover:text-white transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              m.text && (
+                                <div
+                                  className={`flex items-end gap-2.5 flex-wrap justify-between ${
+                                    m.imageUrl ? "px-3 pb-1 pt-2" : ""
+                                  }`}
+                                >
+                                  <span className="whitespace-pre-wrap break-words">
+                                    {m.text}
+                                    {m.edited && (
+                                      <span className="text-[10px] ml-1 opacity-50">
+                                        (edited)
+                                      </span>
+                                    )}
+                                  </span>
+                                  <MessageMeta
+                                    time={time}
+                                    pending={m.pending}
+                                    isMine={isMine}
+                                    isRead={readCount > 1}
+                                    variant="inline"
+                                  />
+                                </div>
+                              )
+                            )}
+                            {!m.text && m.imageUrl && isMine && (
+                              <div className="flex justify-end px-1.5 pb-1 pt-1">
+                                <MessageMeta
+                                  time={time}
+                                  pending={m.pending}
+                                  isMine={isMine}
+                                  isRead={readCount > 1}
+                                  variant="pill"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {hasReactions && !m.deleted && (
+                        <div
+                          className={`flex flex-wrap gap-1 mt-1 ${
+                            isMine ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          {reactionSummary.map(({ token, count, mine }) => (
+                            <button
+                              key={token}
+                              onClick={() => handleReact(m.id, token)}
+                              className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
+                                mine
+                                  ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff] backdrop-blur-sm"
+                                  : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
+                              }`}
+                            >
+                              <ReactionGlyph token={token} size={15} />
+                              <span className="font-medium">{count}</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
-
-                    {hasReactions && !m.deleted && (
-                      <div
-                        className={`flex flex-wrap gap-1 mt-1 ${
-                          isMine ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        {reactionSummary.map(({ token, count, mine }) => (
-                          <button
-                            key={token}
-                            onClick={() => handleReact(m.id, token)}
-                            className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
-                              mine
-                                ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff] backdrop-blur-sm"
-                                : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
-                            }`}
-                          >
-                            <ReactionGlyph token={token} size={15} />
-                            <span className="font-medium">{count}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
 
           {showScrollButton && (
             <button
               onClick={() => {
-                bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                scrollToBottom(true);
                 isNearBottom.current = true;
                 setShowScrollButton(false);
               }}
