@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🌌 Nexo
+<img src="public/logo.png" width="88" alt="Nexo logo" />
+
+# Nexo
 
 **A real-time chat app — now with channels, a native desktop client, and auto-updates.**
 
@@ -122,7 +124,7 @@ electron/
 ---
 
 ## 📌 Roadmap ideas
-- Voice messages
+- Voice calls
 - Message search
 - Mobile companion app
 
