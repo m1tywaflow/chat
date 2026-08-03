@@ -23,13 +23,10 @@ export default function MediaGallery({ chatId, groupId, onClose }: Props) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const collectionPath = groupId
-        ? (["groups", groupId, "messages"] as const)
-        : (["chats", chatId as string, "messages"] as const);
-      const q = query(
-        collection(db, ...collectionPath),
-        orderBy("createdAt", "desc")
-      );
+      const collectionRef = groupId
+        ? collection(db, "groups", groupId, "messages")
+        : collection(db, "chats", chatId as string, "messages");
+      const q = query(collectionRef, orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
       const loaded = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as any))
