@@ -124,7 +124,7 @@ electron/
 ---
 
 ## 📌 Roadmap ideas
-- Voice messages
+- Voice calls
 - Message search
 - Mobile companion app
 
