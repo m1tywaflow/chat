@@ -8,23 +8,46 @@ import { createPortal } from "react-dom";
 import { isCustomEmojiUrl } from "@/lib/customEmoji";
 
 type Props =
-  | { chatId: string; groupId?: undefined; onClose: () => void }
-  | { groupId: string; chatId?: undefined; onClose: () => void };
+  | {
+      chatId: string;
+      groupId?: undefined;
+      channelId?: undefined;
+      onClose: () => void;
+    }
+  | {
+      groupId: string;
+      chatId?: undefined;
+      channelId?: undefined;
+      onClose: () => void;
+    }
+  | {
+      channelId: string;
+      chatId?: undefined;
+      groupId?: undefined;
+      onClose: () => void;
+    };
 
-export default function MediaGallery({ chatId, groupId, onClose }: Props) {
+export default function MediaGallery({
+  chatId,
+  groupId,
+  channelId,
+  onClose,
+}: Props) {
   const [photos, setPhotos] = useState<
     { id: string; url: string; createdAt: any }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  const entityId = groupId ?? chatId;
+  const entityId = groupId ?? channelId ?? chatId;
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       const collectionRef = groupId
         ? collection(db, "groups", groupId, "messages")
+        : channelId
+        ? collection(db, "channels", channelId, "posts")
         : collection(db, "chats", chatId as string, "messages");
       const q = query(collectionRef, orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
