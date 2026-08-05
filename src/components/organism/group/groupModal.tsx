@@ -7,6 +7,8 @@
 //   getUserProfiles,
 //   setGroupAdmin,
 //   kickMember,
+//   addMembersToGroup,
+//   searchUsersByUsername,
 // } from "@/lib/firestore/groups";
 // import { isOnline, formatLastSeen } from "@/lib/formatLastSeen";
 // import {
@@ -16,7 +18,11 @@
 //   ShieldCheck,
 //   ShieldOff,
 //   UserMinus,
+//   UserPlus,
 //   Loader2,
+//   ArrowLeft,
+//   Search,
+//   Check,
 // } from "lucide-react";
 
 // interface Props {
@@ -103,6 +109,14 @@
 //   const [menuUid, setMenuUid] = useState<string | null>(null);
 //   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
 
+//   // --- invite state ---
+//   const [inviteMode, setInviteMode] = useState(false);
+//   const [searchTerm, setSearchTerm] = useState("");
+//   const [searchResults, setSearchResults] = useState<any[]>([]);
+//   const [searching, setSearching] = useState(false);
+//   const [selectedUids, setSelectedUids] = useState<string[]>([]);
+//   const [addingMembers, setAddingMembers] = useState(false);
+
 //   const memberIdsKey = useMemo(
 //     () => (group ? [...group.members].sort().join(",") : ""),
 //     [group?.members]
@@ -128,12 +142,13 @@
 //       if (e.key === "Escape") {
 //         if (kickTarget) setKickTarget(null);
 //         else if (zoomUrl) setZoomUrl(null);
+//         else if (inviteMode) closeInvite();
 //         else onClose();
 //       }
 //     };
 //     window.addEventListener("keydown", handler);
 //     return () => window.removeEventListener("keydown", handler);
-//   }, [kickTarget, zoomUrl, onClose]);
+//   }, [kickTarget, zoomUrl, inviteMode, onClose]);
 
 //   function closeMenu() {
 //     setMenuUid(null);
@@ -149,6 +164,27 @@
 //       window.removeEventListener("resize", closeMenu);
 //     };
 //   }, [menuUid]);
+
+//   // debounce поиска пользователей
+//   useEffect(() => {
+//     if (!inviteMode) return;
+//     const term = searchTerm.trim();
+//     if (!term) {
+//       setSearchResults([]);
+//       setSearching(false);
+//       return;
+//     }
+//     setSearching(true);
+//     const t = setTimeout(async () => {
+//       try {
+//         const res = await searchUsersByUsername(term, group?.members ?? []);
+//         setSearchResults(res);
+//       } finally {
+//         setSearching(false);
+//       }
+//     }, 300);
+//     return () => clearTimeout(t);
+//   }, [searchTerm, inviteMode, group?.members]);
 
 //   if (!group) return null;
 
@@ -237,6 +273,37 @@
 //     }
 //   }
 
+//   function openInvite() {
+//     setInviteMode(true);
+//     setSearchTerm("");
+//     setSearchResults([]);
+//     setSelectedUids([]);
+//   }
+
+//   function closeInvite() {
+//     setInviteMode(false);
+//     setSearchTerm("");
+//     setSearchResults([]);
+//     setSelectedUids([]);
+//   }
+
+//   function toggleSelected(uid: string) {
+//     setSelectedUids((prev) =>
+//       prev.includes(uid) ? prev.filter((u) => u !== uid) : [...prev, uid]
+//     );
+//   }
+
+//   async function handleAddSelected() {
+//     if (selectedUids.length === 0) return;
+//     setAddingMembers(true);
+//     try {
+//       await addMembersToGroup(groupId, selectedUids);
+//       closeInvite();
+//     } finally {
+//       setAddingMembers(false);
+//     }
+//   }
+
 //   return (
 //     <>
 //       <style>{`
@@ -264,6 +331,15 @@
 //             <div className="absolute -top-24 -left-16 w-[280px] h-[280px] rounded-full bg-[#5b3df0]/12 blur-[100px]" />
 //           </div>
 
+//           {inviteMode ? (
+//             <button
+//               onClick={closeInvite}
+//               className="absolute top-3 left-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
+//             >
+//               <ArrowLeft size={15} />
+//             </button>
+//           ) : null}
+
 //           <button
 //             onClick={onClose}
 //             className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
@@ -271,117 +347,237 @@
 //             <X size={15} />
 //           </button>
 
-//           {/* header */}
-//           <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
-//             <div
-//               className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-3 gm-avatar"
-//               onClick={() => group.avatarUrl && setZoomUrl(group.avatarUrl)}
-//             >
-//               {group.avatarUrl ? (
-//                 <img
-//                   src={group.avatarUrl}
-//                   className="w-full h-full object-cover"
-//                 />
-//               ) : (
-//                 <Users size={28} className="text-[#a893ff]" />
-//               )}
-//             </div>
-//             <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
-//               {group.name}
-//             </h2>
-//             <p className="text-[12.5px] text-zinc-500 mt-1">
-//               {group.memberCount} member{group.memberCount === 1 ? "" : "s"}
-//             </p>
-//           </div>
-
-//           {/* members list */}
-//           <div
-//             className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
-//             onScroll={closeMenu}
-//           >
-//             {loadingProfiles && rows.every((r) => r.username === "…") ? (
-//               <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
-//                 <Loader2 size={16} className="animate-spin" />
-//                 <span className="text-xs">Loading members…</span>
+//           {inviteMode ? (
+//             <>
+//               {/* header: invite mode */}
+//               <div className="relative z-10 flex flex-col items-center pt-8 pb-4 px-6 border-b border-white/[0.06]">
+//                 <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
+//                   Add members
+//                 </h2>
+//                 <p className="text-[12.5px] text-zinc-500 mt-1">
+//                   Search by username
+//                 </p>
 //               </div>
-//             ) : (
-//               rows.map((row) => (
-//                 <div
-//                   key={row.uid}
-//                   className="group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors relative"
+
+//               <div className="relative z-10 px-4 pt-3 pb-2">
+//                 <div className="relative">
+//                   <Search
+//                     size={14}
+//                     className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+//                   />
+//                   <input
+//                     autoFocus
+//                     value={searchTerm}
+//                     onChange={(e) => setSearchTerm(e.target.value)}
+//                     placeholder="Username..."
+//                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[13.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#7c5cff]/50 transition-colors"
+//                   />
+//                 </div>
+//               </div>
+
+//               <div className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-1">
+//                 {searching ? (
+//                   <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
+//                     <Loader2 size={16} className="animate-spin" />
+//                     <span className="text-xs">Searching…</span>
+//                   </div>
+//                 ) : searchTerm.trim() && searchResults.length === 0 ? (
+//                   <div className="flex flex-col items-center justify-center py-10 text-zinc-500">
+//                     <span className="text-xs">No users found</span>
+//                   </div>
+//                 ) : (
+//                   searchResults.map((u) => {
+//                     const selected = selectedUids.includes(u.id);
+//                     return (
+//                       <button
+//                         key={u.id}
+//                         onClick={() => toggleSelected(u.id)}
+//                         className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer"
+//                       >
+//                         <div className="shrink-0 relative">
+//                           {u.avatar ? (
+//                             <img
+//                               src={u.avatar}
+//                               className="w-10 h-10 rounded-full object-cover"
+//                             />
+//                           ) : (
+//                             <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
+//                               {u.username?.[0]?.toUpperCase()}
+//                             </div>
+//                           )}
+//                         </div>
+//                         <span className="flex-1 min-w-0 text-left text-[13.5px] font-medium text-white truncate">
+//                           {u.username}
+//                         </span>
+//                         <div
+//                           className={`shrink-0 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+//                             selected
+//                               ? "bg-[#7c5cff] border-[#7c5cff]"
+//                               : "border-white/20"
+//                           }`}
+//                         >
+//                           {selected && (
+//                             <Check size={12} className="text-white" />
+//                           )}
+//                         </div>
+//                       </button>
+//                     );
+//                   })
+//                 )}
+//               </div>
+
+//               <div className="relative z-10 p-3 border-t border-white/[0.06]">
+//                 <button
+//                   onClick={handleAddSelected}
+//                   disabled={selectedUids.length === 0 || addingMembers}
+//                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#7c5cff] hover:bg-[#8f6bff] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13.5px] font-semibold transition-colors cursor-pointer"
 //                 >
-//                   <div
-//                     className="shrink-0 relative gm-avatar"
-//                     onClick={() => row.avatar && setZoomUrl(row.avatar)}
-//                   >
-//                     {row.avatar ? (
-//                       <img
-//                         src={row.avatar}
-//                         className="w-10 h-10 rounded-full object-cover"
-//                       />
-//                     ) : (
-//                       <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
-//                         {row.username?.[0]?.toUpperCase()}
-//                       </div>
-//                     )}
-//                     <span
-//                       className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
-//                       style={{
-//                         background: row.online ? "#34D399" : "#3f3f46",
-//                       }}
-//                     />
-//                   </div>
-
-//                   <div className="flex-1 min-w-0">
-//                     <div className="flex items-center gap-1.5">
-//                       <span className="text-[13.5px] font-medium text-white truncate">
-//                         {row.username}
-//                       </span>
-//                       {row.role === "owner" && (
-//                         <Crown size={12} className="text-yellow-400 shrink-0" />
-//                       )}
-//                       {row.role === "admin" && (
-//                         <ShieldCheck
-//                           size={12}
-//                           className="text-[#a893ff] shrink-0"
-//                         />
-//                       )}
-//                     </div>
-//                     <span className="text-[11.5px] text-zinc-500 truncate block">
-//                       {row.role === "owner"
-//                         ? "owner"
-//                         : row.role === "admin"
-//                         ? "admin"
-//                         : row.online
-//                         ? "online"
-//                         : formatLastSeen(row.lastSeen)}
-//                     </span>
-//                   </div>
-
-//                   {busyUid === row.uid ? (
-//                     <Loader2
-//                       size={15}
-//                       className="animate-spin text-zinc-500 shrink-0"
+//                   {addingMembers ? (
+//                     <Loader2 size={14} className="animate-spin" />
+//                   ) : (
+//                     <UserPlus size={14} />
+//                   )}
+//                   {selectedUids.length > 0
+//                     ? `Add ${selectedUids.length} member${
+//                         selectedUids.length === 1 ? "" : "s"
+//                       }`
+//                     : "Add members"}
+//                 </button>
+//               </div>
+//             </>
+//           ) : (
+//             <>
+//               {/* header */}
+//               <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
+//                 <div
+//                   className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-3 gm-avatar"
+//                   onClick={() => group.avatarUrl && setZoomUrl(group.avatarUrl)}
+//                 >
+//                   {group.avatarUrl ? (
+//                     <img
+//                       src={group.avatarUrl}
+//                       className="w-full h-full object-cover"
 //                     />
 //                   ) : (
-//                     (isOwner || canKick(row)) &&
-//                     row.role !== "owner" && (
-//                       <button
-//                         onClick={(e) => openMenu(e, row.uid)}
-//                         className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${
-//                           menuUid === row.uid
-//                             ? "opacity-100 bg-white/[0.08] text-white"
-//                             : "opacity-0 group-hover:opacity-100"
-//                         }`}
-//                       >
-//                         <UserMinus size={14} />
-//                       </button>
-//                     )
+//                     <Users size={28} className="text-[#a893ff]" />
 //                   )}
 //                 </div>
-//               ))
-//             )}
-//           </div>
+//                 <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
+//                   {group.name}
+//                 </h2>
+//                 <div className="flex items-center gap-2 mt-1.5">
+//                   <p className="text-[12.5px] text-zinc-500">
+//                     {group.memberCount} member
+//                     {group.memberCount === 1 ? "" : "s"}
+//                   </p>
+//                   {canManage && (
+//                     <>
+//                       <span className="text-zinc-700 text-[12px]">·</span>
+//                       <button
+//                         onClick={openInvite}
+//                         className="flex items-center gap-1 text-[12.5px] text-[#a893ff] hover:text-[#c3b2ff] transition-colors cursor-pointer"
+//                       >
+//                         <UserPlus size={12} />
+//                         Add
+//                       </button>
+//                     </>
+//                   )}
+//                 </div>
+//               </div>
+
+//               {/* members list */}
+//               <div
+//                 className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
+//                 onScroll={closeMenu}
+//               >
+//                 {loadingProfiles && rows.every((r) => r.username === "…") ? (
+//                   <div className="flex items-center justify-center py-10 text-zinc-500 gap-2">
+//                     <Loader2 size={16} className="animate-spin" />
+//                     <span className="text-xs">Loading members…</span>
+//                   </div>
+//                 ) : (
+//                   rows.map((row) => (
+//                     <div
+//                       key={row.uid}
+//                       className="group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors relative"
+//                     >
+//                       <div
+//                         className="shrink-0 relative gm-avatar"
+//                         onClick={() => row.avatar && setZoomUrl(row.avatar)}
+//                       >
+//                         {row.avatar ? (
+//                           <img
+//                             src={row.avatar}
+//                             className="w-10 h-10 rounded-full object-cover"
+//                           />
+//                         ) : (
+//                           <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
+//                             {row.username?.[0]?.toUpperCase()}
+//                           </div>
+//                         )}
+//                         <span
+//                           className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
+//                           style={{
+//                             background: row.online ? "#34D399" : "#3f3f46",
+//                           }}
+//                         />
+//                       </div>
+
+//                       <div className="flex-1 min-w-0">
+//                         <div className="flex items-center gap-1.5">
+//                           <span className="text-[13.5px] font-medium text-white truncate">
+//                             {row.username}
+//                           </span>
+//                           {row.role === "owner" && (
+//                             <Crown
+//                               size={12}
+//                               className="text-yellow-400 shrink-0"
+//                             />
+//                           )}
+//                           {row.role === "admin" && (
+//                             <ShieldCheck
+//                               size={12}
+//                               className="text-[#a893ff] shrink-0"
+//                             />
+//                           )}
+//                         </div>
+//                         <span className="text-[11.5px] text-zinc-500 truncate block">
+//                           {row.role === "owner"
+//                             ? "owner"
+//                             : row.role === "admin"
+//                             ? "admin"
+//                             : row.online
+//                             ? "online"
+//                             : formatLastSeen(row.lastSeen)}
+//                         </span>
+//                       </div>
+
+//                       {busyUid === row.uid ? (
+//                         <Loader2
+//                           size={15}
+//                           className="animate-spin text-zinc-500 shrink-0"
+//                         />
+//                       ) : (
+//                         (isOwner || canKick(row)) &&
+//                         row.role !== "owner" && (
+//                           <button
+//                             onClick={(e) => openMenu(e, row.uid)}
+//                             className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${
+//                               menuUid === row.uid
+//                                 ? "opacity-100 bg-white/[0.08] text-white"
+//                                 : "opacity-0 group-hover:opacity-100"
+//                             }`}
+//                           >
+//                             <UserMinus size={14} />
+//                           </button>
+//                         )
+//                       )}
+//                     </div>
+//                   ))
+//                 )}
+//               </div>
+//             </>
+//           )}
 //         </div>
 //       </div>
 
@@ -479,6 +675,7 @@ import {
   kickMember,
   addMembersToGroup,
   searchUsersByUsername,
+  updateGroupInfo,
 } from "@/lib/firestore/groups";
 import { isOnline, formatLastSeen } from "@/lib/formatLastSeen";
 import {
@@ -493,6 +690,8 @@ import {
   ArrowLeft,
   Search,
   Check,
+  Settings,
+  Camera,
 } from "lucide-react";
 
 interface Props {
@@ -514,6 +713,21 @@ interface MenuPos {
   top: number;
   left: number;
   openUp: boolean;
+}
+
+async function uploadGroupAvatar(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", "jhravxtb");
+  formData.append("folder", "group_avatars");
+
+  const res = await fetch(
+    "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
+    { method: "POST", body: formData }
+  );
+  if (!res.ok) throw new Error("Avatar upload failed");
+  const json = await res.json();
+  return json.secure_url as string;
 }
 
 function ConfirmMini({
@@ -587,6 +801,13 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   const [selectedUids, setSelectedUids] = useState<string[]>([]);
   const [addingMembers, setAddingMembers] = useState(false);
 
+  // --- settings (name / avatar) state ---
+  const [settingsMode, setSettingsMode] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   const memberIdsKey = useMemo(
     () => (group ? [...group.members].sort().join(",") : ""),
     [group?.members]
@@ -613,12 +834,13 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
         if (kickTarget) setKickTarget(null);
         else if (zoomUrl) setZoomUrl(null);
         else if (inviteMode) closeInvite();
+        else if (settingsMode) closeSettings();
         else onClose();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [kickTarget, zoomUrl, inviteMode, onClose]);
+  }, [kickTarget, zoomUrl, inviteMode, settingsMode, onClose]);
 
   function closeMenu() {
     setMenuUid(null);
@@ -655,6 +877,13 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     }, 300);
     return () => clearTimeout(t);
   }, [searchTerm, inviteMode, group?.members]);
+
+  // очистка blob-урла превью аватарки при анмаунте
+  useEffect(() => {
+    return () => {
+      if (avatarDraft) URL.revokeObjectURL(avatarDraft);
+    };
+  }, [avatarDraft]);
 
   if (!group) return null;
 
@@ -774,6 +1003,56 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     }
   }
 
+  function openSettings() {
+    setSettingsMode(true);
+    setNameDraft(group!.name);
+    setAvatarDraft(null);
+    setAvatarFile(null);
+  }
+
+  function closeSettings() {
+    setSettingsMode(false);
+    setNameDraft("");
+    if (avatarDraft) URL.revokeObjectURL(avatarDraft);
+    setAvatarDraft(null);
+    setAvatarFile(null);
+  }
+
+  function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (avatarDraft) URL.revokeObjectURL(avatarDraft);
+    setAvatarFile(file);
+    setAvatarDraft(URL.createObjectURL(file));
+  }
+
+  async function handleSaveSettings() {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) return;
+
+    setSavingSettings(true);
+    try {
+      let avatarUrl: string | undefined;
+      if (avatarFile) {
+        avatarUrl = await uploadGroupAvatar(avatarFile);
+      }
+      await updateGroupInfo(groupId, {
+        name: trimmed !== group!.name ? trimmed : undefined,
+        avatarUrl,
+      });
+      closeSettings();
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  const nameChanged =
+    nameDraft.trim() !== group.name && nameDraft.trim().length > 0;
+  const canSaveSettings =
+    (nameChanged || !!avatarFile) &&
+    nameDraft.trim().length > 0 &&
+    !savingSettings;
+
   return (
     <>
       <style>{`
@@ -801,14 +1080,14 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
             <div className="absolute -top-24 -left-16 w-[280px] h-[280px] rounded-full bg-[#5b3df0]/12 blur-[100px]" />
           </div>
 
-          {inviteMode ? (
+          {(inviteMode || settingsMode) && (
             <button
-              onClick={closeInvite}
+              onClick={inviteMode ? closeInvite : closeSettings}
               className="absolute top-3 left-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer"
             >
               <ArrowLeft size={15} />
             </button>
-          ) : null}
+          )}
 
           <button
             onClick={onClose}
@@ -817,7 +1096,65 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
             <X size={15} />
           </button>
 
-          {inviteMode ? (
+          {settingsMode ? (
+            <>
+              {/* header: settings mode */}
+              <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
+                <div
+                  className="relative w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-4 cursor-pointer group"
+                  onClick={() =>
+                    document.getElementById("gm-avatar-input")?.click()
+                  }
+                >
+                  {avatarDraft || group.avatarUrl ? (
+                    <img
+                      src={avatarDraft ?? group.avatarUrl}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Users size={28} className="text-[#a893ff]" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Camera size={18} className="text-white" />
+                  </div>
+                  <input
+                    id="gm-avatar-input"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarPick}
+                  />
+                </div>
+
+                <input
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  placeholder="Group name"
+                  maxLength={64}
+                  className="w-full max-w-[240px] text-center bg-transparent border-b border-white/10 focus:border-[#7c5cff]/50 outline-none text-[15px] font-semibold text-white py-1 transition-colors"
+                />
+                <p className="text-[11.5px] text-zinc-600 mt-3 text-center leading-relaxed px-2">
+                  Only owners and admins can change group name and photo
+                </p>
+              </div>
+
+              <div className="relative z-10 flex-1" />
+
+              <div className="relative z-10 p-3 border-t border-white/[0.06]">
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={!canSaveSettings}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#7c5cff] hover:bg-[#8f6bff] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13.5px] font-semibold transition-colors cursor-pointer"
+                >
+                  {savingSettings ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    "Save changes"
+                  )}
+                </button>
+              </div>
+            </>
+          ) : inviteMode ? (
             <>
               {/* header: invite mode */}
               <div className="relative z-10 flex flex-col items-center pt-8 pb-4 px-6 border-b border-white/[0.06]">
@@ -949,6 +1286,14 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                       >
                         <UserPlus size={12} />
                         Add
+                      </button>
+                      <span className="text-zinc-700 text-[12px]">·</span>
+                      <button
+                        onClick={openSettings}
+                        className="flex items-center gap-1 text-[12.5px] text-[#a893ff] hover:text-[#c3b2ff] transition-colors cursor-pointer"
+                      >
+                        <Settings size={12} />
+                        Edit
                       </button>
                     </>
                   )}
