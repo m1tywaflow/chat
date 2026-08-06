@@ -303,7 +303,7 @@ export default function ChannelInfoModal({
 
       {zoomUrl && (
         <div
-          className="fixed inset-0 z-[230] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          className="fixed inset-0 z-[230] flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setZoomUrl(null)}
         >
           <button
