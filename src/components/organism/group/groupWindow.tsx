@@ -1640,7 +1640,6 @@ import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import GroupModal from "./groupModal";
 import VoiceBubble from "@/components/atoms/VoiceBubble";
 import VoiceRecordButton from "@/components/atoms/recordButton";
-import MediaGallery from "../media-gallery/MediaGallery";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
@@ -1876,7 +1875,6 @@ export default function GroupWindow() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [scrollAreaReady, setScrollAreaReady] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
   const [wallpaper, setWallpaper] = useState<any>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -1974,8 +1972,7 @@ export default function GroupWindow() {
       behavior: smooth ? "smooth" : "auto",
       block: "end",
     });
-    // ждём два кадра, чтобы событие scroll от этого вызова успело "потухнуть"
-    // до того, как handleScroll снова начнёт слушать реальные действия юзера
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         suppressScrollCheck.current = false;
@@ -1984,10 +1981,6 @@ export default function GroupWindow() {
   }
 
   useLayoutEffect(() => {
-    // scrollAreaReady в зависимостях — критично: если сообщения пришли
-    // раньше, чем group успел загрузиться (bottomRef ещё не в DOM), этот
-    // эффект отработает "вхолостую" один раз, а затем повторно сработает
-    // ровно в момент, когда контейнер реально появится на странице.
     if (!groupId || messages.length === 0 || !scrollAreaReady) return;
     if (!bottomRef.current) return;
     if (initializedGroupRef.current === groupId) {
@@ -2675,35 +2668,8 @@ export default function GroupWindow() {
               >
                 <MoreVertical size={16} />
               </button>
-              {galleryOpen && groupId && (
-                <MediaGallery
-                  groupId={groupId}
-                  onClose={() => setGalleryOpen(false)}
-                />
-              )}
               {menuOpen && (
                 <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
-                  <button
-                    onClick={() => {
-                      setGalleryOpen(true);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors"
-                  >
-                    <ImageIcon size={14} />
-                    Media gallery
-                  </button>
-                  <div className="h-px bg-white/[0.06]" />
-                  <button
-                    onClick={() => {
-                      setLeaveConfirm(true);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
-                  >
-                    {isOwner ? <Trash2 size={14} /> : <LogOut size={14} />}
-                    {isOwner ? "Delete group" : "Leave group"}
-                  </button>
                   <button
                     onClick={() => {
                       wallpaperInputRef.current?.click();
@@ -2721,6 +2687,16 @@ export default function GroupWindow() {
                     className="w-full px-4 py-2 text-sm text-red-400 hover:bg-white/5"
                   >
                     Remove wallpaper
+                  </button>{" "}
+                  <button
+                    onClick={() => {
+                      setLeaveConfirm(true);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
+                  >
+                    {isOwner ? <Trash2 size={14} /> : <LogOut size={14} />}
+                    {isOwner ? "Delete group" : "Leave group"}
                   </button>
                 </div>
               )}
