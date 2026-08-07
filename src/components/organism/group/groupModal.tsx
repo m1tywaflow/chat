@@ -267,7 +267,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     }
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const estimatedMenuHeight = isOwner ? 92 : 46; 
+    const estimatedMenuHeight = isOwner ? 92 : 46;
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUp = spaceBelow < estimatedMenuHeight + 12;
 
@@ -398,6 +398,10 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
         @keyframes gmMenuIn { from { opacity:0; transform:scale(0.9) translateY(-4px);} to { opacity:1; transform:scale(1) translateY(0);} }
         .gm-avatar { cursor: zoom-in; transition: opacity 0.15s; }
         .gm-avatar:hover { opacity: 0.85; }
+        .gm-modal { animation: gmModalIn 0.16s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes gmModalIn { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .gm-row { transition: background-color 0.15s, transform 0.1s; }
+        .gm-row:active { transform: scale(0.99); }
       `}</style>
 
       <div
@@ -405,7 +409,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
         onClick={onClose}
       >
         <div
-          className="w-[380px] max-h-[85vh] flex flex-col rounded-3xl bg-[#0d0b17] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden relative"
+          className="gm-modal w-[380px] max-h-[85vh] flex flex-col rounded-3xl bg-[#0d0b17] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden relative"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -433,7 +437,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
               {/* header: settings mode */}
               <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
                 <div
-                  className="relative w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-4 cursor-pointer group"
+                  className="relative w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] ring-2 ring-[#7c5cff]/25 flex items-center justify-center mb-4 cursor-pointer group"
                   onClick={() =>
                     document.getElementById("gm-avatar-input")?.click()
                   }
@@ -531,7 +535,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                       <button
                         key={u.id}
                         onClick={() => toggleSelected(u.id)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer"
+                        className="gm-row w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] cursor-pointer"
                       >
                         <div className="shrink-0 relative">
                           {u.avatar ? (
@@ -589,7 +593,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
               {/* header */}
               <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-6 border-b border-white/[0.06]">
                 <div
-                  className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] flex items-center justify-center mb-3 gm-avatar"
+                  className="w-20 h-20 rounded-full overflow-hidden bg-[#1e2a3a] ring-2 ring-[#7c5cff]/25 flex items-center justify-center mb-3 gm-avatar"
                   onClick={() => group.avatarUrl && setZoomUrl(group.avatarUrl)}
                 >
                   {group.avatarUrl ? (
@@ -601,35 +605,32 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                     <Users size={28} className="text-[#a893ff]" />
                   )}
                 </div>
-                <h2 className="text-[16px] font-semibold text-white text-center leading-tight">
+                <h2 className="text-[17px] font-bold text-white text-center leading-tight">
                   {group.name}
                 </h2>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <p className="text-[12.5px] text-zinc-500">
-                    {group.memberCount} member
-                    {group.memberCount === 1 ? "" : "s"}
-                  </p>
-                  {canManage && (
-                    <>
-                      <span className="text-zinc-700 text-[12px]">·</span>
-                      <button
-                        onClick={openInvite}
-                        className="flex items-center gap-1 text-[12.5px] text-[#a893ff] hover:text-[#c3b2ff] transition-colors cursor-pointer"
-                      >
-                        <UserPlus size={12} />
-                        Add
-                      </button>
-                      <span className="text-zinc-700 text-[12px]">·</span>
-                      <button
-                        onClick={openSettings}
-                        className="flex items-center gap-1 text-[12.5px] text-[#a893ff] hover:text-[#c3b2ff] transition-colors cursor-pointer"
-                      >
-                        <Settings size={12} />
-                        Edit
-                      </button>
-                    </>
-                  )}
-                </div>
+                <p className="text-[12.5px] text-zinc-500 mt-1">
+                  {group.memberCount} member
+                  {group.memberCount === 1 ? "" : "s"}
+                </p>
+
+                {canManage && (
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      onClick={openInvite}
+                      className="flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-full bg-[#7c5cff]/10 hover:bg-[#7c5cff]/[0.18] text-[12px] font-medium text-[#a893ff] transition-colors cursor-pointer"
+                    >
+                      <UserPlus size={13} />
+                      Add
+                    </button>
+                    <button
+                      onClick={openSettings}
+                      className="flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-[12px] font-medium text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      <Settings size={13} />
+                      Edit
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* members list */}
@@ -646,7 +647,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                   rows.map((row) => (
                     <div
                       key={row.uid}
-                      className="group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] transition-colors relative"
+                      className="gm-row group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.04] relative"
                     >
                       <div
                         className="shrink-0 relative gm-avatar"
