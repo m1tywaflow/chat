@@ -498,3 +498,19 @@ export async function forwardMessageToChannel(
     lastPostPreview: original.text ? original.text.slice(0, 80) : "📷 Photo",
   });
 }
+
+export async function updateChannelInfo(
+  channelId: string,
+  data: { name?: string; avatarUrl?: string }
+): Promise<void> {
+  const payload: Record<string, any> = {};
+  if (data.name !== undefined) {
+    const trimmed = data.name.trim();
+    payload.name = trimmed;
+    payload.nameLower = trimmed.toLowerCase();
+  }
+  if (data.avatarUrl !== undefined) payload.avatarUrl = data.avatarUrl;
+
+  if (Object.keys(payload).length === 0) return;
+  await updateDoc(doc(db, "channels", channelId), payload);
+}
