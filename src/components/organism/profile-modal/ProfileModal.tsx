@@ -7,13 +7,13 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import {
-  Gem,
   X,
   Pencil,
   Check,
   Upload,
   Pipette,
   Megaphone,
+  ChevronDown,
 } from "lucide-react";
 import ImageCropper from "../image-cropper/ImageCropper";
 import { AVATAR_DECORATIONS } from "@/lib/avatarDecorations";
@@ -114,6 +114,8 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [giftModal, setGiftModal] = useState<string | null>(null);
   const [avatarDecoration, setAvatarDecoration] = useState<string | null>(null);
   const [draftDecoration, setDraftDecoration] = useState<string | null>(null);
+  const [decorationsOpen, setDecorationsOpen] = useState(false);
+  const [decorationsHeight, setDecorationsHeight] = useState(0);
   const [featuredGift, setFeaturedGift] = useState<string | null>(null);
   const [draftFeaturedGift, setDraftFeaturedGift] = useState<string | null>(
     null
@@ -128,6 +130,8 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [showChannelInProfile, setShowChannelInProfile] = useState(false);
   const [draftShowChannelInProfile, setDraftShowChannelInProfile] =
     useState(false);
+
+  const decorationsRef = useRef<HTMLDivElement>(null);
 
   const currentUser = auth.currentUser;
   const targetUid = userId ?? currentUser?.uid;
@@ -189,6 +193,15 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     });
   }, [targetUid]);
 
+  // Measure decorations panel height AFTER render, never read ref.current during render.
+  useEffect(() => {
+    if (decorationsOpen && decorationsRef.current) {
+      setDecorationsHeight(decorationsRef.current.scrollHeight);
+    } else {
+      setDecorationsHeight(0);
+    }
+  }, [decorationsOpen, editing]);
+
   function openEdit() {
     setDraftBanner(bannerGradient);
     setDraftBannerIsImage(bannerIsImage);
@@ -198,6 +211,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     setBannerLocalPreview(null);
     setAvatarLocalPreview(null);
     setDraftDecoration(avatarDecoration);
+    setDecorationsOpen(false);
     setEditing(true);
     setDraftFeaturedGift(featuredGift);
     setDraftShowChannelInProfile(showChannelInProfile);
@@ -809,40 +823,70 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                     ))}
                   </div>
                 </div>
+
                 <div>
-                  <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
-                    Decoration
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {AVATAR_DECORATIONS.map((d) => (
-                      <button
-                        key={d.id}
-                        onClick={() => setDraftDecoration(d.url)}
-                        className="relative w-14 h-14 rounded-full flex items-center justify-center transition-all"
-                        style={{
-                          background: "rgba(255,255,255,0.05)",
-                          outline:
-                            draftDecoration === d.url
-                              ? "2px solid #A78BFA"
-                              : "2px solid transparent",
-                          outlineOffset: "2px",
-                        }}
-                      >
-                        {d.url ? (
-                          <img
-                            src={d.url}
-                            alt={d.label}
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-white/30 text-[10px]">
-                            None
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                  <button
+                    type="button"
+                    onClick={() => setDecorationsOpen((v) => !v)}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] flex items-center gap-2">
+                      Decoration
+                      {draftDecoration && (
+                        <img
+                          src={draftDecoration}
+                          alt=""
+                          className="w-4 h-4 object-contain opacity-70"
+                        />
+                      )}
+                    </p>
+                    <ChevronDown
+                      size={14}
+                      className={`text-white/30 transition-transform duration-200 ${
+                        decorationsOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  <div
+                    style={{ maxHeight: decorationsHeight }}
+                    className="overflow-hidden transition-[max-height] duration-300 ease-in-out"
+                  >
+                    <div
+                      ref={decorationsRef}
+                      className="flex gap-2 flex-wrap pt-2 pb-1"
+                    >
+                      {AVATAR_DECORATIONS.map((d) => (
+                        <button
+                          key={d.id}
+                          onClick={() => setDraftDecoration(d.url)}
+                          className="relative w-14 h-14 rounded-full flex items-center justify-center transition-all"
+                          style={{
+                            background: "rgba(255,255,255,0.05)",
+                            outline:
+                              draftDecoration === d.url
+                                ? "2px solid #A78BFA"
+                                : "2px solid transparent",
+                            outlineOffset: "2px",
+                          }}
+                        >
+                          {d.url ? (
+                            <img
+                              src={d.url}
+                              alt={d.label}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-white/30 text-[10px]">
+                              None
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+
                 {gifts.length > 0 && (
                   <div>
                     <p className="text-[10px] text-white/35 uppercase tracking-[0.2em] mb-2">
