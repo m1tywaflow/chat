@@ -1107,6 +1107,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   }, [avatarDraft]);
 
   if (!group) return null;
+  const currentGroup = group;
 
   const isOwner = myUid === group.ownerId;
   const isAdmin = !!myUid && group.admins.includes(myUid);
@@ -1253,7 +1254,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
 
   function openSettings() {
     setSettingsMode(true);
-    setNameDraft(group.name);
+    setNameDraft(currentGroup.name);
     setAvatarDraft(null);
     setAvatarFile(null);
   }
@@ -1298,7 +1299,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
       }
 
       await updateGroupInfo(groupId, {
-        name: trimmed !== group.name ? trimmed : undefined,
+        name: trimmed !== currentGroup.name ? trimmed : undefined,
         avatarUrl,
       });
 
@@ -1309,7 +1310,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   }
 
   const nameChanged =
-    nameDraft.trim() !== group.name && nameDraft.trim().length > 0;
+    nameDraft.trim() !== currentGroup.name && nameDraft.trim().length > 0;
 
   const canSaveSettings =
     (nameChanged || !!avatarFile) &&
