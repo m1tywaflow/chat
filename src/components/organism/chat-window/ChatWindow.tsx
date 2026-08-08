@@ -61,6 +61,75 @@ const REACTION_OPTIONS = [
   ...CUSTOM_EMOJIS.map((e) => e.id),
 ];
 
+// plain unicode emoji available for inline insertion into the composer text,
+// same idea as Telegram's default emoji tab
+const TEXT_EMOJIS = [
+  "😀",
+  "😁",
+  "😂",
+  "🤣",
+  "😊",
+  "😉",
+  "😍",
+  "🥰",
+  "😘",
+  "😎",
+  "🤔",
+  "🤨",
+  "😐",
+  "🙄",
+  "😏",
+  "😴",
+  "😢",
+  "😭",
+  "😡",
+  "🤯",
+  "🥳",
+  "🤗",
+  "😅",
+  "🙃",
+  "👍",
+  "👎",
+  "👏",
+  "🙏",
+  "💪",
+  "🤝",
+  "👀",
+  "🔥",
+  "❤️",
+  "🧡",
+  "💛",
+  "💚",
+  "💙",
+  "💜",
+  "🖤",
+  "🤍",
+  "💔",
+  "✨",
+  "🎉",
+  "💯",
+  "☕",
+  "🍕",
+  "🎮",
+  "🚀",
+];
+
+// matches the ::sticker_id:: markers we embed inline in message text
+const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+// non-global, used only for a yes/no check so it's safe to reuse .test()
+// without worrying about lastIndex state from repeated calls
+const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+
+// true when the message text is made up of nothing but one or more
+// ::sticker_id:: tokens (no real words) — that's when we render them big,
+// same treatment Telegram gives a "sticker-only" message
+function isStickerOnlyText(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
+}
+
 // how close to the bottom (px) counts as "at the bottom", Telegram-style
 const NEAR_BOTTOM_THRESHOLD = 120;
 
@@ -110,6 +179,56 @@ function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
     <span style={{ fontSize: size }} className="leading-none">
       {token}
     </span>
+  );
+}
+
+/**
+ * Renders message text with inline custom-sticker tokens (::sticker_id::)
+ * swapped for small inline images, so a sticker can sit before/after/mid
+ * plain text exactly like a Telegram custom emoji — while the underlying
+ * composer input stays a normal <input> since the token is just text.
+ */
+function RichText({
+  text,
+  variant = "inline",
+}: {
+  text: string;
+  /** "inline" = small icon sitting in a line of text.
+   *  "large"  = big standalone sticker, used when the message has no
+   *  other text at all. */
+  variant?: "inline" | "large";
+}) {
+  const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(STICKER_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return variant === "large" ? (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block w-28 h-28 object-contain"
+              />
+            ) : (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
+              />
+            );
+          }
+        }
+        // skip pure-whitespace fragments in "large" mode so several
+        // stickers in a row sit snugly without odd extra gaps
+        if (variant === "large" && !part.trim()) return null;
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
   );
 }
 
@@ -319,6 +438,9 @@ export default function ChatWindow() {
   const initializedChatRef = useRef<string | null>(null);
   const mineMsgCountRef = useRef(0);
   const dragCounter = useRef(0);
+  // tracks where the caret was in the text input, so emoji/sticker taps
+  // insert at that position instead of always appending to the end
+  const lastCaretPos = useRef<number>(0);
 
   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
@@ -548,12 +670,36 @@ export default function ChatWindow() {
 
   function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
     setText(e.target.value);
+    lastCaretPos.current = e.target.selectionStart ?? e.target.value.length;
     if (!chatId || !myUid) return;
     setTyping(chatId, myUid, true);
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
       setTyping(chatId, myUid!, false);
     }, 1200);
+  }
+
+  // keeps lastCaretPos in sync whenever the user moves the caret without
+  // changing the text (arrow keys, mouse click) so emoji/sticker taps land
+  // exactly where the cursor is, not always at the end of the string
+  function trackCaret(e: React.SyntheticEvent<HTMLInputElement>) {
+    lastCaretPos.current =
+      e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+  }
+
+  // inserts a plain emoji or a ::sticker_id:: token at the last known caret
+  // position, then restores focus + caret so the user can keep typing right
+  // after the inserted content, same as Telegram's composer
+  function insertEmoji(token: string) {
+    const pos = lastCaretPos.current ?? text.length;
+    const newText = text.slice(0, pos) + token + text.slice(pos);
+    setText(newText);
+    const newPos = pos + token.length;
+    lastCaretPos.current = newPos;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(newPos, newPos);
+    });
   }
 
   function setFileForPreview(file: File) {
@@ -659,6 +805,7 @@ export default function ChatWindow() {
     // immediately, in its final position, exactly like Telegram
     setPendingMessages((prev) => [...prev, optimisticMsg]);
     setText("");
+    lastCaretPos.current = 0;
     setReplyMessage(null);
     setImageFile(null);
     setImagePreview(null);
@@ -735,13 +882,6 @@ export default function ChatWindow() {
     setPickerOpenId((prev) => (prev === msgId ? null : msgId));
     setPickerExpanded(false);
     setMsgMenu(null);
-  }
-
-  async function sendSticker(url: string) {
-    if (!chatId || !myUid) return;
-    await sendMessage(chatId, myUid, "", replyMessage, url);
-    setReplyMessage(null);
-    setEmojiPanelOpen(false);
   }
 
   // isMine is now purely informational for the menu (which items to show),
@@ -1295,8 +1435,14 @@ export default function ChatWindow() {
             const isEditing = editingId === m.id;
             const msgIsVideo =
               m.imageUrl && (m.isLocalVideo || isVideo(m.imageUrl));
-            const isStickerMsg =
+            // two ways a message can be "just a sticker": the legacy
+            // image-attachment style (m.imageUrl pointing at a custom
+            // emoji asset), or the newer inline-token style where the
+            // whole text is nothing but ::sticker_id:: tokens
+            const isImageStickerMsg =
               !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
+            const isTextStickerMsg = !m.imageUrl && isStickerOnlyText(m.text);
+            const isStickerMsg = isImageStickerMsg || isTextStickerMsg;
             const time = formatTime(m.createdAt);
             const isVoiceMsg = !!m.voiceUrl;
 
@@ -1474,7 +1620,7 @@ export default function ChatWindow() {
                             </div>
                           )}
                         </div>
-                      ) : isStickerMsg ? (
+                      ) : isImageStickerMsg ? (
                         <div className="relative inline-block">
                           <img
                             src={m.imageUrl}
@@ -1483,6 +1629,21 @@ export default function ChatWindow() {
                           />
                           {isMine && (
                             <span className="absolute bottom-1.5 right-1.5">
+                              <MessageMeta
+                                time={time}
+                                pending={m.pending}
+                                isMine={isMine}
+                                isRead={isRead}
+                                variant="pill"
+                              />
+                            </span>
+                          )}
+                        </div>
+                      ) : isTextStickerMsg ? (
+                        <div className="relative inline-flex flex-wrap items-end gap-1">
+                          <RichText text={m.text} variant="large" />
+                          {isMine && (
+                            <span className="absolute -bottom-1 -right-1">
                               <MessageMeta
                                 time={time}
                                 pending={m.pending}
@@ -1567,7 +1728,7 @@ export default function ChatWindow() {
                                 }`}
                               >
                                 <span className="whitespace-pre-wrap break-words">
-                                  {m.text}
+                                  <RichText text={m.text} />
                                   {m.edited && (
                                     <span className="text-[10px] ml-1 opacity-50">
                                       (edited)
@@ -1755,11 +1916,11 @@ export default function ChatWindow() {
               >
                 <Paperclip size={18} />
               </button>
-              {/* Emoji */}
+              {/* Emoji + stickers */}
               <div className="relative shrink-0" ref={emojiPanelRef}>
                 <button
                   onClick={() => setEmojiPanelOpen((v) => !v)}
-                  title="Send emoji"
+                  title="Emoji & stickers"
                   className="
           w-7
           h-7
@@ -1787,12 +1948,9 @@ export default function ChatWindow() {
             bottom-full
             mb-3
             left-0
-            grid
-            grid-cols-4
-            gap-2
             p-3
-            w-[230px]
-            max-h-[230px]
+            w-[248px]
+            max-h-[320px]
             overflow-y-auto
             rounded-2xl
             bg-[#12111f]
@@ -1800,36 +1958,69 @@ export default function ChatWindow() {
             shadow-xl
             shadow-black/50
           "
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {CUSTOM_EMOJIS.map((e) => (
-                      <button
-                        key={e.id}
-                        onClick={() => sendSticker(e.url)}
-                        className="
-                reaction-emoji-btn
-                w-12
-                h-12
-                flex
-                items-center
-                justify-center
-                rounded-xl
-                hover:bg-white/[0.08]
-                cursor-pointer
-                transition
-                hover:scale-110
-              "
-                      >
-                        <img
-                          src={e.url}
-                          alt={e.id}
+                    {/* plain unicode emoji — inserted into the text at the
+                        caret position, can sit anywhere before/after words */}
+                    <div className="grid grid-cols-6 gap-1 mb-2">
+                      {TEXT_EMOJIS.map((em) => (
+                        <button
+                          key={em}
+                          onClick={() => insertEmoji(em)}
                           className="
-                  w-9
-                  h-9
-                  object-contain
+                  reaction-emoji-btn
+                  w-8
+                  h-8
+                  flex
+                  items-center
+                  justify-center
+                  rounded-lg
+                  hover:bg-white/[0.08]
+                  cursor-pointer
+                  text-lg
+                  leading-none
                 "
-                        />
-                      </button>
-                    ))}
+                        >
+                          {em}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-white/[0.06] mb-2" />
+
+                    {/* custom stickers — inserted as ::id:: tokens, rendered
+                        as small inline images inside the sent message text */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {CUSTOM_EMOJIS.map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => insertEmoji(`::${e.id}::`)}
+                          className="
+                  reaction-emoji-btn
+                  w-12
+                  h-12
+                  flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  hover:bg-white/[0.08]
+                  cursor-pointer
+                  transition
+                  hover:scale-110
+                "
+                        >
+                          <img
+                            src={e.url}
+                            alt={e.id}
+                            className="
+                    w-9
+                    h-9
+                    object-contain
+                  "
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1839,6 +2030,8 @@ export default function ChatWindow() {
                 value={text}
                 onChange={handleTyping}
                 onKeyDown={handleKeyDown}
+                onKeyUp={trackCaret}
+                onClick={trackCaret}
                 onPaste={handlePaste}
                 placeholder="Message…"
                 className="
