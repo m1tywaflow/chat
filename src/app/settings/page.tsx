@@ -62,8 +62,8 @@ export default function SettingsPage() {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#07060d] text-white p-6">
       {/* ambient glow field */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -left-32 w-[520px] h-[520px] rounded-full bg-[#5b3df0]/25 blur-[120px]" />
-        <div className="absolute -bottom-48 -right-24 w-[480px] h-[480px] rounded-full bg-[#2b1f78]/30 blur-[130px]" />
+        <div className="absolute -top-40 -left-32 w-[520px] h-[520px] bg-[#5b3df0]/25 blur-[120px]" />
+        <div className="absolute -bottom-48 -right-24 w-[480px] h-[480px] bg-[#2b1f78]/30 blur-[130px]" />
         <div
           className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -82,20 +82,20 @@ export default function SettingsPage() {
           <ArrowLeft size={16} /> back
         </button>
 
-        <div className="rounded-[28px] border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl shadow-[0_0_60px_-15px_rgba(91,61,240,0.35)] overflow-hidden">
+        <div className="border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl shadow-[0_0_60px_-15px_rgba(91,61,240,0.35)] overflow-hidden">
           {/* header */}
           <div className="relative px-8 pt-9 pb-7 border-b border-white/[0.06]">
             <div className="flex items-center gap-4">
               <div className="relative w-16 h-16 flex-shrink-0">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#7c5cff] via-[#5b3df0] to-[#2b1f78] blur-[2px]" />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#7c5cff] via-[#5b3df0] to-[#2b1f78] blur-[2px]" />
                 {avatar ? (
                   <img
                     src={avatar}
                     alt={username}
-                    className="relative w-full h-full rounded-2xl object-cover bg-[#1b1633]"
+                    className="relative w-full h-full object-cover bg-[#1b1633]"
                   />
                 ) : (
-                  <div className="relative w-full h-full rounded-2xl bg-gradient-to-br from-[#7c5cff] to-[#4028b0] flex items-center justify-center text-2xl font-semibold tracking-tight">
+                  <div className="relative w-full h-full bg-gradient-to-br from-[#7c5cff] to-[#4028b0] flex items-center justify-center text-2xl font-semibold tracking-tight">
                     {initial}
                   </div>
                 )}
@@ -151,7 +151,7 @@ export default function SettingsPage() {
             <button
               onClick={save}
               disabled={saving}
-              className="w-full py-3.5 rounded-xl cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] text-white text-sm font-semibold transition-all disabled:opacity-40 shadow-[0_8px_24px_-8px_rgba(124,92,255,0.6)]"
+              className="w-full py-3.5 cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] text-white text-sm font-semibold transition-all disabled:opacity-40 shadow-[0_8px_24px_-8px_rgba(124,92,255,0.6)]"
             >
               {saving ? "saving…" : "save changes"}
             </button>
@@ -164,7 +164,7 @@ export default function SettingsPage() {
 
             <Link
               href="/download"
-              className="w-full flex items-center justify-center gap-2 py-3 text-[13px] text-white/45 hover:text-[#a893ff] border border-white/[0.07] hover:border-[#7c5cff]/30 rounded-xl transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-3 text-[13px] text-white/45 hover:text-[#a893ff] border border-white/[0.07] hover:border-[#7c5cff]/30 transition-colors"
             >
               <Download size={15} />
               download desktop app
@@ -192,7 +192,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.015] px-4 py-3 focus-within:border-[#7c5cff]/40 transition-colors">
+    <div className="border border-white/[0.07] bg-white/[0.015] px-4 py-3 focus-within:border-[#7c5cff]/40 transition-colors">
       <div className="text-[10px] uppercase tracking-[0.2em] text-white/30 mb-1.5">
         {label}
       </div>

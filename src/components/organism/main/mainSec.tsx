@@ -20,25 +20,33 @@ export default function MainSection() {
     <section className="w-full mx-auto h-screen flex flex-col">
       <Header />
 
-      <div className="flex flex-1 h-screen overflow-hidden">
+      <div className="flex flex-1 h-screen overflow-hidden min-w-0">
         <SideBar />
         {activeGroupId && firebaseUser ? (
-          <GroupWindow />
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <GroupWindow />
+          </div>
         ) : activeChannelId && firebaseUser ? (
           activeCommentsPostId ? (
-            <PostCommentsView
-              channelId={activeChannelId}
-              postId={activeCommentsPostId}
-              myUid={firebaseUser.uid}
-            />
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <PostCommentsView
+                channelId={activeChannelId}
+                postId={activeCommentsPostId}
+                myUid={firebaseUser.uid}
+              />
+            </div>
           ) : (
-            <ChannelWindow
-              channelId={activeChannelId}
-              myUid={firebaseUser.uid}
-            />
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <ChannelWindow
+                channelId={activeChannelId}
+                myUid={firebaseUser.uid}
+              />
+            </div>
           )
         ) : (
-          <ChatWindow />
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <ChatWindow />
+          </div>
         )}
       </div>
     </section>
