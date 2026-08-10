@@ -9,12 +9,77 @@ import {
   DEFAULT_DARK,
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
+import { getCustomEmoji } from "@/lib/customEmoji";
 
 const ACTIVE_ROW_BG =
   "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
 
 const ACTIVE_ROW_HOVER_BG =
   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
+
+// same ::sticker_id:: token format used in the chat window composer/bubbles
+// and in ChatItem's sidebar preview
+const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+const STICKER_TOKEN_FIND_RE = /::([\w-]+)::/;
+
+function isStickerOnlyText(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
+}
+
+/**
+ * Renders a group's last-message body the way Telegram's sidebar does:
+ * plain text as-is, ::sticker_id:: tokens swapped for a tiny inline
+ * thumbnail, and a sticker-only message collapsed to "thumbnail + Sticker"
+ * instead of dumping the raw token text into the row. Mirrors ChatItem's
+ * LastMessagePreview 1:1 so groups and 1:1 chats look identical.
+ */
+function LastMessageBody({ text }: { text?: string }) {
+  if (!text) return null;
+
+  if (isStickerOnlyText(text)) {
+    const firstToken = text.match(STICKER_TOKEN_FIND_RE);
+    const custom = firstToken ? getCustomEmoji(firstToken[1]) : null;
+    return (
+      <span className="inline-flex items-center gap-1 align-middle">
+        {custom && (
+          <img
+            src={custom.url}
+            alt={custom.id}
+            className="w-4 h-4 object-contain shrink-0"
+          />
+        )}
+        <span>Sticker</span>
+      </span>
+    );
+  }
+
+  const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(STICKER_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block w-4 h-4 object-contain align-text-bottom mx-0.5"
+              />
+            );
+          }
+        }
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
+  );
+}
 
 export default function GroupItem({
   group,
@@ -55,6 +120,9 @@ export default function GroupItem({
   const myUid = auth.currentUser?.uid;
   const unreadCount = myUid ? group.unreadCounts?.[myUid] || 0 : 0;
 
+  // returns the RAW body (may still contain ::sticker_id:: tokens) —
+  // token-to-thumbnail conversion happens in LastMessageBody so a sticker
+  // sent alone or mixed into text renders as an image, not raw markup
   function getLastMessageBody(msg: Group["lastMessage"]): string {
     if (!msg) return "";
     if (msg.type === "voice") return "🎤 Голосовое сообщение";
@@ -62,11 +130,10 @@ export default function GroupItem({
       return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
     return msg.text || "";
   }
-  const lastMessagePreview = group.lastMessage
-    ? `${group.lastMessage.senderName}: ${getLastMessageBody(
-        group.lastMessage
-      )}`
-    : "No messages yet";
+
+  const lastMessageBody = group.lastMessage
+    ? getLastMessageBody(group.lastMessage)
+    : "";
 
   return (
     <button
@@ -142,7 +209,14 @@ export default function GroupItem({
             className="text-[13px] font-bold truncate leading-tight"
             style={{ color: lastMsgColor }}
           >
-            {lastMessagePreview}
+            {group.lastMessage ? (
+              <>
+                {group.lastMessage.senderName}:{" "}
+                <LastMessageBody text={lastMessageBody} />
+              </>
+            ) : (
+              "No messages yet"
+            )}
           </p>
           {unreadCount > 0 && (
             <span
