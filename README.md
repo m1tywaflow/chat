@@ -8,10 +8,11 @@
 
 Built with Next.js, TypeScript, Firebase, and Electron.
 
+[**🔗 Live demo**](https://chat-vert-nu-34.vercel.app/)
+
 </div>
 
 ---
-
 ## ✨ Features
 
 ### Messaging
