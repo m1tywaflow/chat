@@ -14,6 +14,10 @@ import {
   arrayRemove,
   getDocs,
   increment,
+  limit,
+  runTransaction,
+  writeBatch,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Group, GroupMessage } from "@/types/group";
@@ -38,6 +42,7 @@ export async function createGroup(
     members,
     memberCount: members.length,
     createdAt: serverTimestamp(),
+    unreadCounts: {},
   });
 
   return docRef.id;
@@ -48,15 +53,17 @@ export async function addMembersToGroup(
   newMemberIds: string[]
 ): Promise<void> {
   const groupRef = doc(db, "groups", groupId);
-  const snap = await getDoc(groupRef);
-  if (!snap.exists()) return;
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(groupRef);
+    if (!snap.exists()) return;
 
-  const current = snap.data() as Group;
-  const merged = Array.from(new Set([...current.members, ...newMemberIds]));
+    const current = snap.data() as Group;
+    const merged = Array.from(new Set([...current.members, ...newMemberIds]));
 
-  await updateDoc(groupRef, {
-    members: merged,
-    memberCount: merged.length,
+    transaction.update(groupRef, {
+      members: merged,
+      memberCount: merged.length,
+    });
   });
 }
 
@@ -102,40 +109,69 @@ function buildUnreadIncrement(
   return update;
 }
 
+function buildStaleUnreadCleanup(
+  unreadCounts: Record<string, number> | undefined,
+  members: string[]
+): Record<string, ReturnType<typeof deleteField>> {
+  const update: Record<string, ReturnType<typeof deleteField>> = {};
+  const memberIds = new Set(members);
+
+  Object.keys(unreadCounts ?? {}).forEach((uid) => {
+    if (!memberIds.has(uid)) {
+      update[`unreadCounts.${uid}`] = deleteField();
+    }
+  });
+
+  return update;
+}
+
 export async function sendGroupMessage(
   groupId: string,
   senderId: string,
   senderName: string,
   text: string,
-  members: string[],
+  _members: string[],
   senderAvatarUrl?: string,
   replyTo?: { id: string; text: string; imageUrl?: string } | null,
   imageUrl?: string
 ): Promise<string> {
-  const messagesCol = collection(db, "groups", groupId, "messages");
+  const groupRef = doc(db, "groups", groupId);
+  const msgRef = doc(collection(db, "groups", groupId, "messages"));
 
-  const msgRef = await addDoc(messagesCol, {
-    text,
-    imageUrl: imageUrl ?? null,
-    senderId,
-    senderName,
-    senderAvatarUrl: senderAvatarUrl ?? null,
-    replyTo: replyTo ?? null,
-    createdAt: serverTimestamp(),
-    readBy: [senderId],
-    reactions: {},
-  });
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef);
+    if (!groupSnap.exists()) throw new Error("Group not found");
 
-  await updateDoc(doc(db, "groups", groupId), {
-    lastMessage: {
+    const group = groupSnap.data() as Group & { deleting?: boolean };
+    if (group.deleting || !group.members.includes(senderId)) {
+      throw new Error("Sender is not an active group member");
+    }
+
+    transaction.set(msgRef, {
       text,
       imageUrl: imageUrl ?? null,
-      type: imageUrl ? "image" : "text",
       senderId,
       senderName,
+      senderAvatarUrl: senderAvatarUrl ?? null,
+      replyTo: replyTo ?? null,
       createdAt: serverTimestamp(),
-    },
-    ...buildUnreadIncrement(members, senderId),
+      readBy: [senderId],
+      reactions: {},
+    });
+
+    transaction.update(groupRef, {
+      lastMessage: {
+        messageId: msgRef.id,
+        text,
+        imageUrl: imageUrl ?? null,
+        type: imageUrl ? "image" : "text",
+        senderId,
+        senderName,
+        createdAt: serverTimestamp(),
+      },
+      ...buildStaleUnreadCleanup(group.unreadCounts, group.members),
+      ...buildUnreadIncrement(group.members, senderId),
+    });
   });
 
   return msgRef.id;
@@ -149,39 +185,52 @@ export async function sendGroupVoiceMessage(
   audioUrl: string,
   duration: number,
   waveform: number[],
-  members: string[]
-) {
-  const messagesRef = collection(db, "groups", groupId, "messages");
+  _members: string[]
+): Promise<void> {
+  const groupRef = doc(db, "groups", groupId);
+  const msgRef = doc(collection(db, "groups", groupId, "messages"));
 
-  await addDoc(messagesRef, {
-    senderId,
-    senderName,
-    text: "",
-    voiceUrl: audioUrl,
-    duration,
-    waveform,
-    replyTo: replyTo
-      ? {
-          id: replyTo.id,
-          text: replyTo.text || "",
-          imageUrl: replyTo.imageUrl || null,
-        }
-      : null,
-    createdAt: serverTimestamp(),
-    readBy: [],
-    reactions: {},
-  });
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef);
+    if (!groupSnap.exists()) throw new Error("Group not found");
 
-  await updateDoc(doc(db, "groups", groupId), {
-    lastMessage: {
-      text: "",
-      voiceUrl: audioUrl,
-      type: "voice",
+    const group = groupSnap.data() as Group & { deleting?: boolean };
+    if (group.deleting || !group.members.includes(senderId)) {
+      throw new Error("Sender is not an active group member");
+    }
+
+    transaction.set(msgRef, {
       senderId,
       senderName,
+      text: "",
+      voiceUrl: audioUrl,
+      duration,
+      waveform,
+      replyTo: replyTo
+        ? {
+            id: replyTo.id,
+            text: replyTo.text || "",
+            imageUrl: replyTo.imageUrl || null,
+          }
+        : null,
       createdAt: serverTimestamp(),
-    },
-    ...buildUnreadIncrement(members, senderId),
+      readBy: [],
+      reactions: {},
+    });
+
+    transaction.update(groupRef, {
+      lastMessage: {
+        messageId: msgRef.id,
+        text: "",
+        voiceUrl: audioUrl,
+        type: "voice",
+        senderId,
+        senderName,
+        createdAt: serverTimestamp(),
+      },
+      ...buildStaleUnreadCleanup(group.unreadCounts, group.members),
+      ...buildUnreadIncrement(group.members, senderId),
+    });
   });
 }
 
@@ -202,6 +251,7 @@ export async function markGroupMessageRead(
   const msgRef = doc(db, "groups", groupId, "messages", messageId);
   await updateDoc(msgRef, {
     readBy: arrayUnion(uid),
+    lastReadBy: uid,
   });
 }
 
@@ -229,14 +279,18 @@ export async function toggleGroupReaction(
   uid: string
 ): Promise<void> {
   const msgRef = doc(db, "groups", groupId, "messages", messageId);
-  const snap = await getDoc(msgRef);
-  if (!snap.exists()) return;
-  const data = snap.data() as GroupMessage;
-  const reactions = (data as any).reactions || {};
-  const current: string[] = reactions[token] || [];
-  const hasReacted = current.includes(uid);
-  await updateDoc(msgRef, {
-    [`reactions.${token}`]: hasReacted ? arrayRemove(uid) : arrayUnion(uid),
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(msgRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data() as GroupMessage;
+    const current = data.reactions?.[token] || [];
+    const hasReacted = current.includes(uid);
+
+    transaction.update(msgRef, {
+      [`reactions.${token}`]: hasReacted ? arrayRemove(uid) : arrayUnion(uid),
+      reactionChange: { token, uid, added: !hasReacted },
+    });
   });
 }
 
@@ -262,19 +316,62 @@ export async function togglePinGroup(
 
 export async function leaveGroup(groupId: string, uid: string): Promise<void> {
   const groupRef = doc(db, "groups", groupId);
-  const snap = await getDoc(groupRef);
-  if (!snap.exists()) return;
-  const data = snap.data() as Group;
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(groupRef);
+    if (!snap.exists()) return;
 
-  await updateDoc(groupRef, {
-    members: arrayRemove(uid),
-    admins: arrayRemove(uid),
-    memberCount: Math.max(0, (data.memberCount || 1) - 1),
+    const data = snap.data() as Group;
+    if (!data.members.includes(uid)) return;
+    if (data.ownerId === uid) {
+      throw new Error("The group owner must delete the group instead of leaving");
+    }
+
+    const members = data.members.filter((memberId) => memberId !== uid);
+    transaction.update(groupRef, {
+      members,
+      admins: data.admins.filter((adminId) => adminId !== uid),
+      memberCount: members.length,
+      [`unreadCounts.${uid}`]: deleteField(),
+      memberChange: { memberId: uid, action: "remove" },
+    });
   });
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
-  await deleteDoc(doc(db, "groups", groupId));
+  const groupRef = doc(db, "groups", groupId);
+
+  // Mark first so rules can reject new messages while existing subcollection
+  // documents are removed in batches. This avoids leaving late-arriving
+  // messages orphaned when the parent document is deleted.
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(groupRef);
+    if (!snap.exists()) return;
+    transaction.update(groupRef, { deleting: true });
+  });
+
+  try {
+    const messagesRef = collection(db, "groups", groupId, "messages");
+    while (true) {
+      // Keep each batch within the Firestore Rules document-access budget even
+      // when rule reads are not cached across writes.
+      const snap = await getDocs(query(messagesRef, limit(20)));
+      if (snap.empty) break;
+
+      const batch = writeBatch(db);
+      snap.docs.forEach((message) => batch.delete(message.ref));
+      await batch.commit();
+    }
+
+    await deleteDoc(groupRef);
+  } catch (error) {
+    // A failed client-side cascade must not leave the group permanently
+    // read-only. The owner can retry deletion after this rollback.
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(groupRef);
+      if (snap.exists()) transaction.update(groupRef, { deleting: false });
+    });
+    throw error;
+  }
 }
 
 export async function getUserProfiles(

@@ -15,6 +15,7 @@ export interface Group {
   createdAt: Timestamp;
   ownerName: string;
   lastMessage?: {
+    messageId: string;
     text: string;
     type?: LastMessageType;
     imageUrl?: string | null;
@@ -45,4 +46,10 @@ export interface GroupMessage {
   createdAt: any;
   readBy: string[];
   reactions: Record<string, string[]>;
+  lastReadBy?: string;
+  reactionChange?: {
+    token: string;
+    uid: string;
+    added: boolean;
+  };
 }
