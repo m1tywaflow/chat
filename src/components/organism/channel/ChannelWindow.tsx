@@ -15,6 +15,7 @@ import {
   pinChannelPost,
   unpinChannelPost,
   markPostViewed,
+  markChannelAsRead,
 } from "@/lib/firestore/channels";
 import {
   Megaphone,
@@ -46,6 +47,76 @@ import ChannelInfoModal from "./ChannelInfoModal";
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "👍", "🔥"];
 
 const NEAR_BOTTOM_THRESHOLD = 150;
+
+// matches the ::sticker_id:: markers embedded inline in post text —
+// identical scheme to GroupWindow/ChatWindow, so stickers behave the same
+// everywhere in the app
+const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+// non-global, used only for a yes/no check so it's safe to reuse .test()
+// without worrying about lastIndex state from repeated calls
+const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+
+// true when the post text is made up of nothing but one or more
+// ::sticker_id:: tokens (no real words) — rendered big, same treatment
+// Telegram gives a "sticker-only" message
+function isStickerOnlyText(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
+}
+
+// plain unicode emoji available for inline insertion into the composer text
+const TEXT_EMOJIS = [
+  "😀",
+  "😁",
+  "😂",
+  "🤣",
+  "😊",
+  "😉",
+  "😍",
+  "🥰",
+  "😘",
+  "😎",
+  "🤔",
+  "🤨",
+  "😐",
+  "🙄",
+  "😏",
+  "😴",
+  "😢",
+  "😭",
+  "😡",
+  "🤯",
+  "🥳",
+  "🤗",
+  "😅",
+  "🙃",
+  "👍",
+  "👎",
+  "👏",
+  "🙏",
+  "💪",
+  "🤝",
+  "👀",
+  "🔥",
+  "❤️",
+  "🧡",
+  "💛",
+  "💚",
+  "💙",
+  "💜",
+  "🖤",
+  "🤍",
+  "💔",
+  "✨",
+  "🎉",
+  "💯",
+  "☕",
+  "🍕",
+  "🎮",
+  "🚀",
+];
 
 function formatTime(ts: any): string {
   if (!ts) return "";
@@ -95,6 +166,56 @@ function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
     <span style={{ fontSize: size }} className="leading-none">
       {token}
     </span>
+  );
+}
+
+/**
+ * Renders post text with inline custom-sticker tokens (::sticker_id::)
+ * swapped for small inline images, so a sticker can sit before/after/mid
+ * plain text — mirrors GroupWindow's RichText 1:1 so channel posts behave
+ * identically to group/1:1 chats.
+ */
+function RichText({
+  text,
+  variant = "inline",
+}: {
+  text: string;
+  /** "inline" = small icon sitting in a line of text.
+   *  "large"  = big standalone sticker, used when the post has no
+   *  other text at all. */
+  variant?: "inline" | "large";
+}) {
+  const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(STICKER_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return variant === "large" ? (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block w-28 h-28 object-contain"
+              />
+            ) : (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
+              />
+            );
+          }
+        }
+        // skip pure-whitespace fragments in "large" mode so several
+        // stickers in a row sit snugly without odd extra gaps
+        if (variant === "large" && !part.trim()) return null;
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
   );
 }
 
@@ -366,6 +487,10 @@ export default function ChannelWindow({
 
   const myUidRef = useRef(myUid);
 
+  // tracks where the caret was in the composer input, so emoji/sticker taps
+  // insert at that position instead of always appending to the end
+  const lastCaretPos = useRef<number>(0);
+
   channelIdRef.current = channelId;
 
   myUidRef.current = myUid;
@@ -517,6 +642,16 @@ export default function ChannelWindow({
   useEffect(() => {
     checkIsSubscribed(channelId, myUid).then(setIsSub);
   }, [channelId, myUid]);
+
+  // reset this subscriber's unread badge whenever they open the channel,
+  // and again whenever a new post lands while they're already looking at
+  // it — same idea as markGroupAsRead being gated on window visibility in
+  // GroupWindow, just simpler since there's no separate app-visibility
+  // concern here (the channel is either open in the UI or it isn't)
+  useEffect(() => {
+    if (!channelId || !myUid) return;
+    markChannelAsRead(channelId, myUid).catch(() => {});
+  }, [channelId, myUid, posts.length]);
 
   useEffect(() => {
     if (!emojiPanelOpen) return;
@@ -782,6 +917,34 @@ export default function ChannelWindow({
     }
   }
 
+  function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
+    setText(e.target.value);
+    lastCaretPos.current = e.target.selectionStart ?? e.target.value.length;
+  }
+
+  // keeps lastCaretPos in sync whenever the user moves the caret without
+  // changing the text (arrow keys, mouse click) so emoji/sticker taps land
+  // exactly where the cursor is, not always at the end of the string
+  function trackCaret(e: React.SyntheticEvent<HTMLInputElement>) {
+    lastCaretPos.current =
+      e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+  }
+
+  // inserts a plain emoji or a ::sticker_id:: token at the last known caret
+  // position, then restores focus + caret so the user can keep typing right
+  // after the inserted content — same as the composer in GroupWindow
+  function insertEmoji(token: string) {
+    const pos = lastCaretPos.current ?? text.length;
+    const newText = text.slice(0, pos) + token + text.slice(pos);
+    setText(newText);
+    const newPos = pos + token.length;
+    lastCaretPos.current = newPos;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(newPos, newPos);
+    });
+  }
+
   async function handlePost() {
     if (!text.trim() && !imageFile) {
       return;
@@ -799,6 +962,7 @@ export default function ChannelWindow({
       await createChannelPost(channelId, myUid, text.trim(), imageUrl);
 
       setText("");
+      lastCaretPos.current = 0;
 
       setImageFile(null);
 
@@ -808,12 +972,6 @@ export default function ChannelWindow({
     } finally {
       setUploading(false);
     }
-  }
-
-  async function sendSticker(url: string) {
-    setEmojiPanelOpen(false);
-
-    await createChannelPost(channelId, myUid, "", url);
   }
 
   function openPostMenu(e: React.MouseEvent, postId: string) {
@@ -1062,8 +1220,16 @@ export default function ChannelWindow({
         className="chat-scroll relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-4"
       >
         {posts.map((p) => {
-          const isSticker =
+          // two ways a post can be "just a sticker": the legacy
+          // image-attachment style (p.imageUrl pointing at a custom emoji
+          // asset), or the newer inline-token style where the whole text
+          // is nothing but ::sticker_id:: tokens
+          const isImageStickerPost =
             !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
+
+          const isTextStickerPost = !p.imageUrl && isStickerOnlyText(p.text);
+
+          const isStickerPost = isImageStickerPost || isTextStickerPost;
 
           const isEditing = editingPostId === p.id;
 
@@ -1071,7 +1237,7 @@ export default function ChannelWindow({
 
           const views = (p as any).views as number | undefined;
 
-          if (isSticker) {
+          if (isStickerPost) {
             return (
               <div
                 key={p.id}
@@ -1080,16 +1246,22 @@ export default function ChannelWindow({
                 onContextMenu={(e) => openPostMenu(e, p.id)}
                 className="relative group max-w-[420px] flex flex-col items-start gap-1.5"
               >
-                <img
-                  src={p.imageUrl!}
-                  alt="sticker"
-                  onLoad={() => {
-                    if (isInitialLoadRef.current) {
-                      scrollToBottomInstant();
-                    }
-                  }}
-                  className="w-32 h-32 object-contain"
-                />
+                {isImageStickerPost ? (
+                  <img
+                    src={p.imageUrl!}
+                    alt="sticker"
+                    onLoad={() => {
+                      if (isInitialLoadRef.current) {
+                        scrollToBottomInstant();
+                      }
+                    }}
+                    className="w-32 h-32 object-contain"
+                  />
+                ) : (
+                  <div className="inline-flex flex-wrap items-end gap-1">
+                    <RichText text={p.text} variant="large" />
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 px-1">
                   <PostMeta
@@ -1099,12 +1271,22 @@ export default function ChannelWindow({
                   />
 
                   {isOwner && (
-                    <button
-                      onClick={() => setDeleteConfirmId(p.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-400 cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <>
+                      {isTextStickerPost && (
+                        <button
+                          onClick={() => startEdit(p)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-[#a893ff] cursor-pointer"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteConfirmId(p.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-400 cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -1175,7 +1357,7 @@ export default function ChannelWindow({
                   <>
                     {p.text && (
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {p.text}
+                        <RichText text={p.text} />
 
                         {p.edited && (
                           <span className="text-[10px] ml-1 opacity-50">
@@ -1248,13 +1430,19 @@ export default function ChannelWindow({
             if (!post) return null;
 
             const isStickerPost =
+              (!post.text &&
+                post.imageUrl &&
+                isCustomEmojiUrl(post.imageUrl)) ||
+              (!post.imageUrl && isStickerOnlyText(post.text));
+
+            const isImageStickerPost =
               !post.text && post.imageUrl && isCustomEmojiUrl(post.imageUrl);
 
             const pinned = channel.pinnedPostId === post.id;
 
             return (
               <>
-                {!isStickerPost && (
+                {!isImageStickerPost && (
                   <button
                     onClick={() => startEdit(post)}
                     className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
@@ -1354,30 +1542,59 @@ export default function ChannelWindow({
                 <Paperclip size={18} />
               </button>
 
+              {/* Emoji + stickers — identical to GroupWindow/ChatWindow:
+                  unicode emoji insert as plain chars, custom stickers
+                  insert as ::sticker_id:: tokens, both land at the caret
+                  position inside the post text */}
               <div className="relative shrink-0" ref={emojiPanelRef}>
                 <button
                   onClick={() => setEmojiPanelOpen((v) => !v)}
-                  title="Send a sticker"
+                  title="Emoji & stickers"
                   className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
                 >
                   <Smile size={18} />
                 </button>
 
                 {emojiPanelOpen && (
-                  <div className="chat-scroll absolute z-50 bottom-full mb-3 left-0 grid grid-cols-4 gap-2 p-3 w-[230px] max-h-[230px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50">
-                    {CUSTOM_EMOJIS.map((e) => (
-                      <button
-                        key={e.id}
-                        onClick={() => sendSticker(e.url)}
-                        className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
-                      >
-                        <img
-                          src={e.url}
-                          alt={e.id}
-                          className="w-9 h-9 object-contain"
-                        />
-                      </button>
-                    ))}
+                  <div
+                    className="reaction-picker chat-scroll absolute z-50 bottom-full mb-3 left-0 p-3 w-[248px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* plain unicode emoji — inserted into the post text at
+                        the caret position, can sit anywhere before/after
+                        words */}
+                    <div className="grid grid-cols-6 gap-1 mb-2">
+                      {TEXT_EMOJIS.map((em) => (
+                        <button
+                          key={em}
+                          onClick={() => insertEmoji(em)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg leading-none transition hover:scale-110"
+                        >
+                          {em}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-white/[0.06] mb-2" />
+
+                    {/* custom stickers — inserted as ::id:: tokens,
+                        rendered as small inline images inside the post
+                        text (or big, if the post ends up sticker-only) */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {CUSTOM_EMOJIS.map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => insertEmoji(`::${e.id}::`)}
+                          className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
+                        >
+                          <img
+                            src={e.url}
+                            alt={e.id}
+                            className="w-9 h-9 object-contain"
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1385,8 +1602,10 @@ export default function ChannelWindow({
               <input
                 ref={inputRef}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={handleTyping}
                 onKeyDown={handleKeyDown}
+                onKeyUp={trackCaret}
+                onClick={trackCaret}
                 onPaste={handlePaste}
                 placeholder="Write a post…"
                 className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-white placeholder:text-zinc-600"

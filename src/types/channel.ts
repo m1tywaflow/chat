@@ -9,7 +9,11 @@ export interface Channel {
   subscriberCount: number;
   createdAt: any;
   lastPostAt: any;
+  lastPostId?: string | null;
   lastPostPreview: string;
+  unreadCounts?: {
+    [uid: string]: number;
+  };
   deleted?: {
     [uid: string]: boolean;
   };
