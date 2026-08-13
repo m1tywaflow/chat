@@ -423,7 +423,6 @@ export default function ChatWindow() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [forwardData, setForwardData] = useState<any | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -436,6 +435,11 @@ export default function ChatWindow() {
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
   const unreadComputedForChat = useRef<string | null>(null);
   const initializedChatRef = useRef<string | null>(null);
+  const activeChatIdRef = useRef<string | null>(chatId);
+  const confirmedMessageIdsRef = useRef<Set<string>>(new Set());
+  const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(
+    null
+  );
   const mineMsgCountRef = useRef(0);
   const dragCounter = useRef(0);
   // tracks where the caret was in the text input, so emoji/sticker taps
@@ -443,6 +447,9 @@ export default function ChatWindow() {
   const lastCaretPos = useRef<number>(0);
 
   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
+
+  // Guard against a stale Firestore callback updating the newly active chat.
+  activeChatIdRef.current = chatId;
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -459,22 +466,39 @@ export default function ChatWindow() {
   }, [chatId, myUid]);
 
   // reset all per-chat scroll/unread tracking whenever the active chat changes
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMessages([]);
     setPendingMessages([]);
     setFirstUnreadId(null);
     setShowScrollButton(false);
+    setTypingUsers([]);
+    setPinnedMessage(null);
+    setWallpaper(null);
     initializedChatRef.current = null;
     unreadComputedForChat.current = null;
     isNearBottom.current = true;
     mineMsgCountRef.current = 0;
+    confirmedMessageIdsRef.current = new Set();
+    scrollIntentRef.current = null;
   }, [chatId]);
 
   useEffect(() => {
     if (!chatId) return;
     const unsub = subscribeToMessages(chatId, (msgs) => {
+      if (activeChatIdRef.current !== chatId) return;
       const isFirstLoadForThisChat = unreadComputedForChat.current !== chatId;
       const mineCount = msgs.filter((m) => m.senderId === myUid).length;
+      const nextIds = new Set(msgs.map((m) => m.id));
+      const hasNewConfirmedMessage = [...nextIds].some(
+        (id) => !confirmedMessageIdsRef.current.has(id)
+      );
+      confirmedMessageIdsRef.current = nextIds;
+
+      if (isFirstLoadForThisChat) {
+        scrollIntentRef.current = "initial";
+      } else if (hasNewConfirmedMessage && isNearBottom.current) {
+        scrollIntentRef.current = "follow";
+      }
 
       if (isFirstLoadForThisChat) {
         mineMsgCountRef.current = mineCount;
@@ -507,6 +531,7 @@ export default function ChatWindow() {
   useEffect(() => {
     if (!chatId || !myUid) return;
     const unsub = onSnapshot(doc(db, "chats", chatId), (snap) => {
+      if (activeChatIdRef.current !== chatId) return;
       const data = snap.data();
       if (data?.typing) {
         const typingList = Object.entries(data.typing)
@@ -564,52 +589,40 @@ export default function ChatWindow() {
     setShowScrollButton(!nearBottom);
   }
 
+  function scrollToBottom() {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  function handleMediaLoad() {
+    if (isNearBottom.current) scrollToBottom();
+  }
+
   // initial positioning when a chat is opened, and auto-scroll on new
   // messages — runs BEFORE paint so there is no visible jump/animation
   useLayoutEffect(() => {
-    if (!chatId || messages.length === 0) return;
+    if (!chatId) return;
 
-    if (initializedChatRef.current === chatId) {
-      // chat already initialized: only follow new messages if the user
-      // was already at the bottom (this is decided from the scroll
-      // position captured before this update, via handleScroll)
-      if (isNearBottom.current) {
-        bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-      }
-      return;
-    }
-
-    initializedChatRef.current = chatId;
-    if (firstUnreadId) {
-      document
-        .getElementById(`msg-${firstUnreadId}`)
-        ?.scrollIntoView({ behavior: "auto", block: "center" });
-      isNearBottom.current = false;
-      setShowScrollButton(true);
-    } else {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    const intent = scrollIntentRef.current;
+    if (!intent) return;
+    if (intent === "initial" || intent === "force" || isNearBottom.current) {
+      scrollToBottom();
       isNearBottom.current = true;
       setShowScrollButton(false);
     }
-  }, [chatId, messages, firstUnreadId]);
+    initializedChatRef.current = chatId;
+    scrollIntentRef.current = null;
+  }, [chatId, messages, pendingMessages]);
 
   // optimistic messages appear instantly — pin to bottom before paint too,
   // so there is zero delay/flash between typing Enter and seeing the bubble
-  useLayoutEffect(() => {
-    if (!chatId || initializedChatRef.current !== chatId) return;
-    if (pendingMessages.length === 0) return;
-    if (isNearBottom.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-    }
-  }, [pendingMessages, chatId]);
-
   // the "typing…" indicator changes the height of the messages area — if
   // the user is at the bottom, re-pin them to the bottom so it doesn't
   // look like the screen jumped
   useLayoutEffect(() => {
     if (!chatId || initializedChatRef.current !== chatId) return;
     if (isNearBottom.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      scrollToBottom();
     }
   }, [typingUsers.length, chatId]);
 
@@ -812,9 +825,7 @@ export default function ChatWindow() {
     setIsFileVideo(false);
     setTyping(chatId, myUid, false);
     isNearBottom.current = true;
-    requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-    });
+    scrollIntentRef.current = "force";
 
     try {
       let imageUrl: string | undefined;
@@ -841,6 +852,8 @@ export default function ChatWindow() {
     if (!chatId || !myUid) return;
     const currentReply = replyMessage;
     setReplyMessage(null);
+    isNearBottom.current = true;
+    scrollIntentRef.current = "force";
     try {
       await sendVoiceMessage(
         chatId,
@@ -1626,6 +1639,7 @@ export default function ChatWindow() {
                             src={m.imageUrl}
                             alt="sticker"
                             className="w-32 h-32 object-contain"
+                            onLoad={handleMediaLoad}
                           />
                           {isMine && (
                             <span className="absolute bottom-1.5 right-1.5">
@@ -1668,6 +1682,7 @@ export default function ChatWindow() {
                                   src={m.imageUrl}
                                   className="chat-video"
                                   preload="metadata"
+                                  onLoadedMetadata={handleMediaLoad}
                                 />
                                 <div className="play-overlay">
                                   <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
@@ -1684,6 +1699,7 @@ export default function ChatWindow() {
                                 src={m.imageUrl}
                                 alt="image"
                                 className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                onLoad={handleMediaLoad}
                                 onClick={() =>
                                   !m.pending && setLightboxUrl(m.imageUrl)
                                 }
@@ -1787,12 +1803,11 @@ export default function ChatWindow() {
               </div>
             );
           })}
-          <div ref={bottomRef} />
-
           {showScrollButton && (
             <button
               onClick={() => {
-                bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                const el = chatScrollRef.current;
+                el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
                 isNearBottom.current = true;
                 setShowScrollButton(false);
               }}
