@@ -24,9 +24,65 @@ import {
   Paperclip,
   Smile,
 } from "lucide-react";
-import { CUSTOM_EMOJIS, isCustomEmojiUrl } from "@/lib/customEmoji";
+import {
+  CUSTOM_EMOJIS,
+  getCustomEmoji,
+  isCustomEmojiUrl,
+} from "@/lib/customEmoji";
 
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "😮", "😢", "🙏", "🎉"];
+
+// Keep the comment composer in sync with ChannelWindow: Unicode emoji are
+// inserted as text and custom stickers are stored as inline ::id:: tokens.
+const TEXT_EMOJIS = [
+  "😀", "😁", "😂", "🤣", "😊", "😉", "😍", "🥰", "😘", "😎", "🤔", "🤨",
+  "😐", "🙄", "😏", "😴", "😢", "😭", "😡", "🤯", "🥳", "🥵", "🤗", "😅",
+  "🙃", "👍", "👎", "👏", "🙏", "💪", "🤝", "👀", "🔥", "❤️", "🧡", "💛",
+  "💚", "💙", "💜", "🖤", "🤍", "💔", "✨", "🎉", "💯", "☕", "🍕", "🎮", "🚀",
+];
+
+const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+
+function isStickerOnlyText(text: string): boolean {
+  return text.trim().length > 0 && STICKER_TOKEN_ONLY_RE.test(text.trim());
+}
+
+function RichText({
+  text,
+  variant = "inline",
+}: {
+  text: string;
+  variant?: "inline" | "large";
+}) {
+  return (
+    <>
+      {text.split(STICKER_TOKEN_SPLIT_RE).map((part, i) => {
+        const match = part.match(STICKER_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className={
+                  variant === "large"
+                    ? "inline-block w-28 h-28 object-contain"
+                    : "inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
+                }
+              />
+            );
+          }
+        }
+        if (variant === "large" && !part.trim()) return null;
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
+  );
+}
 
 function formatTime(ts: any): string {
   if (!ts) return "";
@@ -116,6 +172,7 @@ export default function PostCommentsView({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const lastCaretPos = useRef(0);
 
   const isOwner = channel?.ownerId === myUid;
 
@@ -225,6 +282,7 @@ export default function PostCommentsView({
         imageUrl
       );
       setText("");
+      lastCaretPos.current = 0;
       setImageFile(null);
       setImagePreview(null);
       setReplyingTo(null);
@@ -236,25 +294,26 @@ export default function PostCommentsView({
     }
   }
 
-  async function sendSticker(url: string) {
-    setEmojiPanelOpen(false);
-    if (sending) return;
-    setSending(true);
-    try {
-      await createComment(
-        channelId,
-        postId,
-        myUid,
-        "",
-        buildReplyPayload(),
-        url
-      );
-      setReplyingTo(null);
-    } catch (err) {
-      console.error("Sticker comment failed:", err);
-    } finally {
-      setSending(false);
-    }
+  function handleTyping(e: React.ChangeEvent<HTMLInputElement>) {
+    setText(e.target.value);
+    lastCaretPos.current = e.target.selectionStart ?? e.target.value.length;
+  }
+
+  function trackCaret(e: React.SyntheticEvent<HTMLInputElement>) {
+    lastCaretPos.current =
+      e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+  }
+
+  function insertEmoji(token: string) {
+    const pos = lastCaretPos.current ?? text.length;
+    const newText = text.slice(0, pos) + token + text.slice(pos);
+    const newPos = pos + token.length;
+    setText(newText);
+    lastCaretPos.current = newPos;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(newPos, newPos);
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -360,6 +419,7 @@ export default function PostCommentsView({
           );
           const isSticker =
             !c.text && c.imageUrl && isCustomEmojiUrl(c.imageUrl);
+          const isStickerOnly = isStickerOnlyText(c.text);
 
           return (
             <div
@@ -420,7 +480,10 @@ export default function PostCommentsView({
                     )}
                     {c.text && (
                       <div className="text-[13px] text-zinc-200 leading-relaxed whitespace-pre-wrap break-words">
-                        {c.text}
+                        <RichText
+                          text={c.text}
+                          variant={isStickerOnly ? "large" : "inline"}
+                        />
                       </div>
                     )}
                   </>
@@ -587,47 +650,45 @@ export default function PostCommentsView({
               <div className="relative shrink-0" ref={emojiPanelRef}>
                 <button
                   onClick={() => setEmojiPanelOpen((v) => !v)}
-                  title="Send a sticker"
+                  title="Emoji & stickers"
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-all cursor-pointer"
                 >
                   <Smile size={16} />
                 </button>
                 {emojiPanelOpen && (
                   <div
-                    className="
-                      chat-scroll
-                      absolute
-                      z-50
-                      bottom-full
-                      mb-3
-                      left-0
-                      grid
-                      grid-cols-4
-                      gap-2
-                      p-3
-                      w-[230px]
-                      max-h-[230px]
-                      overflow-y-auto
-                      rounded-2xl
-                      bg-[#141220]
-                      border border-white/[0.08]
-                      shadow-xl
-                      shadow-black/50
-                    "
+                    className="reaction-picker chat-scroll absolute z-50 bottom-full mb-3 left-0 p-3 w-[248px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {CUSTOM_EMOJIS.map((e) => (
-                      <button
-                        key={e.id}
-                        onClick={() => sendSticker(e.url)}
-                        className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
-                      >
-                        <img
-                          src={e.url}
-                          alt={e.id}
-                          className="w-9 h-9 object-contain"
-                        />
-                      </button>
-                    ))}
+                    <div className="grid grid-cols-6 gap-1 mb-2">
+                      {TEXT_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => insertEmoji(emoji)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg leading-none transition hover:scale-110"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-white/[0.06] mb-2" />
+
+                    <div className="grid grid-cols-4 gap-2">
+                      {CUSTOM_EMOJIS.map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => insertEmoji(`::${e.id}::`)}
+                          className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
+                        >
+                          <img
+                            src={e.url}
+                            alt={e.id}
+                            className="w-9 h-9 object-contain"
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -635,8 +696,11 @@ export default function PostCommentsView({
               <input
                 ref={inputRef}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={handleTyping}
                 onKeyDown={handleKeyDown}
+                onKeyUp={trackCaret}
+                onClick={trackCaret}
+                onSelect={trackCaret}
                 onPaste={handlePaste}
                 placeholder={
                   replyingTo
