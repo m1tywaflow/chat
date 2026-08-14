@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { Channel, ChannelPost } from "@/types/channel";
 import {
   subscribeToChannelDoc,
@@ -419,7 +419,13 @@ export default function ChannelWindow({
 
   const [posts, setPosts] = useState<ChannelPost[]>([]);
 
+  const [postsChannelId, setPostsChannelId] = useState<string | null>(null);
+
   const [isSub, setIsSub] = useState(false);
+
+  const [subscriptionChannelId, setSubscriptionChannelId] = useState<
+    string | null
+  >(null);
 
   const [text, setText] = useState("");
 
@@ -459,8 +465,6 @@ export default function ChannelWindow({
 
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
@@ -471,9 +475,15 @@ export default function ChannelWindow({
 
   const editInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const isInitialLoadRef = useRef(true);
-
   const isNearBottomRef = useRef(true);
+
+  const knownPostIdsRef = useRef<Set<string>>(new Set());
+
+  const hasReceivedPostsSnapshotRef = useRef(false);
+
+  const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(
+    null
+  );
 
   const viewObserverRef = useRef<IntersectionObserver | null>(null);
 
@@ -491,9 +501,10 @@ export default function ChannelWindow({
   // insert at that position instead of always appending to the end
   const lastCaretPos = useRef<number>(0);
 
-  channelIdRef.current = channelId;
-
-  myUidRef.current = myUid;
+  useLayoutEffect(() => {
+    channelIdRef.current = channelId;
+    myUidRef.current = myUid;
+  }, [channelId, myUid]);
 
   const isOwner = channel?.ownerId === myUid;
 
@@ -515,25 +526,17 @@ export default function ChannelWindow({
     isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
   }
 
-  useEffect(() => {
-    isInitialLoadRef.current = true;
+  function handleMediaLoad() {
+    if (isNearBottomRef.current) scrollToBottomInstant();
+  }
 
+  // Reset before paint so a newly selected channel cannot show the previous
+  // feed or inherit its scroll position for a frame.
+  useLayoutEffect(() => {
     isNearBottomRef.current = true;
-
-    scrollToBottomInstant();
-
-    const timers = [30, 100, 250, 450, 800].map((ms) =>
-      setTimeout(scrollToBottomInstant, ms)
-    );
-
-    const doneTimer = setTimeout(() => {
-      isInitialLoadRef.current = false;
-    }, 900);
-
-    return () => {
-      timers.forEach(clearTimeout);
-      clearTimeout(doneTimer);
-    };
+    knownPostIdsRef.current = new Set();
+    hasReceivedPostsSnapshotRef.current = false;
+    scrollIntentRef.current = null;
   }, [channelId]);
 
   useEffect(() => {
@@ -546,6 +549,7 @@ export default function ChannelWindow({
 
   useEffect(() => {
     const DWELL_MS = 1000;
+    const observedChannelId = channelId;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -572,13 +576,11 @@ export default function ChannelWindow({
 
               viewedIdsRef.current.add(postId);
 
-              const cid = channelIdRef.current;
-
               const uid = myUidRef.current;
 
-              if (!uid) return;
+              if (!uid || channelIdRef.current !== observedChannelId) return;
 
-              markPostViewed(cid, postId, uid).catch((err) =>
+              markPostViewed(observedChannelId, postId, uid).catch((err) =>
                 console.error("View tracking failed:", err)
               );
             }, DWELL_MS);
@@ -620,27 +622,61 @@ export default function ChannelWindow({
   }
 
   useEffect(() => {
-    const unsub = subscribeToChannelDoc(channelId, setChannel);
-
-    return () => unsub();
-  }, [channelId]);
-
-  useEffect(() => {
-    const unsub = subscribeToChannelPosts(channelId, (p) => {
-      setPosts(p.slice().reverse());
-
-      requestAnimationFrame(() => {
-        if (isInitialLoadRef.current || isNearBottomRef.current) {
-          scrollToBottomInstant();
-        }
-      });
+    const unsub = subscribeToChannelDoc(channelId, (nextChannel) => {
+      if (channelIdRef.current === channelId) setChannel(nextChannel);
     });
 
     return () => unsub();
   }, [channelId]);
 
   useEffect(() => {
-    checkIsSubscribed(channelId, myUid).then(setIsSub);
+    const unsub = subscribeToChannelPosts(channelId, (p) => {
+      if (channelIdRef.current !== channelId) return;
+
+      const nextIds = new Set(p.map((post) => post.id));
+      const hasNewPost = [...nextIds].some(
+        (id) => !knownPostIdsRef.current.has(id)
+      );
+      const isInitialSnapshot = !hasReceivedPostsSnapshotRef.current;
+      knownPostIdsRef.current = nextIds;
+      hasReceivedPostsSnapshotRef.current = true;
+
+      if (isInitialSnapshot) {
+        scrollIntentRef.current = "initial";
+      } else if (hasNewPost && isNearBottomRef.current) {
+        scrollIntentRef.current = "follow";
+      }
+      setPosts(p.slice().reverse());
+      setPostsChannelId(channelId);
+    });
+
+    return () => unsub();
+  }, [channelId]);
+
+  // The only automatic scroll writer. A snapshot containing only edits,
+  // reactions, views, or deletions preserves the reader's position.
+  useLayoutEffect(() => {
+    if (!scrollIntentRef.current || !scrollContainerRef.current) return;
+
+    const intent = scrollIntentRef.current;
+    if (
+      intent === "initial" ||
+      intent === "force" ||
+      isNearBottomRef.current
+    ) {
+      scrollToBottomInstant();
+      isNearBottomRef.current = true;
+    }
+    scrollIntentRef.current = null;
+  }, [channelId, channel, posts]);
+
+  useEffect(() => {
+    checkIsSubscribed(channelId, myUid).then((subscribed) => {
+      if (channelIdRef.current === channelId) {
+        setIsSub(subscribed);
+        setSubscriptionChannelId(channelId);
+      }
+    });
   }, [channelId, myUid]);
 
   // reset this subscriber's unread badge whenever they open the channel,
@@ -866,12 +902,14 @@ export default function ChannelWindow({
   }
 
   async function toggleSub() {
-    if (isSub) {
+    if (subscriptionChannelId === channelId && isSub) {
       setIsSub(false);
+      setSubscriptionChannelId(channelId);
 
       await unsubscribeFromChannel(channelId, myUid);
     } else {
       setIsSub(true);
+      setSubscriptionChannelId(channelId);
 
       await subscribeToChannel(channelId, myUid);
     }
@@ -959,6 +997,7 @@ export default function ChannelWindow({
         imageUrl = await uploadPostImage(imageFile);
       }
 
+      scrollIntentRef.current = "force";
       await createChannelPost(channelId, myUid, text.trim(), imageUrl);
 
       setText("");
@@ -1067,12 +1106,14 @@ export default function ChannelWindow({
     setDeleteChannelConfirm(false);
   }
 
-  if (!channel) {
+  if (!channel || channel.id !== channelId) {
     return null;
   }
 
+  const displayPosts = postsChannelId === channelId ? posts : [];
+
   const pinnedPost = channel.pinnedPostId
-    ? posts.find((p) => p.id === channel.pinnedPostId)
+    ? displayPosts.find((p) => p.id === channel.pinnedPostId)
     : undefined;
 
   return (
@@ -1145,12 +1186,14 @@ export default function ChannelWindow({
             <button
               onClick={toggleSub}
               className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
-                isSub
+                subscriptionChannelId === channelId && isSub
                   ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
                   : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
               }`}
             >
-              {isSub ? "Unsubscribe" : "Subscribe"}
+              {subscriptionChannelId === channelId && isSub
+                ? "Unsubscribe"
+                : "Subscribe"}
             </button>
           )}
 
@@ -1219,7 +1262,7 @@ export default function ChannelWindow({
         onScroll={handleScroll}
         className="chat-scroll relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-4"
       >
-        {posts.map((p) => {
+        {displayPosts.map((p) => {
           // two ways a post can be "just a sticker": the legacy
           // image-attachment style (p.imageUrl pointing at a custom emoji
           // asset), or the newer inline-token style where the whole text
@@ -1250,11 +1293,7 @@ export default function ChannelWindow({
                   <img
                     src={p.imageUrl!}
                     alt="sticker"
-                    onLoad={() => {
-                      if (isInitialLoadRef.current) {
-                        scrollToBottomInstant();
-                      }
-                    }}
+                    onLoad={handleMediaLoad}
                     className="w-32 h-32 object-contain"
                   />
                 ) : (
@@ -1314,11 +1353,7 @@ export default function ChannelWindow({
                 <img
                   src={p.imageUrl}
                   alt="post"
-                  onLoad={() => {
-                    if (isInitialLoadRef.current) {
-                      scrollToBottomInstant();
-                    }
-                  }}
+                  onLoad={handleMediaLoad}
                   onClick={() => setLightboxUrl(p.imageUrl!)}
                   className="w-full max-h-[360px] object-cover cursor-zoom-in"
                 />
@@ -1403,13 +1438,12 @@ export default function ChannelWindow({
           );
         })}
 
-        {posts.length === 0 && (
+        {displayPosts.length === 0 && (
           <div className="text-center text-zinc-600 text-sm py-10">
             No posts yet
           </div>
         )}
 
-        <div ref={bottomRef} />
       </div>
 
       {/* Post context menu */}
@@ -1425,7 +1459,7 @@ export default function ChannelWindow({
           className="w-44 rounded-xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
         >
           {(() => {
-            const post = posts.find((p) => p.id === postMenu.postId);
+            const post = displayPosts.find((p) => p.id === postMenu.postId);
 
             if (!post) return null;
 

@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
+import type { ForwardableContent, ForwardedFrom } from "@/types/forward";
 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
@@ -290,13 +291,7 @@ export async function togglePinChat(
 export async function forwardMessageToChat(
   targetChatId: string,
   myUid: string,
-  original: {
-    text: string;
-    imageUrl?: string | null;
-    senderId: string;
-    senderName?: string;
-    chatId: string;
-  }
+  original: ForwardableContent
 ) {
   const [uid1, uid2] = targetChatId.split("_");
   const otherUid = uid1 === myUid ? uid2 : uid1;
@@ -307,11 +302,7 @@ export async function forwardMessageToChat(
     imageUrl: original.imageUrl || null,
     createdAt: serverTimestamp(),
     replyTo: null,
-    forwardedFrom: {
-      chatId: original.chatId,
-      senderId: original.senderId,
-      senderName: original.senderName || null,
-    },
+    forwardedFrom: buildForwardedFrom(original),
   });
 
   await updateDoc(doc(db, "chats", targetChatId), {
@@ -321,6 +312,19 @@ export async function forwardMessageToChat(
     updatedAt: serverTimestamp(),
     [`unreadCount.${otherUid}`]: increment(1),
   });
+}
+
+function buildForwardedFrom(original: ForwardableContent): ForwardedFrom {
+  if (original.forwardedFrom) return original.forwardedFrom;
+  return {
+    sourceType: original.channelId ? "channel" : "chat",
+    chatId: original.chatId ?? null,
+    channelId: original.channelId ?? null,
+    groupId: original.groupId ?? null,
+    postId: original.postId ?? null,
+    senderId: original.senderId,
+    senderName: original.senderName ?? null,
+  };
 }
 export async function sendVoiceMessage(
   chatId: string,

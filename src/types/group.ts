@@ -52,4 +52,5 @@ export interface GroupMessage {
     uid: string;
     added: boolean;
   };
+  forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
 }

@@ -30,6 +30,7 @@ export interface ChannelPost {
   edited?: boolean;
   reactions?: Record<string, string[]>;
   commentCount?: number;
+  forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
 }
 
 export interface ChannelCommentReplyTo {

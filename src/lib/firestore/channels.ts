@@ -22,6 +22,7 @@ import {
   documentId,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import type { ForwardableContent, ForwardedFrom } from "@/types/forward";
 import {
   Channel,
   ChannelPost,
@@ -578,13 +579,7 @@ export async function togglePinChannel(
 export async function forwardMessageToChannel(
   channelId: string,
   myUid: string,
-  original: {
-    text: string;
-    imageUrl?: string | null;
-    senderId: string;
-    senderName?: string;
-    chatId: string;
-  }
+  original: ForwardableContent
 ) {
   const postRef = doc(collection(db, "channels", channelId, "posts"));
   await setDoc(postRef, {
@@ -595,11 +590,7 @@ export async function forwardMessageToChannel(
     reactions: {},
     commentCount: 0,
     views: 0,
-    forwardedFrom: {
-      chatId: original.chatId,
-      senderId: original.senderId,
-      senderName: original.senderName || null,
-    },
+    forwardedFrom: buildForwardedFrom(original),
   });
 
   const channelUpdate: Record<string, any> = {
@@ -610,6 +601,19 @@ export async function forwardMessageToChannel(
   await bumpUnreadForSubscribers(channelId, myUid, channelUpdate);
 
   await updateDoc(doc(db, "channels", channelId), channelUpdate);
+}
+
+function buildForwardedFrom(original: ForwardableContent): ForwardedFrom {
+  if (original.forwardedFrom) return original.forwardedFrom;
+  return {
+    sourceType: original.channelId ? "channel" : "chat",
+    chatId: original.chatId ?? null,
+    channelId: original.channelId ?? null,
+    groupId: original.groupId ?? null,
+    postId: original.postId ?? null,
+    senderId: original.senderId,
+    senderName: original.senderName ?? null,
+  };
 }
 
 export async function updateChannelInfo(

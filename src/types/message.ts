@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase/firestore";
+import type { ForwardedFrom } from "@/types/forward";
 
 export interface Message {
   id: string;
@@ -7,11 +8,7 @@ export interface Message {
   createdAt: number;
   forwardedFrom?: ForwardedFrom | null;
 }
-export interface ForwardedFrom {
-  chatId: string;
-  senderId: string;
-  senderName?: string;
-}
+export type { ForwardedFrom };
 
 export interface VoiceMessage {
   id: string;
