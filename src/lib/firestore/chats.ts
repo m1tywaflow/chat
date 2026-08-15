@@ -17,7 +17,8 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import type { ForwardableContent, ForwardedFrom } from "@/types/forward";
+import type { ForwardableContent } from "@/types/forward";
+import { buildForwardedFrom } from "@/lib/forwarding";
 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
@@ -300,6 +301,9 @@ export async function forwardMessageToChat(
     senderId: myUid,
     text: original.text || "",
     imageUrl: original.imageUrl || null,
+    voiceUrl: original.voiceUrl || null,
+    duration: original.duration ?? null,
+    waveform: original.waveform ?? null,
     createdAt: serverTimestamp(),
     replyTo: null,
     forwardedFrom: buildForwardedFrom(original),
@@ -314,18 +318,6 @@ export async function forwardMessageToChat(
   });
 }
 
-function buildForwardedFrom(original: ForwardableContent): ForwardedFrom {
-  if (original.forwardedFrom) return original.forwardedFrom;
-  return {
-    sourceType: original.channelId ? "channel" : "chat",
-    chatId: original.chatId ?? null,
-    channelId: original.channelId ?? null,
-    groupId: original.groupId ?? null,
-    postId: original.postId ?? null,
-    senderId: original.senderId,
-    senderName: original.senderName ?? null,
-  };
-}
 export async function sendVoiceMessage(
   chatId: string,
   senderId: string,

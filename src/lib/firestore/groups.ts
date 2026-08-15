@@ -21,6 +21,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Group, GroupMessage } from "@/types/group";
+import type { ForwardableContent } from "@/types/forward";
+import { buildForwardedFrom } from "@/lib/forwarding";
 
 const groupsCol = collection(db, "groups");
 
@@ -230,6 +232,56 @@ export async function sendGroupVoiceMessage(
       },
       ...buildStaleUnreadCleanup(group.unreadCounts, group.members),
       ...buildUnreadIncrement(group.members, senderId),
+    });
+  });
+}
+
+export async function forwardMessageToGroup(
+  groupId: string,
+  myUid: string,
+  original: ForwardableContent
+): Promise<void> {
+  const groupRef = doc(db, "groups", groupId);
+  const msgRef = doc(collection(db, "groups", groupId, "messages"));
+
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef);
+    if (!groupSnap.exists()) throw new Error("Group not found");
+
+    const group = groupSnap.data() as Group & { deleting?: boolean };
+    if (group.deleting || !group.members.includes(myUid)) {
+      throw new Error("Sender is not an active group member");
+    }
+
+    const isVoice = !!original.voiceUrl;
+    transaction.set(msgRef, {
+      senderId: myUid,
+      senderName: original.senderName || "Unknown",
+      text: original.text || "",
+      imageUrl: original.imageUrl || null,
+      voiceUrl: original.voiceUrl || null,
+      duration: original.duration ?? null,
+      waveform: original.waveform ?? null,
+      replyTo: null,
+      createdAt: serverTimestamp(),
+      readBy: [myUid],
+      reactions: {},
+      forwardedFrom: buildForwardedFrom(original),
+    });
+
+    transaction.update(groupRef, {
+      lastMessage: {
+        messageId: msgRef.id,
+        text: original.text || "",
+        imageUrl: original.imageUrl || null,
+        voiceUrl: original.voiceUrl || null,
+        type: isVoice ? "voice" : original.imageUrl ? "image" : "text",
+        senderId: myUid,
+        senderName: original.senderName || "Unknown",
+        createdAt: serverTimestamp(),
+      },
+      ...buildStaleUnreadCleanup(group.unreadCounts, group.members),
+      ...buildUnreadIncrement(group.members, myUid),
     });
   });
 }

@@ -14,7 +14,10 @@ import {
   leaveGroup,
   deleteGroup,
   sendGroupVoiceMessage,
+  forwardMessageToGroup,
 } from "@/lib/firestore/groups";
+import { forwardMessageToChat } from "@/lib/firestore/chats";
+import { forwardMessageToChannel } from "@/lib/firestore/channels";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc } from "firebase/firestore";
@@ -22,6 +25,7 @@ import { onSnapshot, doc, updateDoc } from "firebase/firestore";
 import {
   X,
   CornerUpLeft,
+  Forward,
   Send,
   MoreVertical,
   Trash2,
@@ -50,6 +54,8 @@ import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import GroupModal from "./groupModal";
 import VoiceBubble from "@/components/atoms/VoiceBubble";
 import VoiceRecordButton from "@/components/atoms/recordButton";
+import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
+import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [
@@ -407,19 +413,21 @@ export default function GroupWindow() {
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [scrollAreaReady, setScrollAreaReady] = useState(false);
   const [wallpaper, setWallpaper] = useState<any>(null);
+  const [forwardData, setForwardData] = useState<any | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const msgMenuRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
   const isNearBottom = useRef(true);
-  const suppressScrollCheck = useRef(false);
   const emojiPanelRef = useRef<HTMLDivElement | null>(null);
-  const initializedGroupRef = useRef<string | null>(null);
+  const activeGroupIdRef = useRef<string | null>(groupId);
+  const confirmedMessageIdsRef = useRef<Set<string>>(new Set());
+  const receivedSnapshotRef = useRef(false);
+  const mineMessageCountRef = useRef(0);
+  const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(null);
   const dragCounter = useRef(0);
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   // tracks where the caret was in the text input, so emoji/sticker taps
@@ -431,6 +439,12 @@ export default function GroupWindow() {
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
   }, []);
+
+  // Update before passive Firestore subscriptions run, so a callback from a
+  // just-unsubscribed group cannot write into the newly selected group.
+  useLayoutEffect(() => {
+    activeGroupIdRef.current = groupId;
+  }, [groupId]);
 
   useEffect(() => {
     if (!myUid) return;
@@ -445,20 +459,39 @@ export default function GroupWindow() {
     setMessages([]);
     setPendingMessages([]);
     setShowScrollButton(false);
-    initializedGroupRef.current = null;
     isNearBottom.current = true;
+    confirmedMessageIdsRef.current = new Set();
+    receivedSnapshotRef.current = false;
+    mineMessageCountRef.current = 0;
+    scrollIntentRef.current = null;
   }, [groupId]);
 
   useEffect(() => {
     if (!groupId) return;
     const unsub = subscribeToGroupMessages(groupId, (msgs) => {
-      setMessages(msgs);
-      setPendingMessages((prev) =>
-        prev.filter(
-          (p) =>
-            !msgs.some((m) => m.text === p.text && m.senderId === p.senderId)
-        )
+      if (activeGroupIdRef.current !== groupId) return;
+      const nextIds = new Set(msgs.map((m) => m.id));
+      const hasNewConfirmedMessage = [...nextIds].some(
+        (id) => !confirmedMessageIdsRef.current.has(id)
       );
+      const isInitialSnapshot = !receivedSnapshotRef.current;
+      const mineMessageCount = msgs.filter((m) => m.senderId === myUid).length;
+      confirmedMessageIdsRef.current = nextIds;
+      receivedSnapshotRef.current = true;
+
+      if (isInitialSnapshot) {
+        mineMessageCountRef.current = mineMessageCount;
+        scrollIntentRef.current = "initial";
+      } else if (mineMessageCount > mineMessageCountRef.current) {
+        setPendingMessages((prev) => prev.slice(mineMessageCount - mineMessageCountRef.current));
+        mineMessageCountRef.current = mineMessageCount;
+      } else {
+        mineMessageCountRef.current = mineMessageCount;
+      }
+      if (!isInitialSnapshot && hasNewConfirmedMessage && isNearBottom.current) {
+        scrollIntentRef.current = "follow";
+      }
+      setMessages(msgs);
 
       if (myUid && isWindowVisible) {
         msgs.forEach((m) => {
@@ -493,7 +526,6 @@ export default function GroupWindow() {
   function handleScroll() {
     const el = chatScrollRef.current;
     if (!el) return;
-    if (suppressScrollCheck.current) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
     isNearBottom.current = nearBottom;
@@ -501,55 +533,27 @@ export default function GroupWindow() {
   }
 
   function scrollToBottom(smooth = false) {
-    suppressScrollCheck.current = true;
-    bottomRef.current?.scrollIntoView({
-      behavior: smooth ? "smooth" : "auto",
-      block: "end",
-    });
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        suppressScrollCheck.current = false;
-      });
-    });
+    const el = chatScrollRef.current;
+    if (!el) return;
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    else el.scrollTop = el.scrollHeight;
   }
 
   useLayoutEffect(() => {
-    if (!groupId || messages.length === 0 || !scrollAreaReady) return;
-    if (!bottomRef.current) return;
-    if (initializedGroupRef.current === groupId) {
-      if (isNearBottom.current) {
-        scrollToBottom();
-      }
-      return;
-    }
-    initializedGroupRef.current = groupId;
-    scrollToBottom();
-    isNearBottom.current = true;
-    setShowScrollButton(false);
-  }, [groupId, messages, scrollAreaReady]);
-
-  useLayoutEffect(() => {
-    if (!groupId || !scrollAreaReady || initializedGroupRef.current !== groupId)
-      return;
-    if (pendingMessages.length === 0) return;
-    if (isNearBottom.current) {
+    if (!groupId || !scrollAreaReady) return;
+    const intent = scrollIntentRef.current;
+    if (!intent) return;
+    if (intent === "initial" || intent === "force" || isNearBottom.current) {
       scrollToBottom();
+      isNearBottom.current = true;
+      setShowScrollButton(false);
     }
-  }, [pendingMessages, groupId, scrollAreaReady]);
+    scrollIntentRef.current = null;
+  }, [groupId, messages, pendingMessages, scrollAreaReady]);
 
-  useEffect(() => {
-    if (!scrollAreaReady) return;
-    const el = contentRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
-      if (isNearBottom.current) {
-        scrollToBottom();
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scrollAreaReady]);
+  function handleMediaLoad() {
+    if (isNearBottom.current) scrollToBottom();
+  }
 
   useEffect(() => {
     if (!lightboxUrl) return;
@@ -730,9 +734,7 @@ export default function GroupWindow() {
     setImagePreview(null);
     setIsFileVideo(false);
     isNearBottom.current = true;
-    requestAnimationFrame(() => {
-      scrollToBottom();
-    });
+    scrollIntentRef.current = "force";
 
     try {
       let imageUrl: string | undefined;
@@ -768,6 +770,8 @@ export default function GroupWindow() {
     const currentReply = replyMessage;
 
     setReplyMessage(null);
+    isNearBottom.current = true;
+    scrollIntentRef.current = "force";
 
     try {
       await sendGroupVoiceMessage(
@@ -791,6 +795,26 @@ export default function GroupWindow() {
   function handleReply(m: any) {
     setReplyMessage(m);
     inputRef.current?.focus();
+  }
+
+  function resolveForwardSenderName(message: any): string {
+    return message.senderName || (message.senderId === myUid ? "You" : "user");
+  }
+
+  function forwardPayload(message: any) {
+    return {
+      text: message.text || "",
+      imageUrl: message.imageUrl || null,
+      voiceUrl: message.voiceUrl || null,
+      duration: message.duration,
+      waveform: message.waveform,
+      senderId: message.senderId,
+      senderName: resolveForwardSenderName(message),
+      groupId: groupId!,
+      sourceName: group?.name || "Group",
+      messageId: message.id,
+      forwardedFrom: message.forwardedFrom || null,
+    };
   }
 
   function scrollToMessage(id: string) {
@@ -1034,6 +1058,16 @@ export default function GroupWindow() {
           >
             <CornerUpLeft size={14} className="text-zinc-500" />
             Reply
+          </button>
+          <button
+            className="ctx-item text-zinc-300"
+            onClick={() => {
+              setForwardData(currentMsgMenu);
+              setMsgMenu(null);
+            }}
+          >
+            <Forward size={14} className="text-zinc-500" />
+            Forward
           </button>
           {currentMsgMenu.text && (
             <button
@@ -1285,7 +1319,7 @@ export default function GroupWindow() {
           onScroll={handleScroll}
           className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 min-h-0"
         >
-          <div ref={contentRef} className="space-y-1">
+          <div className="space-y-1">
             {displayMessages.map((m) => {
               const isMine = m.senderId === myUid;
               const reactionSummary = getReactionSummary(m.reactions);
@@ -1401,6 +1435,8 @@ export default function GroupWindow() {
                         </div>
                       )}
 
+                      {m.forwardedFrom && <ForwardedFrom source={m.forwardedFrom} />}
+
                       {m.replyTo && (
                         <div
                           onClick={() => scrollToMessage(m.replyTo.id)}
@@ -1481,6 +1517,7 @@ export default function GroupWindow() {
                               src={m.imageUrl}
                               alt="sticker"
                               className="w-32 h-32 object-contain"
+                              onLoad={handleMediaLoad}
                             />
                             {isMine && (
                               <span className="absolute bottom-1.5 right-1.5">
@@ -1523,6 +1560,7 @@ export default function GroupWindow() {
                                     src={m.imageUrl}
                                     className="chat-video"
                                     preload="metadata"
+                                    onLoadedMetadata={handleMediaLoad}
                                   />
                                   <div className="play-overlay">
                                     <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
@@ -1539,6 +1577,7 @@ export default function GroupWindow() {
                                   src={m.imageUrl}
                                   alt="image"
                                   className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                  onLoad={handleMediaLoad}
                                   onClick={() =>
                                     !m.pending && setLightboxUrl(m.imageUrl)
                                   }
@@ -1642,7 +1681,6 @@ export default function GroupWindow() {
                 </div>
               );
             })}
-            <div ref={bottomRef} />
           </div>
 
           {showScrollButton && (
@@ -1826,6 +1864,25 @@ export default function GroupWindow() {
           </div>
         </div>
       </div>
+
+      {forwardData && myUid && groupId && (
+        <ForwardPicker
+          myUid={myUid}
+          onClose={() => setForwardData(null)}
+          onSelectChat={async (targetChatId) => {
+            await forwardMessageToChat(targetChatId, myUid, forwardPayload(forwardData));
+            setForwardData(null);
+          }}
+          onSelectGroup={async (targetGroupId) => {
+            await forwardMessageToGroup(targetGroupId, myUid, forwardPayload(forwardData));
+            setForwardData(null);
+          }}
+          onSelectChannel={async (channelId) => {
+            await forwardMessageToChannel(channelId, myUid, forwardPayload(forwardData));
+            setForwardData(null);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -225,12 +225,41 @@ service cloud.firestore {
         && request.resource.data.deleting is bool;
     }
 
+    function validForwardedFrom() {
+      return !('forwardedFrom' in request.resource.data)
+        || (request.resource.data.forwardedFrom is map
+          && request.resource.data.forwardedFrom.keys().hasOnly([
+            'sourceType', 'sourceName', 'chatId', 'channelId', 'groupId',
+            'messageId', 'postId', 'senderId', 'senderName'
+          ])
+          && request.resource.data.forwardedFrom.keys().hasAll([
+            'sourceType', 'senderId'
+          ])
+          && request.resource.data.forwardedFrom.sourceType
+            in ['chat', 'channel', 'group']
+          && request.resource.data.forwardedFrom.senderId is string
+          && (request.resource.data.forwardedFrom.get('sourceName', null) == null
+            || request.resource.data.forwardedFrom.get('sourceName', null) is string)
+          && (request.resource.data.forwardedFrom.get('senderName', null) == null
+            || request.resource.data.forwardedFrom.get('senderName', null) is string)
+          && (request.resource.data.forwardedFrom.get('chatId', null) == null
+            || request.resource.data.forwardedFrom.get('chatId', null) is string)
+          && (request.resource.data.forwardedFrom.get('channelId', null) == null
+            || request.resource.data.forwardedFrom.get('channelId', null) is string)
+          && (request.resource.data.forwardedFrom.get('groupId', null) == null
+            || request.resource.data.forwardedFrom.get('groupId', null) is string)
+          && (request.resource.data.forwardedFrom.get('messageId', null) == null
+            || request.resource.data.forwardedFrom.get('messageId', null) is string)
+          && (request.resource.data.forwardedFrom.get('postId', null) == null
+            || request.resource.data.forwardedFrom.get('postId', null) is string));
+    }
+
     function validNewMessage(groupId, messageId) {
       let afterGroup = getAfter(groupPath(groupId));
       return request.resource.data.keys().hasOnly([
           'text', 'imageUrl', 'voiceUrl', 'duration', 'waveform', 'senderId',
           'senderName', 'senderAvatarUrl', 'replyTo', 'createdAt', 'readBy',
-          'reactions'
+          'reactions', 'forwardedFrom'
         ])
         && request.resource.data.keys().hasAll([
           'text', 'senderId', 'senderName', 'createdAt', 'readBy', 'reactions'
@@ -242,6 +271,7 @@ service cloud.firestore {
         && request.resource.data.readBy is list
         && request.resource.data.readBy.hasOnly([request.auth.uid])
         && request.resource.data.reactions is map
+        && validForwardedFrom()
         && afterGroup.data.lastMessage.messageId == messageId
         && afterGroup.data.lastMessage.senderId == request.auth.uid
         && afterGroup.data.lastMessage.senderName == request.resource.data.senderName

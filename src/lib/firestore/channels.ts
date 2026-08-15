@@ -22,7 +22,8 @@ import {
   documentId,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { ForwardableContent, ForwardedFrom } from "@/types/forward";
+import type { ForwardableContent } from "@/types/forward";
+import { buildForwardedFrom } from "@/lib/forwarding";
 import {
   Channel,
   ChannelPost,
@@ -586,6 +587,9 @@ export async function forwardMessageToChannel(
     authorId: myUid,
     text: original.text || "",
     imageUrl: original.imageUrl || null,
+    voiceUrl: original.voiceUrl || null,
+    duration: original.duration ?? null,
+    waveform: original.waveform ?? null,
     createdAt: serverTimestamp(),
     reactions: {},
     commentCount: 0,
@@ -603,18 +607,6 @@ export async function forwardMessageToChannel(
   await updateDoc(doc(db, "channels", channelId), channelUpdate);
 }
 
-function buildForwardedFrom(original: ForwardableContent): ForwardedFrom {
-  if (original.forwardedFrom) return original.forwardedFrom;
-  return {
-    sourceType: original.channelId ? "channel" : "chat",
-    chatId: original.chatId ?? null,
-    channelId: original.channelId ?? null,
-    groupId: original.groupId ?? null,
-    postId: original.postId ?? null,
-    senderId: original.senderId,
-    senderName: original.senderName ?? null,
-  };
-}
 
 export async function updateChannelInfo(
   channelId: string,

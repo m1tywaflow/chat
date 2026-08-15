@@ -15,6 +15,7 @@ import {
   forwardMessageToChat,
 } from "@/lib/firestore/chats";
 import { forwardMessageToChannel } from "@/lib/firestore/channels";
+import { forwardMessageToGroup } from "@/lib/firestore/groups";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc } from "firebase/firestore";
@@ -43,6 +44,7 @@ import {
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
 import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
+import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import {
   CUSTOM_EMOJIS,
@@ -1261,9 +1263,14 @@ export default function ChatWindow() {
             await forwardMessageToChat(targetChatId, myUid, {
               text: forwardData.text,
               imageUrl: forwardData.imageUrl,
+              voiceUrl: forwardData.voiceUrl,
+              duration: forwardData.duration,
+              waveform: forwardData.waveform,
               senderId: forwardData.senderId,
               senderName: resolveForwardSenderName(forwardData),
               chatId: chatId!,
+              messageId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
             });
             setForwardData(null);
           }}
@@ -1271,9 +1278,29 @@ export default function ChatWindow() {
             await forwardMessageToChannel(channelId, myUid, {
               text: forwardData.text,
               imageUrl: forwardData.imageUrl,
+              voiceUrl: forwardData.voiceUrl,
+              duration: forwardData.duration,
+              waveform: forwardData.waveform,
               senderId: forwardData.senderId,
               senderName: resolveForwardSenderName(forwardData),
               chatId: chatId!,
+              messageId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
+            });
+            setForwardData(null);
+          }}
+          onSelectGroup={async (groupId) => {
+            await forwardMessageToGroup(groupId, myUid, {
+              text: forwardData.text,
+              imageUrl: forwardData.imageUrl,
+              voiceUrl: forwardData.voiceUrl,
+              duration: forwardData.duration,
+              waveform: forwardData.waveform,
+              senderId: forwardData.senderId,
+              senderName: resolveForwardSenderName(forwardData),
+              chatId: chatId!,
+              messageId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
             });
             setForwardData(null);
           }}
@@ -1554,11 +1581,7 @@ export default function ChatWindow() {
                       </>
                     )}
 
-                    {m.forwardedFrom && (
-                      <div className="mb-1 text-[10px] font-semibold text-[#a893ff]/80 uppercase tracking-wide px-1">
-                        Forwarded from {m.forwardedFrom.senderName || "user"}
-                      </div>
-                    )}
+                    {m.forwardedFrom && <ForwardedFrom source={m.forwardedFrom} />}
 
                     {m.replyTo && (
                       <div

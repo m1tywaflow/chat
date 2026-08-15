@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { subscribeToUserChats } from "@/lib/firestore/chats";
 import { subscribeToMyChannels } from "@/lib/firestore/channels";
-import { X, Send, Megaphone } from "lucide-react";
+import { subscribeToUserGroups } from "@/lib/firestore/groups";
+import { X, Megaphone, Users } from "lucide-react";
 
 interface Props {
   myUid: string;
   onClose: () => void;
   onSelectChat: (chatId: string) => void;
   onSelectChannel: (channelId: string) => void;
+  onSelectGroup: (groupId: string) => void;
 }
 
 export default function ForwardPicker({
@@ -17,15 +19,19 @@ export default function ForwardPicker({
   onClose,
   onSelectChat,
   onSelectChannel,
+  onSelectGroup,
 }: Props) {
   const [chats, setChats] = useState<any[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToUserChats(myUid, setChats);
     return unsub;
   }, [myUid]);
+
+  useEffect(() => subscribeToUserGroups(myUid, setGroups), [myUid]);
 
   useEffect(() => {
     const unsub = subscribeToMyChannels(myUid, setChannels);
@@ -60,6 +66,16 @@ export default function ForwardPicker({
     }
   }
 
+  async function handleGroupClick(groupId: string) {
+    if (sendingId) return;
+    setSendingId(groupId);
+    try {
+      await onSelectGroup(groupId);
+    } finally {
+      setSendingId(null);
+    }
+  }
+
   const visibleChats = chats.filter((c) => !c.deleted);
 
   return (
@@ -82,7 +98,7 @@ export default function ForwardPicker({
         </div>
 
         <div className="overflow-y-auto chat-scroll flex-1">
-          {channels.length === 0 && visibleChats.length === 0 && (
+          {channels.length === 0 && groups.length === 0 && visibleChats.length === 0 && (
             <p className="text-xs text-zinc-500 px-4 py-3">
               Nothing to forward to yet.
             </p>
@@ -102,6 +118,21 @@ export default function ForwardPicker({
               {sendingId === c.id && (
                 <span className="ml-auto text-[10px] text-zinc-500">…</span>
               )}
+            </button>
+          ))}
+
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              disabled={!!sendingId}
+              onClick={() => handleGroupClick(g.id)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.05] transition-colors text-left disabled:opacity-50 cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-[#A78BFA]/15 text-[#A78BFA] shrink-0">
+                <Users size={14} />
+              </div>
+              <span className="truncate">{g.name}</span>
+              {sendingId === g.id && <span className="ml-auto text-[10px] text-zinc-500">...</span>}
             </button>
           ))}
 

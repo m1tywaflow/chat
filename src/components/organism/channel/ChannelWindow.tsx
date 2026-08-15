@@ -16,7 +16,10 @@ import {
   unpinChannelPost,
   markPostViewed,
   markChannelAsRead,
+  forwardMessageToChannel,
 } from "@/lib/firestore/channels";
+import { forwardMessageToChat } from "@/lib/firestore/chats";
+import { forwardMessageToGroup } from "@/lib/firestore/groups";
 import {
   Megaphone,
   Paperclip,
@@ -33,6 +36,7 @@ import {
   Check,
   Eye,
   ChevronDown,
+  Forward,
 } from "lucide-react";
 import { useChannelStore } from "@/store/channel-store";
 import {
@@ -43,6 +47,8 @@ import {
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ChannelInfoModal from "./ChannelInfoModal";
+import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
+import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "👍", "🔥"];
 
@@ -462,6 +468,7 @@ export default function ChannelWindow({
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
 
   const [editText, setEditText] = useState("");
+  const [forwardData, setForwardData] = useState<ChannelPost | null>(null);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -1014,8 +1021,6 @@ export default function ChannelWindow({
   }
 
   function openPostMenu(e: React.MouseEvent, postId: string) {
-    if (!isOwner) return;
-
     e.preventDefault();
 
     setPostMenu({
@@ -1289,6 +1294,7 @@ export default function ChannelWindow({
                 onContextMenu={(e) => openPostMenu(e, p.id)}
                 className="relative group max-w-[420px] flex flex-col items-start gap-1.5"
               >
+                {p.forwardedFrom && <ForwardedFrom source={p.forwardedFrom} />}
                 {isImageStickerPost ? (
                   <img
                     src={p.imageUrl!}
@@ -1349,6 +1355,7 @@ export default function ChannelWindow({
                 background: "var(--color-msg-bg)",
               }}
             >
+              {p.forwardedFrom && <ForwardedFrom source={p.forwardedFrom} />}
               {p.imageUrl && (
                 <img
                   src={p.imageUrl}
@@ -1476,7 +1483,7 @@ export default function ChannelWindow({
 
             return (
               <>
-                {!isImageStickerPost && (
+                {isOwner && !isImageStickerPost && (
                   <button
                     onClick={() => startEdit(post)}
                     className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
@@ -1486,7 +1493,7 @@ export default function ChannelWindow({
                   </button>
                 )}
 
-                <button
+                {isOwner && <button
                   onClick={() => togglePin(post)}
                   className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
                 >
@@ -1497,11 +1504,22 @@ export default function ChannelWindow({
                   )}
 
                   {pinned ? "Unpin" : "Pin"}
-                </button>
-
-                <div className="h-px bg-white/[0.06] my-1" />
+                </button>}
 
                 <button
+                  onClick={() => {
+                    setForwardData(post);
+                    setPostMenu(null);
+                  }}
+                  className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
+                >
+                  <Forward size={14} className="text-zinc-400" />
+                  Forward
+                </button>
+
+                {isOwner && <div className="h-px bg-white/[0.06] my-1" />}
+
+                {isOwner && <button
                   onClick={() => {
                     setDeleteConfirmId(post.id);
 
@@ -1511,7 +1529,7 @@ export default function ChannelWindow({
                 >
                   <Trash2 size={14} />
                   Delete
-                </button>
+                </button>}
               </>
             );
           })()}
@@ -1712,6 +1730,52 @@ export default function ChannelWindow({
           onCancel={() => setDeleteChannelConfirm(false)}
           onConfirm={confirmDeleteChat}
           confirmLabel="Delete"
+        />
+      )}
+
+      {forwardData && (
+        <ForwardPicker
+          myUid={myUid}
+          onClose={() => setForwardData(null)}
+          onSelectChat={async (targetChatId) => {
+            await forwardMessageToChat(targetChatId, myUid, {
+              text: forwardData.text || "",
+              imageUrl: forwardData.imageUrl,
+              senderId: forwardData.authorId,
+              senderName: channel?.ownerUsername || "Channel author",
+              channelId,
+              sourceName: channel?.name || "Channel",
+              postId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
+            });
+            setForwardData(null);
+          }}
+          onSelectGroup={async (targetGroupId) => {
+            await forwardMessageToGroup(targetGroupId, myUid, {
+              text: forwardData.text || "",
+              imageUrl: forwardData.imageUrl,
+              senderId: forwardData.authorId,
+              senderName: channel?.ownerUsername || "Channel author",
+              channelId,
+              sourceName: channel?.name || "Channel",
+              postId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
+            });
+            setForwardData(null);
+          }}
+          onSelectChannel={async (targetChannelId) => {
+            await forwardMessageToChannel(targetChannelId, myUid, {
+              text: forwardData.text || "",
+              imageUrl: forwardData.imageUrl,
+              senderId: forwardData.authorId,
+              senderName: channel?.ownerUsername || "Channel author",
+              channelId,
+              sourceName: channel?.name || "Channel",
+              postId: forwardData.id,
+              forwardedFrom: forwardData.forwardedFrom || null,
+            });
+            setForwardData(null);
+          }}
         />
       )}
     </div>
