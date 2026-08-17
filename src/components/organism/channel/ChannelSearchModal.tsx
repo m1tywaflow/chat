@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Search, Check } from "lucide-react";
+import { X, Search, Check, Radio } from "lucide-react";
 import { Channel } from "@/types/channel";
 import {
   searchChannels,
@@ -28,6 +28,7 @@ export default function ChannelSearchModal({
   useEffect(() => {
     if (!term.trim()) {
       setResults([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -52,103 +53,157 @@ export default function ChannelSearchModal({
     }
   }
 
+  function handleOpen(channelId: string) {
+    onOpenChannel(channelId);
+    onClose();
+  }
+
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="w-[380px] max-h-[520px] flex flex-col rounded-2xl bg-[#0d0d1d] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+        className="relative w-[400px] h-[560px] flex flex-col rounded-md bg-[#0a0913]/95 border border-white/[0.07] shadow-[0_24px_80px_-12px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-2 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h3 className="text-[15px] font-semibold text-white">
-            Find a channel
-          </h3>
+        <div className="pointer-events-none absolute -top-24 -left-16 w-64 h-64 rounded-full bg-[#7c5cff]/20 blur-[80px] animate-pulse" />
+        <div className="pointer-events-none absolute -bottom-24 -right-16 w-64 h-64 rounded-full bg-[#4f46e5]/15 blur-[80px]" />
+
+        <div className="relative flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-sm bg-[#7c5cff]/15 border border-[#7c5cff]/20 flex items-center justify-center text-[#a78bfa]">
+              <Radio size={15} />
+            </div>
+            <h3 className="text-[16px] font-semibold text-white tracking-tight">
+              Find a channel
+            </h3>
+          </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-sm text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
-            <X size={14} />
+            <X size={15} />
           </button>
         </div>
-        <div className="px-5 pb-3 relative">
-          <Search
-            size={14}
-            className="absolute left-8 top-1/2 -translate-y-1/2 text-zinc-600"
-          />
-          <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Channel name"
-            autoFocus
-            className="w-full h-10 pl-9 pr-3.5 rounded-xl bg-white/[0.05] border border-white/[0.08] text-sm text-white placeholder:text-zinc-700 outline-none focus:border-[#A78BFA]/30 transition-all"
-          />
+
+        <div className="relative px-6 pb-4 shrink-0">
+          <div className="group relative">
+            <Search
+              size={15}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#a78bfa] transition-colors"
+            />
+            <input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Search by channel name"
+              autoFocus
+              className="w-full h-11 pl-11 pr-4 rounded-sm bg-white/[0.04] border border-white/[0.08] text-[13.5px] text-white placeholder:text-zinc-600 outline-none focus:bg-white/[0.06] focus:border-[#7c5cff]/40 focus:shadow-[0_0_0_4px_rgba(124,92,255,0.08)] transition-all"
+            />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
+
+        <div className="relative flex-1 min-h-0 overflow-y-auto px-3 pb-3">
           {loading && (
-            <div className="px-5 py-4 text-xs text-zinc-600">Ищем…</div>
+            <div className="space-y-1.5 px-2 py-1">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-sm animate-pulse"
+                >
+                  <div className="shrink-0 w-10 h-10 rounded-full bg-white/[0.06]" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-2/5 rounded-sm bg-white/[0.06]" />
+                    <div className="h-2.5 w-1/4 rounded-sm bg-white/[0.04]" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+
           {!loading && term.trim() && results.length === 0 && (
-            <div className="px-5 py-4 text-xs text-zinc-600">Nothing found</div>
+            <div className="flex flex-col items-center justify-center gap-2.5 h-full px-6 text-center">
+              <div className="w-11 h-11 rounded-sm bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-600">
+                <Search size={16} />
+              </div>
+              <div className="text-[13px] text-zinc-500">
+                No channels match &ldquo;{term.trim()}&rdquo;
+              </div>
+            </div>
           )}
-          {results.map((ch) => {
-            const isSub = subscribed.has(ch.id);
-            const isOwner = ch.ownerId === uid;
-            return (
-              <div
-                key={ch.id}
-                className="flex items-center gap-3 px-5 py-2.5 border-t border-white/[0.05] hover:bg-white/[0.02] transition-colors cursor-pointer"
-                onClick={() => onOpenChannel(ch.id)}
-              >
-                <div className="shrink-0 w-10 h-10 rounded-full bg-[#A78BFA]/15 flex items-center justify-center overflow-hidden text-[#A78BFA] text-sm font-semibold">
-                  {ch.avatarUrl ? (
-                    <img
-                      src={ch.avatarUrl}
-                      alt={ch.name}
-                      className="w-full h-full object-cover"
-                    />
+
+          {!loading && !term.trim() && (
+            <div className="flex flex-col items-center justify-center gap-2.5 h-full px-6 text-center">
+              <div className="w-11 h-11 rounded-sm bg-[#7c5cff]/10 border border-[#7c5cff]/15 flex items-center justify-center text-[#a78bfa]">
+                <Radio size={16} />
+              </div>
+              <div className="text-[13px] text-zinc-500">
+                Start typing to find channels
+              </div>
+            </div>
+          )}
+
+          {!loading &&
+            results.map((ch) => {
+              const isSub = subscribed.has(ch.id);
+              const isOwner = ch.ownerId === uid;
+              return (
+                <div
+                  key={ch.id}
+                  onClick={() => handleOpen(ch.id)}
+                  className="group flex items-center gap-3 px-3 py-2.5 rounded-sm hover:bg-white/[0.04] transition-colors cursor-pointer"
+                >
+                  <div className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden">
+                    <div className="absolute inset-0 rounded-full ring-1 ring-white/[0.06] group-hover:ring-[#7c5cff]/40 transition-all" />
+                    {ch.avatarUrl ? (
+                      <img
+                        src={ch.avatarUrl}
+                        alt={ch.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#7c5cff]/25 to-[#4f46e5]/15 flex items-center justify-center text-[#c4b5fd] text-sm font-semibold">
+                        {ch.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-medium text-white truncate">
+                      {ch.name}
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {ch.subscriberCount} subscribers
+                    </div>
+                  </div>
+                  {isOwner ? (
+                    <span className="shrink-0 px-3 py-1.5 rounded-sm text-[11.5px] font-medium bg-white/[0.04] text-zinc-500 border border-white/[0.07]">
+                      Your channel
+                    </span>
                   ) : (
-                    ch.name.charAt(0).toUpperCase()
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSub(ch.id, ch.ownerId);
+                      }}
+                      className={`shrink-0 px-3 py-1.5 rounded-sm text-[11.5px] font-medium transition-all cursor-pointer ${
+                        isSub
+                          ? "bg-[#34D399]/10 text-[#34D399] border border-[#34D399]/20 hover:bg-[#34D399]/[0.15]"
+                          : "bg-[#7c5cff]/15 text-[#a78bfa] border border-[#7c5cff]/25 hover:bg-[#7c5cff]/25"
+                      }`}
+                    >
+                      {isSub ? (
+                        <span className="flex items-center gap-1">
+                          <Check size={11} />
+                          Subscribed
+                        </span>
+                      ) : (
+                        "Subscribe"
+                      )}
+                    </button>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">
-                    {ch.name}
-                  </div>
-                  <div className="text-[11px] text-zinc-500">
-                    {ch.subscriberCount} subscribers
-                  </div>
-                </div>
-                {isOwner ? (
-                  <span className="shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.05] text-zinc-500 border border-white/[0.08]">
-                    Your channel
-                  </span>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSub(ch.id, ch.ownerId);
-                    }}
-                    className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
-                      isSub
-                        ? "bg-[#34D399]/10 text-[#34D399] border border-[#34D399]/20"
-                        : "bg-[#A78BFA]/10 text-[#A78BFA] border border-[#A78BFA]/20 hover:bg-[#A78BFA]/20"
-                    }`}
-                  >
-                    {isSub ? (
-                      <span className="flex items-center gap-1">
-                        <Check size={12} />
-                        You are subscribed.
-                      </span>
-                    ) : (
-                      "Subscribe"
-                    )}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
     </div>
