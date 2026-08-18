@@ -1,69 +1,3 @@
-// import { Channel } from "@/types/channel";
-// import { Group } from "@/types/group";
-
-// export type ConversationItem =
-//   | { type: "chat"; id: string; data: any; sortTime: number }
-//   | { type: "channel"; id: string; data: Channel; sortTime: number }
-//   | { type: "group"; id: string; data: Group; sortTime: number };
-
-// function toMillis(ts: any): number {
-//   if (!ts) return 0;
-//   if (typeof ts.toMillis === "function") return ts.toMillis();
-//   if (typeof ts === "string") return new Date(ts).getTime() || 0;
-//   return 0;
-// }
-
-// export function buildConversationItems(
-//   chats: any[],
-//   channels: Channel[],
-//   groups: Group[] = []
-// ): ConversationItem[] {
-//   const chatItems: ConversationItem[] = chats.map((c) => ({
-//     type: "chat",
-//     id: c.id,
-//     data: c,
-//     sortTime: toMillis(c.lastMessageTime),
-//   }));
-//   const channelItems: ConversationItem[] = channels.map((c) => ({
-//     type: "channel",
-//     id: c.id,
-//     data: c,
-//     sortTime: toMillis(c.lastPostAt),
-//   }));
-//   const groupItems: ConversationItem[] = groups.map((g) => ({
-//     type: "group",
-//     id: g.id,
-//     data: g,
-//     sortTime: toMillis(g.lastMessage?.createdAt) || toMillis(g.createdAt),
-//   }));
-//   return [...chatItems, ...channelItems, ...groupItems];
-// }
-
-// export function sortConversationItems(
-//   items: ConversationItem[],
-//   orderMap: Record<string, number> | undefined
-// ): ConversationItem[] {
-//   return [...items].sort((a, b) => {
-//     const oa = orderMap?.[a.id];
-//     const ob = orderMap?.[b.id];
-//     if (oa !== undefined && ob !== undefined) return oa - ob;
-//     if (oa !== undefined) return 1;
-//     if (ob !== undefined) return -1;
-//     return b.sortTime - a.sortTime;
-//   });
-// }
-
-// export function mergeConversations(
-//   chats: any[],
-//   channels: Channel[],
-//   groups: Group[] = [],
-//   orderMap?: Record<string, number>
-// ): ConversationItem[] {
-//   return sortConversationItems(
-//     buildConversationItems(chats, channels, groups),
-//     orderMap
-//   );
-// }
 import { Channel } from "@/types/channel";
 import { Group } from "@/types/group";
 import { useChatStore } from "@/store/chat-store";
@@ -120,6 +54,9 @@ export function sortConversationItems(
     if (ob !== undefined) return -1;
     return b.sortTime - a.sortTime;
   });
+}
+export function sortByRecency(items: ConversationItem[]): ConversationItem[] {
+  return [...items].sort((a, b) => b.sortTime - a.sortTime);
 }
 
 export function mergeConversations(
