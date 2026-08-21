@@ -5,7 +5,6 @@ import { Room, RoomEvent, Track } from "livekit-client";
 import { Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import { useCallStore } from "@/store/call-store";
 import { endCall, subscribeToCall } from "@/lib/calls";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function CallWindow() {
     const {
@@ -16,9 +15,8 @@ export default function CallWindow() {
         toggleMute,
         toggleCamera,
         resetCall,
+        myUid,
     } = useCallStore();
-
-    const { firebaseUser } = useCurrentUser();
     const roomRef = useRef<Room | null>(null);
     const localVideoRef = useRef<HTMLVideoElement | null>(null);
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -146,12 +144,12 @@ export default function CallWindow() {
     if (!activeCall) return null;
 
     const otherName =
-        activeCall.callerId === firebaseUser?.uid
+        activeCall.callerId === myUid
             ? activeCall.calleeName
             : activeCall.callerName;
 
     const otherAvatar =
-        activeCall.callerId === firebaseUser?.uid
+        activeCall.callerId === myUid
             ? activeCall.calleeAvatar
             : activeCall.callerAvatar;
 
@@ -221,8 +219,8 @@ export default function CallWindow() {
                         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08]">
                             <span
                                 className={`w-1.5 h-1.5 rounded-full ${remoteConnected
-                                        ? "bg-[#34D399] shadow-[0_0_6px_#34D399]"
-                                        : "bg-[#a996ff] animate-pulse"
+                                    ? "bg-[#34D399] shadow-[0_0_6px_#34D399]"
+                                    : "bg-[#a996ff] animate-pulse"
                                     }`}
                             />
                             <span className="text-[11px] font-medium text-white/60 tracking-wide">
@@ -280,8 +278,8 @@ export default function CallWindow() {
                             onClick={handleToggleMute}
                             title={isMuted ? "Unmute" : "Mute"}
                             className={`call-btn w-13 h-13 w-[52px] h-[52px] flex items-center justify-center border backdrop-blur-sm ${isMuted
-                                    ? "bg-white text-[#0d0b17] border-white"
-                                    : "bg-white/[0.06] text-white border-white/[0.12] hover:bg-white/[0.1]"
+                                ? "bg-white text-[#0d0b17] border-white"
+                                : "bg-white/[0.06] text-white border-white/[0.12] hover:bg-white/[0.1]"
                                 }`}
                         >
                             {isMuted ? <MicOff size={19} /> : <Mic size={19} />}
@@ -292,8 +290,8 @@ export default function CallWindow() {
                                 onClick={handleToggleCamera}
                                 title={isCameraOff ? "Turn camera on" : "Turn camera off"}
                                 className={`call-btn w-[52px] h-[52px] flex items-center justify-center border backdrop-blur-sm ${isCameraOff
-                                        ? "bg-white text-[#0d0b17] border-white"
-                                        : "bg-white/[0.06] text-white border-white/[0.12] hover:bg-white/[0.1]"
+                                    ? "bg-white text-[#0d0b17] border-white"
+                                    : "bg-white/[0.06] text-white border-white/[0.12] hover:bg-white/[0.1]"
                                     }`}
                             >
                                 {isCameraOff ? <VideoOff size={19} /> : <Video size={19} />}

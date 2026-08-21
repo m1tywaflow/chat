@@ -6,7 +6,7 @@ import { acceptCall, declineCall, fetchLiveKitToken } from "@/lib/calls";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function IncomingCallModal() {
-    const { incomingCall, setIncomingCall, setActiveCall, setLivekitToken } =
+    const { incomingCall, setIncomingCall, setActiveCall, setLivekitToken, setMyUid } =
         useCallStore();
     const { firebaseUser } = useCurrentUser();
 
@@ -15,12 +15,16 @@ export default function IncomingCallModal() {
     const handleAccept = async () => {
         if (!firebaseUser) return;
         await acceptCall(incomingCall.id);
+        // incomingCall.calleeName is our own username — firebaseUser.displayName
+        // is always null here because auth uses a fake email/password login,
+        // so relying on it was making LiveKit register us as literal "User"
         const token = await fetchLiveKitToken(
             incomingCall.roomName,
             firebaseUser.uid,
-            firebaseUser.displayName ?? "User"
+            incomingCall.calleeName || firebaseUser.displayName || "User"
         );
         setLivekitToken(token);
+        setMyUid(firebaseUser.uid);
         setActiveCall(incomingCall);
         setIncomingCall(null);
     };
