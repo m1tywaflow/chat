@@ -2511,6 +2511,7 @@ export default function ChatWindow() {
   const markOpened = useChatStore((s) => s.markOpened);
   const setActiveCall = useCallStore((s) => s.setActiveCall);
   const setLivekitToken = useCallStore((s) => s.setLivekitToken);
+  const setCallStoreMyUid = useCallStore((s) => s.setMyUid);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
@@ -3109,9 +3110,7 @@ export default function ChatWindow() {
       }));
   }
 
-  // works out the display name of whoever actually wrote the message being
-  // forwarded — not just "the other person in this chat", since you can
-  // forward your own messages too, and the source chat isn't always this one
+
   function resolveForwardSenderName(m: any): string {
     if (!m) return "user";
     if (m.senderId === myUid) return "You";
@@ -3121,8 +3120,6 @@ export default function ChatWindow() {
   async function handleStartCall(type: "audio" | "video") {
     if (!myUid || !chatId || !otherUser?.id) return;
 
-    // pull the real username + avatar so the other side sees who's actually
-    // calling, instead of the literal placeholder string "You"
     let myName = "User";
     let myAvatar: string | null = null;
     try {
@@ -3130,16 +3127,11 @@ export default function ChatWindow() {
       if (mySnap.exists()) {
         const data = mySnap.data();
         myName = data?.username || myName;
-        myAvatar = data?.avatarUrl ?? null;
+        myAvatar = data?.avatar ?? null;
       }
-
     } catch (err) {
       console.error("Failed to load own profile for call:", err);
     }
-    console.log("=== CALL DEBUG ===");
-    console.log("otherUser:", otherUser);
-    console.log("otherUser.avatar:", otherUser.avatar);
-    console.log("myAvatar:", myAvatar);
 
     const { callId, roomName } = await createCall({
       callerId: myUid,
@@ -3147,7 +3139,7 @@ export default function ChatWindow() {
       callerAvatar: myAvatar,
       calleeId: otherUser.id,
       calleeName: otherUser.username ?? "User",
-      calleeAvatar: otherUser.avatarUrl ?? null,
+      calleeAvatar: otherUser.avatar ?? null,
       chatId,
       type,
     });
@@ -3155,6 +3147,7 @@ export default function ChatWindow() {
     const token = await fetchLiveKitToken(roomName, myUid, myName);
 
     setLivekitToken(token);
+    setCallStoreMyUid(myUid);
     setActiveCall({
       id: callId,
       roomName,
@@ -3165,7 +3158,7 @@ export default function ChatWindow() {
       callerAvatar: myAvatar,
       calleeId: otherUser.id,
       calleeName: otherUser.username ?? "User",
-      calleeAvatar: otherUser.avatarUrl ?? null,
+      calleeAvatar: otherUser.avatar ?? null, // было otherUser.avatarUrl
       chatId,
     } as any);
   }
