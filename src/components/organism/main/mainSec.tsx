@@ -62,6 +62,7 @@ import GroupWindow from "../group/groupWindow";
 import PostCommentsView from "../channel/PostCommentsView";
 import { useChannelStore } from "@/store/channel-store";
 import { useGroupStore } from "@/store/group-store";
+import { useCallStore } from "@/store/call-store";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCallListener } from "@/hooks/useCallListener";
 import IncomingCallModal from "../calls/IncomingCallModal";
@@ -72,6 +73,7 @@ export default function MainSection() {
   const activeCommentsPostId = useChannelStore((s) => s.activeCommentsPostId);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const { firebaseUser } = useCurrentUser();
+  const activeCallId = useCallStore((s) => s.activeCall?.id);
 
   useCallListener(firebaseUser?.uid);
 
@@ -110,7 +112,7 @@ export default function MainSection() {
       </div>
 
       <IncomingCallModal />
-      <CallWindow />
+      <CallWindow key={activeCallId} />
     </section>
   );
 }
