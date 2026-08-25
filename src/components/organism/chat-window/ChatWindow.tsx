@@ -18,7 +18,7 @@
 // import { forwardMessageToGroup } from "@/lib/firestore/groups";
 // import { auth, db } from "@/lib/firebase";
 // import { onAuthStateChanged } from "firebase/auth";
-// import { onSnapshot, doc, updateDoc } from "firebase/firestore";
+// import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
 
 // import {
 //   X,
@@ -40,6 +40,8 @@
 //   ChevronDown,
 //   Smile,
 //   Forward,
+//   Phone,
+//   Video,
 // } from "lucide-react";
 // import ProfileModal from "../profile-modal/ProfileModal";
 // import MediaGallery from "../media-gallery/MediaGallery";
@@ -56,6 +58,8 @@
 // import VoiceBubble from "@/components/atoms/VoiceBubble";
 // import VoiceRecordButton from "@/components/atoms/recordButton";
 // import { sendVoiceMessage } from "@/lib/firestore/chats";
+// import { createCall, fetchLiveKitToken } from "@/lib/calls";
+// import { useCallStore } from "@/store/call-store";
 
 // const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 // const REACTION_OPTIONS = [
@@ -149,8 +153,7 @@
 //   formData.append("upload_preset", "jhravxtb");
 //   formData.append("folder", isVid ? "chat_videos" : "chat_images");
 //   const res = await fetch(
-//     `https://api.cloudinary.com/v1_1/dgylh67ms/${
-//       isVid ? "video" : "image"
+//     `https://api.cloudinary.com/v1_1/dgylh67ms/${isVid ? "video" : "image"
 //     }/upload`,
 //     { method: "POST", body: formData }
 //   );
@@ -283,9 +286,8 @@
 // }) {
 //   const content = (
 //     <span
-//       className={`inline-flex items-center gap-1 leading-none tabular-nums select-none whitespace-nowrap ${
-//         variant === "pill" ? "text-[11px] text-white/90" : "text-[11px]"
-//       } ${variant === "inline" && isMine ? "text-white/65" : ""}`}
+//       className={`inline-flex items-center gap-1 leading-none tabular-nums select-none whitespace-nowrap ${variant === "pill" ? "text-[11px] text-white/90" : "text-[11px]"
+//         } ${variant === "inline" && isMine ? "text-white/65" : ""}`}
 //       style={
 //         variant === "inline" && !isMine
 //           ? { color: "var(--color-text)", opacity: 0.55 }
@@ -299,8 +301,8 @@
 //             variant === "pill"
 //               ? "text-white/90"
 //               : isRead
-//               ? "text-[#d7c3ff]"
-//               : "text-white/60"
+//                 ? "text-[#d7c3ff]"
+//                 : "text-white/60"
 //           }
 //         >
 //           <StatusTick pending={pending} isRead={isRead} />
@@ -390,6 +392,9 @@
 // export default function ChatWindow() {
 //   const chatId = useChatStore((s) => s.activeChatId);
 //   const markOpened = useChatStore((s) => s.markOpened);
+//   const setActiveCall = useCallStore((s) => s.setActiveCall);
+//   const setLivekitToken = useCallStore((s) => s.setLivekitToken);
+//   const setCallStoreMyUid = useCallStore((s) => s.setMyUid);
 
 //   const [messages, setMessages] = useState<any[]>([]);
 //   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
@@ -522,7 +527,7 @@
 //       if (myUid && isWindowVisible) {
 //         msgs.forEach((m) => {
 //           if (m.senderId !== myUid && !(m.readBy || []).includes(myUid)) {
-//             markMessageRead(chatId, m.id, myUid).catch(() => {});
+//             markMessageRead(chatId, m.id, myUid).catch(() => { });
 //           }
 //         });
 //       }
@@ -548,7 +553,7 @@
 //       if (unread > 0 && isWindowVisible) {
 //         updateDoc(doc(db, "chats", chatId), {
 //           [`unreadCount.${myUid}`]: 0,
-//         }).catch(() => {});
+//         }).catch(() => { });
 //       }
 //     });
 //     return () => unsub();
@@ -559,7 +564,7 @@
 //     if (!chatId || !myUid) return;
 //     markOpened(chatId);
 //     updateDoc(doc(db, "chats", chatId), { [`unreadCount.${myUid}`]: 0 }).catch(
-//       () => {}
+//       () => { }
 //     );
 //   }, [chatId, myUid]);
 
@@ -805,10 +810,10 @@
 //       isLocalVideo: wasVideo,
 //       replyTo: currentReply
 //         ? {
-//             id: currentReply.id,
-//             text: currentReply.text,
-//             imageUrl: currentReply.imageUrl,
-//           }
+//           id: currentReply.id,
+//           text: currentReply.text,
+//           imageUrl: currentReply.imageUrl,
+//         }
 //         : null,
 //       createdAt: new Date(),
 //       readBy: [],
@@ -915,12 +920,12 @@
 //       prev?.id === msgId
 //         ? null
 //         : {
-//             id: msgId,
-//             x: e.clientX,
-//             y: openUpward ? rect.top : rect.bottom,
-//             openUpward,
-//             isMine,
-//           }
+//           id: msgId,
+//           x: e.clientX,
+//           y: openUpward ? rect.top : rect.bottom,
+//           openUpward,
+//           isMine,
+//         }
 //     );
 //     setPickerOpenId(null);
 //   }
@@ -988,13 +993,57 @@
 //       }));
 //   }
 
-//   // works out the display name of whoever actually wrote the message being
-//   // forwarded — not just "the other person in this chat", since you can
-//   // forward your own messages too, and the source chat isn't always this one
+
 //   function resolveForwardSenderName(m: any): string {
 //     if (!m) return "user";
 //     if (m.senderId === myUid) return "You";
 //     return otherUser?.username || "user";
+//   }
+
+//   async function handleStartCall(type: "audio" | "video") {
+//     if (!myUid || !chatId || !otherUser?.id) return;
+
+//     let myName = "User";
+//     let myAvatar: string | null = null;
+//     try {
+//       const mySnap = await getDoc(doc(db, "users", myUid));
+//       if (mySnap.exists()) {
+//         const data = mySnap.data();
+//         myName = data?.username || myName;
+//         myAvatar = data?.avatar ?? null;
+//       }
+//     } catch (err) {
+//       console.error("Failed to load own profile for call:", err);
+//     }
+
+//     const { callId, roomName } = await createCall({
+//       callerId: myUid,
+//       callerName: myName,
+//       callerAvatar: myAvatar,
+//       calleeId: otherUser.id,
+//       calleeName: otherUser.username ?? "User",
+//       calleeAvatar: otherUser.avatar ?? null,
+//       chatId,
+//       type,
+//     });
+
+//     const token = await fetchLiveKitToken(roomName, myUid, myName);
+
+//     setLivekitToken(token);
+//     setCallStoreMyUid(myUid);
+//     setActiveCall({
+//       id: callId,
+//       roomName,
+//       type,
+//       status: "ringing",
+//       callerId: myUid,
+//       callerName: myName,
+//       callerAvatar: myAvatar,
+//       calleeId: otherUser.id,
+//       calleeName: otherUser.username ?? "User",
+//       calleeAvatar: otherUser.avatar ?? null, // было otherUser.avatarUrl
+//       chatId,
+//     } as any);
 //   }
 
 //   if (!chatId) {
@@ -1107,9 +1156,9 @@
 //           style={
 //             msgMenu.openUpward
 //               ? {
-//                   bottom: window.innerHeight - msgMenu.y,
-//                   right: window.innerWidth - msgMenu.x - 8,
-//                 }
+//                 bottom: window.innerHeight - msgMenu.y,
+//                 right: window.innerWidth - msgMenu.x - 8,
+//               }
 //               : { top: msgMenu.y, right: window.innerWidth - msgMenu.x - 8 }
 //           }
 //           onClick={(e) => e.stopPropagation()}
@@ -1361,9 +1410,8 @@
 //                     title={GIFTS[otherUser.featuredGift].name}
 //                     className="shrink-0 w-4 h-4 object-contain"
 //                     style={{
-//                       filter: `drop-shadow(0 0 3px ${
-//                         RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
-//                       }90)`,
+//                       filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
+//                         }90)`,
 //                     }}
 //                   />
 //                 )}
@@ -1380,56 +1428,72 @@
 //                 </span>
 //               )}
 //             </button>
-//             <div className="relative  items-center " ref={menuRef}>
+//             <div className="flex items-center gap-1">
 //               <button
-//                 onClick={() => setMenuOpen((v) => !v)}
-//                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                 onClick={() => handleStartCall("audio")}
+//                 title="Voice call"
+//                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
 //               >
-//                 <MoreVertical size={16} />
+//                 <Phone size={16} />
 //               </button>
-//               {galleryOpen && chatId && (
-//                 <MediaGallery
-//                   chatId={chatId}
-//                   onClose={() => setGalleryOpen(false)}
-//                 />
-//               )}
-//               {menuOpen && (
-//                 <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
-//                   <button
-//                     onClick={() => {
-//                       setGalleryOpen(true);
-//                       setMenuOpen(false);
-//                     }}
-//                     className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors"
-//                   >
-//                     <ImageIcon size={14} />
-//                     Media gallery
-//                   </button>
-//                   <div className="h-px bg-white/[0.06]" />
-//                   <button
-//                     onClick={() => {
-//                       setDeleteChatConfirm(true);
-//                       setMenuOpen(false);
-//                     }}
-//                     className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
-//                   >
-//                     <Trash2 size={14} />
-//                     Delete chat
-//                   </button>
-//                   <button
-//                     onClick={() => wallpaperInputRef.current?.click()}
-//                     className="w-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
-//                   >
-//                     Change wallpaper
-//                   </button>
-//                   <button
-//                     onClick={removeWallpaper}
-//                     className="w-full px-4 py-2 text-sm text-red-400 hover:bg-white/5"
-//                   >
-//                     Remove wallpaper
-//                   </button>
-//                 </div>
-//               )}
+//               <button
+//                 onClick={() => handleStartCall("video")}
+//                 title="Video call"
+//                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
+//               >
+//                 <Video size={16} />
+//               </button>
+//               <div className="relative  items-center " ref={menuRef}>
+//                 <button
+//                   onClick={() => setMenuOpen((v) => !v)}
+//                   className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                 >
+//                   <MoreVertical size={16} />
+//                 </button>
+//                 {galleryOpen && chatId && (
+//                   <MediaGallery
+//                     chatId={chatId}
+//                     onClose={() => setGalleryOpen(false)}
+//                   />
+//                 )}
+//                 {menuOpen && (
+//                   <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+//                     <button
+//                       onClick={() => {
+//                         setGalleryOpen(true);
+//                         setMenuOpen(false);
+//                       }}
+//                       className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors"
+//                     >
+//                       <ImageIcon size={14} />
+//                       Media gallery
+//                     </button>
+//                     <div className="h-px bg-white/[0.06]" />
+//                     <button
+//                       onClick={() => {
+//                         setDeleteChatConfirm(true);
+//                         setMenuOpen(false);
+//                       }}
+//                       className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
+//                     >
+//                       <Trash2 size={14} />
+//                       Delete chat
+//                     </button>
+//                     <button
+//                       onClick={() => wallpaperInputRef.current?.click()}
+//                       className="w-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+//                     >
+//                       Change wallpaper
+//                     </button>
+//                     <button
+//                       onClick={removeWallpaper}
+//                       className="w-full px-4 py-2 text-sm text-red-400 hover:bg-white/5"
+//                     >
+//                       Remove wallpaper
+//                     </button>
+//                   </div>
+//                 )}
+//               </div>
 //             </div>
 //           </div>
 //           {pinnedMessage && (
@@ -1499,9 +1563,8 @@
 //                 )}
 //                 <div
 //                   id={`msg-${m.id}`}
-//                   className={`msg-row flex ${
-//                     isMine ? "justify-end" : "justify-start"
-//                   } ${hasReactions ? "mb-2" : ""}`}
+//                   className={`msg-row flex ${isMine ? "justify-end" : "justify-start"
+//                     } ${hasReactions ? "mb-2" : ""}`}
 //                   onContextMenu={(e) => {
 //                     if (!m.deleted && !m.pending) openMsgMenu(e, m.id, isMine);
 //                   }}
@@ -1509,11 +1572,9 @@
 //                   <div className="relative group max-w-[72%] min-w-0">
 //                     {isPickerOpen && (
 //                       <div
-//                         className={`reaction-picker absolute z-30 bottom-full mb-2 ${
-//                           isMine ? "right-0" : "left-0"
-//                         } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${
-//                           pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
-//                         }`}
+//                         className={`reaction-picker absolute z-30 bottom-full mb-2 ${isMine ? "right-0" : "left-0"
+//                           } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
+//                           }`}
 //                         onClick={(e) => e.stopPropagation()}
 //                       >
 //                         {!pickerExpanded ? (
@@ -1556,18 +1617,16 @@
 //                         <button
 //                           onClick={() => handleReply(m)}
 //                           title="Reply"
-//                           className={`reply-btn absolute top-1/2 -translate-y-1/2 ${
-//                             isMine ? "-left-16" : "-right-16"
-//                           } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
+//                           className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-16" : "-right-16"
+//                             } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
 //                         >
 //                           <CornerUpLeft size={13} />
 //                         </button>
 //                         <button
 //                           onClick={(e) => openPicker(e, m.id)}
 //                           title="React"
-//                           className={`react-btn absolute top-1/2 -translate-y-1/2 ${
-//                             isMine ? "-left-8" : "-right-8"
-//                           } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
+//                           className={`react-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-8" : "-right-8"
+//                             } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
 //                         >
 //                           <span>😊</span>
 //                         </button>
@@ -1607,27 +1666,23 @@
 //                     <div
 //                       className={
 //                         isStickerMsg
-//                           ? `leading-none ${
-//                               m.pending ? "msg-bubble-pending" : ""
-//                             }`
-//                           : `text-sm leading-relaxed overflow-hidden ${
-//                               isMine
-//                                 ? "bg-gradient-to-r from-[#6b46f0] via-[#5b3df0] to-[#4028b0] text-white rounded-[18px] rounded-br-[8px] shadow-md shadow-[#5b3df0]/20"
-//                                 : "border border-white/[0.08] rounded-2xl rounded-bl-md"
-//                             } ${
-//                               !m.text && m.imageUrl && !m.deleted
-//                                 ? "p-1"
-//                                 : "px-4 py-2"
-//                             } ${isPinned ? "ring-1 ring-[#7c5cff]/40" : ""} ${
-//                               m.pending ? "msg-bubble-pending" : ""
-//                             }`
+//                           ? `leading-none ${m.pending ? "msg-bubble-pending" : ""
+//                           }`
+//                           : `text-sm leading-relaxed overflow-hidden ${isMine
+//                             ? "bg-gradient-to-r from-[#6b46f0] via-[#5b3df0] to-[#4028b0] text-white rounded-[18px] rounded-br-[8px] shadow-md shadow-[#5b3df0]/20"
+//                             : "border border-white/[0.08] rounded-2xl rounded-bl-md"
+//                           } ${!m.text && m.imageUrl && !m.deleted
+//                             ? "p-1"
+//                             : "px-4 py-2"
+//                           } ${isPinned ? "ring-1 ring-[#7c5cff]/40" : ""} ${m.pending ? "msg-bubble-pending" : ""
+//                           }`
 //                       }
 //                       style={
 //                         !isMine && !isStickerMsg
 //                           ? {
-//                               background: "var(--color-msg-bg)",
-//                               color: "var(--color-text)",
-//                             }
+//                             background: "var(--color-msg-bg)",
+//                             color: "var(--color-text)",
+//                           }
 //                           : undefined
 //                       }
 //                     >
@@ -1762,9 +1817,8 @@
 //                           ) : (
 //                             m.text && (
 //                               <div
-//                                 className={`flex items-end gap-2.5 flex-wrap justify-between ${
-//                                   m.imageUrl ? "px-3 pb-1 pt-2" : ""
-//                                 }`}
+//                                 className={`flex items-end gap-2.5 flex-wrap justify-between ${m.imageUrl ? "px-3 pb-1 pt-2" : ""
+//                                   }`}
 //                               >
 //                                 <span className="whitespace-pre-wrap break-words">
 //                                   <RichText text={m.text} />
@@ -1801,19 +1855,17 @@
 
 //                     {hasReactions && !m.deleted && (
 //                       <div
-//                         className={`flex flex-wrap gap-1 mt-1 ${
-//                           isMine ? "justify-end" : "justify-start"
-//                         }`}
+//                         className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"
+//                           }`}
 //                       >
 //                         {reactionSummary.map(({ token, count, mine }) => (
 //                           <button
 //                             key={token}
 //                             onClick={() => handleReact(m.id, token)}
-//                             className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${
-//                               mine
-//                                 ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff] backdrop-blur-sm"
-//                                 : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
-//                             }`}
+//                             className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${mine
+//                               ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff] backdrop-blur-sm"
+//                               : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
+//                               }`}
 //                           >
 //                             <ReactionGlyph token={token} size={15} />
 //                             <span className="font-medium">{count}</span>
@@ -2115,6 +2167,7 @@
 //     </>
 //   );
 // }
+
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
@@ -2184,8 +2237,6 @@ const REACTION_OPTIONS = [
   ...CUSTOM_EMOJIS.map((e) => e.id),
 ];
 
-// plain unicode emoji available for inline insertion into the composer text,
-// same idea as Telegram's default emoji tab
 const TEXT_EMOJIS = [
   "😀",
   "😁",
@@ -2237,23 +2288,16 @@ const TEXT_EMOJIS = [
   "🚀",
 ];
 
-// matches the ::sticker_id:: markers we embed inline in message text
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
-// non-global, used only for a yes/no check so it's safe to reuse .test()
-// without worrying about lastIndex state from repeated calls
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
 
-// true when the message text is made up of nothing but one or more
-// ::sticker_id:: tokens (no real words) — that's when we render them big,
-// same treatment Telegram gives a "sticker-only" message
 function isStickerOnlyText(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
-// how close to the bottom (px) counts as "at the bottom", Telegram-style
 const NEAR_BOTTOM_THRESHOLD = 120;
 
 function isVideo(url: string) {
@@ -2304,20 +2348,11 @@ function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
   );
 }
 
-/**
- * Renders message text with inline custom-sticker tokens (::sticker_id::)
- * swapped for small inline images, so a sticker can sit before/after/mid
- * plain text exactly like a Telegram custom emoji — while the underlying
- * composer input stays a normal <input> since the token is just text.
- */
 function RichText({
   text,
   variant = "inline",
 }: {
   text: string;
-  /** "inline" = small icon sitting in a line of text.
-   *  "large"  = big standalone sticker, used when the message has no
-   *  other text at all. */
   variant?: "inline" | "large";
 }) {
   const parts = text.split(STICKER_TOKEN_SPLIT_RE);
@@ -2345,8 +2380,7 @@ function RichText({
             );
           }
         }
-        // skip pure-whitespace fragments in "large" mode so several
-        // stickers in a row sit snugly without odd extra gaps
+
         if (variant === "large" && !part.trim()) return null;
         return part ? <span key={i}>{part}</span> : null;
       })}
@@ -2354,7 +2388,6 @@ function RichText({
   );
 }
 
-// mirrors Telegram: clock while sending, single check once sent, double once read
 function StatusTick({
   pending,
   isRead,
@@ -2379,13 +2412,7 @@ function StatusTick({
   );
 }
 
-/**
- * Single source of truth for "time + status" rendered on every one of the
- * user's own messages (text, image, or sticker). Telegram never hides this
- * on anything but the very last bubble in a row visually — but logically it
- * lives on every message; keeping one component means the baseline,
- * spacing, and tick size can never drift between message types again.
- */
+
 function MessageMeta({
   time,
   pending,
@@ -2397,8 +2424,6 @@ function MessageMeta({
   pending?: boolean;
   isMine: boolean;
   isRead: boolean;
-  /** "inline" sits directly in bubble flow (text/image captions).
-   *  "pill" is the frosted overlay used on bare media & stickers. */
   variant?: "inline" | "pill";
 }) {
   const content = (
@@ -2546,6 +2571,7 @@ export default function ChatWindow() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [forwardData, setForwardData] = useState<any | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -2566,14 +2592,13 @@ export default function ChatWindow() {
   );
   const mineMsgCountRef = useRef(0);
   const dragCounter = useRef(0);
-  // tracks where the caret was in the text input, so emoji/sticker taps
-  // insert at that position instead of always appending to the end
   const lastCaretPos = useRef<number>(0);
 
   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
-  // Guard against a stale Firestore callback updating the newly active chat.
-  activeChatIdRef.current = chatId;
+  useLayoutEffect(() => {
+    activeChatIdRef.current = chatId;
+  }, [chatId]);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -2589,7 +2614,6 @@ export default function ChatWindow() {
     return () => unsub();
   }, [chatId, myUid]);
 
-  // reset all per-chat scroll/unread tracking whenever the active chat changes
   useLayoutEffect(() => {
     setMessages([]);
     setPendingMessages([]);
@@ -2676,7 +2700,6 @@ export default function ChatWindow() {
     return () => unsub();
   }, [chatId, myUid, isWindowVisible]);
 
-  // reset unread badge the moment the chat is opened
   useEffect(() => {
     if (!chatId || !myUid) return;
     markOpened(chatId);
@@ -2685,9 +2708,6 @@ export default function ChatWindow() {
     );
   }, [chatId, myUid]);
 
-  // keep resetting the unread badge whenever a NEW message lands while this
-  // chat is already the open one (Telegram never lets the counter tick up
-  // while you're sitting inside the conversation)
 
   useEffect(() => {
     if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
@@ -2702,8 +2722,6 @@ export default function ChatWindow() {
     }
   }, []);
 
-  // track scroll position directly (no IntersectionObserver) so we always
-  // know, in real time, whether the user was sitting at the bottom
   function handleScroll() {
     const el = chatScrollRef.current;
     if (!el) return;
@@ -2722,8 +2740,6 @@ export default function ChatWindow() {
     if (isNearBottom.current) scrollToBottom();
   }
 
-  // initial positioning when a chat is opened, and auto-scroll on new
-  // messages — runs BEFORE paint so there is no visible jump/animation
   useLayoutEffect(() => {
     if (!chatId) return;
 
@@ -2738,11 +2754,6 @@ export default function ChatWindow() {
     scrollIntentRef.current = null;
   }, [chatId, messages, pendingMessages]);
 
-  // optimistic messages appear instantly — pin to bottom before paint too,
-  // so there is zero delay/flash between typing Enter and seeing the bubble
-  // the "typing…" indicator changes the height of the messages area — if
-  // the user is at the bottom, re-pin them to the bottom so it doesn't
-  // look like the screen jumped
   useLayoutEffect(() => {
     if (!chatId || initializedChatRef.current !== chatId) return;
     if (isNearBottom.current) {
@@ -2816,17 +2827,11 @@ export default function ChatWindow() {
     }, 1200);
   }
 
-  // keeps lastCaretPos in sync whenever the user moves the caret without
-  // changing the text (arrow keys, mouse click) so emoji/sticker taps land
-  // exactly where the cursor is, not always at the end of the string
   function trackCaret(e: React.SyntheticEvent<HTMLInputElement>) {
     lastCaretPos.current =
       e.currentTarget.selectionStart ?? e.currentTarget.value.length;
   }
 
-  // inserts a plain emoji or a ::sticker_id:: token at the last known caret
-  // position, then restores focus + caret so the user can keep typing right
-  // after the inserted content, same as Telegram's composer
   function insertEmoji(token: string) {
     const pos = lastCaretPos.current ?? text.length;
     const newText = text.slice(0, pos) + token + text.slice(pos);
@@ -2910,8 +2915,6 @@ export default function ChatWindow() {
     if (!hasText && !hasImage) return;
     if (!chatId || !myUid) return;
 
-    // capture everything we need before clearing the composer, since the
-    // state setters below only schedule updates and won't affect these
     const messageText = text;
     const currentReply = replyMessage;
     const fileToUpload = imageFile;
@@ -2938,8 +2941,6 @@ export default function ChatWindow() {
       pending: true,
     };
 
-    // everything below happens in the SAME tick — the bubble shows up
-    // immediately, in its final position, exactly like Telegram
     setPendingMessages((prev) => [...prev, optimisticMsg]);
     setText("");
     lastCaretPos.current = 0;
@@ -2960,8 +2961,6 @@ export default function ChatWindow() {
       await sendMessage(chatId, myUid, messageText, currentReply, imageUrl);
     } catch (err) {
       console.error("Send failed:", err);
-      // roll back: drop the failed bubble and give the text back so the
-      // person can retry without retyping everything
       setPendingMessages((prev) => prev.filter((p) => p.id !== tempId));
       setText((t) => t || messageText);
     } finally {
@@ -3021,9 +3020,6 @@ export default function ChatWindow() {
     setMsgMenu(null);
   }
 
-  // isMine is now purely informational for the menu (which items to show),
-  // it no longer gates whether the menu can open at all — every message,
-  // yours or theirs, can be opened for Reply/Copy/Pin/Forward
   function openMsgMenu(e: React.MouseEvent, msgId: string, isMine: boolean) {
     e.preventDefault();
     e.stopPropagation();
@@ -3225,6 +3221,34 @@ export default function ChatWindow() {
 
   return (
     <>
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <defs>
+          <filter
+            id="glass-distortion-composer"
+            x="0%"
+            y="0%"
+            width="100%"
+            height="100%"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.012 0.012"
+              numOctaves="2"
+              seed="17"
+              result="noise"
+            />
+            <feGaussianBlur in="noise" stdDeviation="2" result="blurred" />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="blurred"
+              scale="26"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+        </defs>
+      </svg>
+
       <style>{`
         .chat-scroll::-webkit-scrollbar { width: 4px; }
         .chat-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -3263,9 +3287,9 @@ export default function ChatWindow() {
         .ctx-item:hover { background: rgba(255,255,255,0.05); }
         .ctx-divider { height:1px; background:rgba(255,255,255,0.06); margin:2px 0; }
         .msg-bubble-pending { opacity: 0.75; transition: opacity 0.2s ease-out; }
+        .composer-tint { transition: box-shadow 0.15s ease, border-color 0.15s ease; }
       `}</style>
 
-      {/* Message context menu */}
       {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
         <div
           ref={msgMenuRef}
@@ -3346,7 +3370,6 @@ export default function ChatWindow() {
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxUrl && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
@@ -3396,7 +3419,6 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* Delete message confirm */}
       {deleteConfirmId && (
         <ConfirmDialog
           icon={<Trash2 size={18} className="text-red-400" />}
@@ -3408,7 +3430,6 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* Delete chat confirm */}
       {deleteChatConfirm && (
         <ConfirmDialog
           icon={<Trash2 size={18} className="text-red-400" />}
@@ -3420,7 +3441,6 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* Forward message */}
       {forwardData && myUid && (
         <ForwardPicker
           myUid={myUid}
@@ -3486,13 +3506,11 @@ export default function ChatWindow() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {/* Wallpaper overlay */}
         {wallpaper?.url && (
           <div className="absolute inset-0 z-0 pointer-events-none bg-black/40" />
         )}
 
-        {/* Ambient violet glow field — matches the settings page signature, only
-            shown when there's no custom wallpaper to avoid fighting for attention */}
+
         {!wallpaper?.url && (
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
@@ -3500,7 +3518,6 @@ export default function ChatWindow() {
           </div>
         )}
 
-        {/* Drag & drop overlay */}
         {isDraggingFile && (
           <div className="absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#7c5cff] bg-[#0d0b17]/85 backdrop-blur-sm pointer-events-none">
             <div className="flex flex-col items-center gap-2 text-[#a893ff]">
@@ -3511,7 +3528,6 @@ export default function ChatWindow() {
             </div>
           </div>
         )}
-        {/* Header */}
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
             <button
@@ -3640,7 +3656,6 @@ export default function ChatWindow() {
           )}
         </div>
 
-        {/* Messages */}
         <div
           ref={chatScrollRef}
           onScroll={handleScroll}
@@ -3656,10 +3671,6 @@ export default function ChatWindow() {
             const isEditing = editingId === m.id;
             const msgIsVideo =
               m.imageUrl && (m.isLocalVideo || isVideo(m.imageUrl));
-            // two ways a message can be "just a sticker": the legacy
-            // image-attachment style (m.imageUrl pointing at a custom
-            // emoji asset), or the newer inline-token style where the
-            // whole text is nothing but ::sticker_id:: tokens
             const isImageStickerMsg =
               !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
             const isTextStickerMsg = !m.imageUrl && isStickerOnlyText(m.text);
@@ -4011,7 +4022,7 @@ export default function ChatWindow() {
           )}
         </div>
 
-        {/* Input area */}
+        {/* input area */}
         <div className="flex-none border-t border-white/[0.06] bg-[#0d0b17]/95 backdrop-blur-xl relative z-10 ">
           {typingUsers.length > 0 && (
             <div className="px-5 pt-2.5 flex items-center gap-1.5 text-xs text-zinc-600">
@@ -4083,178 +4094,105 @@ export default function ChatWindow() {
               className="hidden"
               onChange={handleFileChange}
             />
-            {/* Input wrapper */}
-            <div
-              className="
-      flex-1
-      h-[54px]
-      flex
-      items-center
-      gap-3
-      px-4
-      rounded-full
-      bg-[#12111f]/80
-      backdrop-blur-xl
-      border border-white/[0.07]
-      shadow-[inset_0_0_20px_rgba(124,92,255,0.03)]
-      transition-all
-      focus-within:border-[#7c5cff]/40
-    "
-            >
-              {/* Attach */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                title="Attach file"
-                className="
-        shrink-0
-        w-7
-        h-7
-        flex
-        items-center
-        justify-center
-        rounded-xl
-        text-zinc-500
-        hover:text-[#a893ff]
-        hover:bg-[#7c5cff]/10
-        transition-all
-        hover:scale-105
-        active:scale-95
-      "
-              >
-                <Paperclip size={18} />
-              </button>
-              {/* Emoji + stickers */}
-              <div className="relative shrink-0" ref={emojiPanelRef}>
-                <button
-                  onClick={() => setEmojiPanelOpen((v) => !v)}
-                  title="Emoji & stickers"
-                  className="
-          w-7
-          h-7
-          flex
-          items-center
-          justify-center
-          rounded-xl
-          text-zinc-500
-          hover:text-[#a893ff]
-          hover:bg-[#7c5cff]/10
-          transition-all
-          hover:scale-105
-          active:scale-95
-        "
-                >
-                  <Smile size={18} />
-                </button>
-                {emojiPanelOpen && (
-                  <div
-                    className="
-            reaction-picker
-            chat-scroll
-            absolute
-            z-50
-            bottom-full
-            mb-3
-            left-0
-            p-3
-            w-[248px]
-            max-h-[320px]
-            overflow-y-auto
-            rounded-2xl
-            bg-[#12111f]
-            border border-white/[0.08]
-            shadow-xl
-            shadow-black/50
-          "
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* plain unicode emoji — inserted into the text at the
-                        caret position, can sit anywhere before/after words */}
-                    <div className="grid grid-cols-6 gap-1 mb-2">
-                      {TEXT_EMOJIS.map((em) => (
-                        <button
-                          key={em}
-                          onClick={() => insertEmoji(em)}
-                          className="
-                  reaction-emoji-btn
-                  w-8
-                  h-8
-                  flex
-                  items-center
-                  justify-center
-                  rounded-lg
-                  hover:bg-white/[0.08]
-                  cursor-pointer
-                  text-lg
-                  leading-none
-                "
-                        >
-                          {em}
-                        </button>
-                      ))}
-                    </div>
 
-                    <div className="h-px bg-white/[0.06] mb-2" />
 
-                    {/* custom stickers — inserted as ::id:: tokens, rendered
-                        as small inline images inside the sent message text */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {CUSTOM_EMOJIS.map((e) => (
-                        <button
-                          key={e.id}
-                          onClick={() => insertEmoji(`::${e.id}::`)}
-                          className="
-                  reaction-emoji-btn
-                  w-12
-                  h-12
-                  flex
-                  items-center
-                  justify-center
-                  rounded-xl
-                  hover:bg-white/[0.08]
-                  cursor-pointer
-                  transition
-                  hover:scale-110
-                "
-                        >
-                          <img
-                            src={e.url}
-                            alt={e.id}
-                            className="
-                    w-9
-                    h-9
-                    object-contain
-                  "
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {/* Text */}
-              <input
-                ref={inputRef}
-                value={text}
-                onChange={handleTyping}
-                onKeyDown={handleKeyDown}
-                onKeyUp={trackCaret}
-                onClick={trackCaret}
-                onPaste={handlePaste}
-                placeholder="Message…"
-                className="
-        flex-1
-        min-w-0
-        bg-transparent
-        outline-none
-        text-[15px]
-        text-white
-        placeholder:text-zinc-600
-      "
+            <div className="flex-1 relative isolate rounded-full">
+              <div
+                className="composer-tint absolute inset-0 z-0 rounded-full pointer-events-none"
                 style={{
-                  caretColor: "#7c5cff",
+                  background: "rgba(18,17,31,0.55)",
+                  border: composerFocused
+                    ? "1px solid rgba(124,92,255,0.45)"
+                    : "1px solid rgba(124,92,255,0.16)",
+                  boxShadow: composerFocused
+                    ? "inset 0 0 24px rgba(124,92,255,0.10)"
+                    : "inset 0 0 20px rgba(124,92,255,0.03)",
                 }}
               />
+              <div
+                className="absolute inset-0 z-0 rounded-full pointer-events-none"
+                style={{
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                  filter: "url(#glass-distortion-composer)",
+                  WebkitFilter: "url(#glass-distortion-composer)",
+                }}
+              />
+
+              <div className="relative z-10 h-[54px] flex items-center gap-3 px-4">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach file"
+                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Paperclip size={18} />
+                </button>
+
+                <div className="relative shrink-0" ref={emojiPanelRef}>
+                  <button
+                    onClick={() => setEmojiPanelOpen((v) => !v)}
+                    title="Emoji & stickers"
+                    className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Smile size={18} />
+                  </button>
+                  {emojiPanelOpen && (
+                    <div
+                      className="reaction-picker chat-scroll absolute z-50 bottom-full mb-3 left-0 p-3 w-[248px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+
+                      <div className="grid grid-cols-6 gap-1 mb-2">
+                        {TEXT_EMOJIS.map((em) => (
+                          <button
+                            key={em}
+                            onClick={() => insertEmoji(em)}
+                            className="reaction-emoji-btn w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg leading-none"
+                          >
+                            {em}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="h-px bg-white/[0.06] mb-2" />
+
+
+                      <div className="grid grid-cols-4 gap-2">
+                        {CUSTOM_EMOJIS.map((e) => (
+                          <button
+                            key={e.id}
+                            onClick={() => insertEmoji(`::${e.id}::`)}
+                            className="reaction-emoji-btn w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
+                          >
+                            <img
+                              src={e.url}
+                              alt={e.id}
+                              className="w-9 h-9 object-contain"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={handleTyping}
+                  onKeyDown={handleKeyDown}
+                  onKeyUp={trackCaret}
+                  onClick={trackCaret}
+                  onPaste={handlePaste}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
+                  placeholder="Message…"
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-white placeholder:text-zinc-600"
+                  style={{ caretColor: "#7c5cff" }}
+                />
+              </div>
             </div>
+
             <input
               type="file"
               accept="image/*"
@@ -4262,7 +4200,6 @@ export default function ChatWindow() {
               ref={wallpaperInputRef}
               onChange={handleWallpaperChange}
             />
-            {/* Send */}
             {canSend ? (
               <button
                 onClick={send}
