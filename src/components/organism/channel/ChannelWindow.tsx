@@ -53,26 +53,17 @@ import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "👍", "🔥"];
 
 const NEAR_BOTTOM_THRESHOLD = 150;
-
-// matches the ::sticker_id:: markers embedded inline in post text —
-// identical scheme to GroupWindow/ChatWindow, so stickers behave the same
-// everywhere in the app
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
-// non-global, used only for a yes/no check so it's safe to reuse .test()
-// without worrying about lastIndex state from repeated calls
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
 
-// true when the post text is made up of nothing but one or more
-// ::sticker_id:: tokens (no real words) — rendered big, same treatment
-// Telegram gives a "sticker-only" message
 function isStickerOnlyText(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
-// plain unicode emoji available for inline insertion into the composer text
+
 const TEXT_EMOJIS = [
   "😀",
   "😁",
@@ -134,7 +125,6 @@ function formatTime(ts: any): string {
   });
 }
 
-// Telegram-style compact number: 999, 1.2K, 3.4M
 function formatViews(n: number | undefined): string {
   const v = n ?? 0;
 
@@ -175,20 +165,12 @@ function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
   );
 }
 
-/**
- * Renders post text with inline custom-sticker tokens (::sticker_id::)
- * swapped for small inline images, so a sticker can sit before/after/mid
- * plain text — mirrors GroupWindow's RichText 1:1 so channel posts behave
- * identically to group/1:1 chats.
- */
+
 function RichText({
   text,
   variant = "inline",
 }: {
   text: string;
-  /** "inline" = small icon sitting in a line of text.
-   *  "large"  = big standalone sticker, used when the post has no
-   *  other text at all. */
   variant?: "inline" | "large";
 }) {
   const parts = text.split(STICKER_TOKEN_SPLIT_RE);
@@ -216,8 +198,7 @@ function RichText({
             );
           }
         }
-        // skip pure-whitespace fragments in "large" mode so several
-        // stickers in a row sit snugly without odd extra gaps
+
         if (variant === "large" && !part.trim()) return null;
         return part ? <span key={i}>{part}</span> : null;
       })}
@@ -263,11 +244,10 @@ function ReactionPill({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border transition-colors ${
-        mine
-          ? "bg-[#7c5cff]/20 border-[#7c5cff]/50 text-[#a893ff]"
-          : "bg-black/20 border-white/15 text-zinc-400 hover:border-white/25"
-      }`}
+      className={`flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border transition-colors ${mine
+        ? "bg-[#7c5cff]/20 border-[#7c5cff]/50 text-[#a893ff]"
+        : "bg-black/20 border-white/15 text-zinc-400 hover:border-white/25"
+        }`}
     >
       <ReactionGlyph token={token} size={15} />
 
@@ -276,9 +256,7 @@ function ReactionPill({
   );
 }
 
-/**
- * Telegram-style "time · views" meta row.
- */
+
 function PostMeta({
   time,
   views,
@@ -469,6 +447,7 @@ export default function ChannelWindow({
 
   const [editText, setEditText] = useState("");
   const [forwardData, setForwardData] = useState<ChannelPost | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -504,8 +483,6 @@ export default function ChannelWindow({
 
   const myUidRef = useRef(myUid);
 
-  // tracks where the caret was in the composer input, so emoji/sticker taps
-  // insert at that position instead of always appending to the end
   const lastCaretPos = useRef<number>(0);
 
   useLayoutEffect(() => {
@@ -537,8 +514,6 @@ export default function ChannelWindow({
     if (isNearBottomRef.current) scrollToBottomInstant();
   }
 
-  // Reset before paint so a newly selected channel cannot show the previous
-  // feed or inherit its scroll position for a frame.
   useLayoutEffect(() => {
     isNearBottomRef.current = true;
     knownPostIdsRef.current = new Set();
@@ -660,8 +635,6 @@ export default function ChannelWindow({
     return () => unsub();
   }, [channelId]);
 
-  // The only automatic scroll writer. A snapshot containing only edits,
-  // reactions, views, or deletions preserves the reader's position.
   useLayoutEffect(() => {
     if (!scrollIntentRef.current || !scrollContainerRef.current) return;
 
@@ -686,14 +659,9 @@ export default function ChannelWindow({
     });
   }, [channelId, myUid]);
 
-  // reset this subscriber's unread badge whenever they open the channel,
-  // and again whenever a new post lands while they're already looking at
-  // it — same idea as markGroupAsRead being gated on window visibility in
-  // GroupWindow, just simpler since there's no separate app-visibility
-  // concern here (the channel is either open in the UI or it isn't)
   useEffect(() => {
     if (!channelId || !myUid) return;
-    markChannelAsRead(channelId, myUid).catch(() => {});
+    markChannelAsRead(channelId, myUid).catch(() => { });
   }, [channelId, myUid, posts.length]);
 
   useEffect(() => {
@@ -802,7 +770,7 @@ export default function ChannelWindow({
           />
         ))}
 
-        {/* comments */}
+
         <button
           onClick={() => openPostComments(post.id)}
           className="flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border bg-black/20 border-white/15 text-zinc-400 hover:text-[#a893ff] hover:border-[#7c5cff]/40 transition-colors"
@@ -813,8 +781,6 @@ export default function ChannelWindow({
             {post.commentCount || 0}
           </span>
         </button>
-
-        {/* Reaction picker */}
         <div className="relative reaction-picker-wrapper">
           <button
             onClick={() => {
@@ -854,15 +820,13 @@ export default function ChannelWindow({
                       isCustomPickerOpen ? null : post.id
                     );
                   }}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] cursor-pointer transition ${
-                    isCustomPickerOpen ? "text-[#a893ff] bg-white/[0.08]" : ""
-                  }`}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] cursor-pointer transition ${isCustomPickerOpen ? "text-[#a893ff] bg-white/[0.08]" : ""
+                    }`}
                 >
                   <ChevronDown
                     size={16}
-                    className={`transition-transform ${
-                      isCustomPickerOpen ? "rotate-180" : ""
-                    }`}
+                    className={`transition-transform ${isCustomPickerOpen ? "rotate-180" : ""
+                      }`}
                   />
                 </button>
               </div>
@@ -967,17 +931,13 @@ export default function ChannelWindow({
     lastCaretPos.current = e.target.selectionStart ?? e.target.value.length;
   }
 
-  // keeps lastCaretPos in sync whenever the user moves the caret without
-  // changing the text (arrow keys, mouse click) so emoji/sticker taps land
-  // exactly where the cursor is, not always at the end of the string
+
   function trackCaret(e: React.SyntheticEvent<HTMLInputElement>) {
     lastCaretPos.current =
       e.currentTarget.selectionStart ?? e.currentTarget.value.length;
   }
 
-  // inserts a plain emoji or a ::sticker_id:: token at the last known caret
-  // position, then restores focus + caret so the user can keep typing right
-  // after the inserted content — same as the composer in GroupWindow
+
   function insertEmoji(token: string) {
     const pos = lastCaretPos.current ?? text.length;
     const newText = text.slice(0, pos) + token + text.slice(pos);
@@ -1129,6 +1089,34 @@ export default function ChannelWindow({
         color: "var(--color-text)",
       }}
     >
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <defs>
+          <filter
+            id="glass-distortion-composer"
+            x="0%"
+            y="0%"
+            width="100%"
+            height="100%"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.012 0.012"
+              numOctaves="2"
+              seed="17"
+              result="noise"
+            />
+            <feGaussianBlur in="noise" stdDeviation="2" result="blurred" />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="blurred"
+              scale="26"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+        </defs>
+      </svg>
+
       <style>{`
         .chat-scroll::-webkit-scrollbar {
           width: 4px;
@@ -1146,16 +1134,16 @@ export default function ChannelWindow({
         .chat-scroll::-webkit-scrollbar-thumb:hover {
           background: rgba(124,92,255,0.5);
         }
+
+        .composer-tint { transition: box-shadow 0.15s ease, border-color 0.15s ease; }
       `}</style>
 
-      {/* Ambient violet glow */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
 
         <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
       </div>
 
-      {/* Header */}
       <div className="relative z-10 flex-none flex items-center justify-between h-14 px-5 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl">
         <div
           onClick={() => setInfoModalOpen(true)}
@@ -1190,11 +1178,10 @@ export default function ChannelWindow({
           {!isOwner && (
             <button
               onClick={toggleSub}
-              className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
-                subscriptionChannelId === channelId && isSub
-                  ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
-                  : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
-              }`}
+              className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${subscriptionChannelId === channelId && isSub
+                ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
+                : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
+                }`}
             >
               {subscriptionChannelId === channelId && isSub
                 ? "Unsubscribe"
@@ -1231,7 +1218,6 @@ export default function ChannelWindow({
         </div>
       </div>
 
-      {/* Pinned post */}
       {pinnedPost && (
         <div
           onClick={() => scrollToPost(pinnedPost.id)}
@@ -1261,17 +1247,12 @@ export default function ChannelWindow({
         </div>
       )}
 
-      {/* Posts */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
         className="chat-scroll relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-4"
       >
         {displayPosts.map((p) => {
-          // two ways a post can be "just a sticker": the legacy
-          // image-attachment style (p.imageUrl pointing at a custom emoji
-          // asset), or the newer inline-token style where the whole text
-          // is nothing but ::sticker_id:: tokens
           const isImageStickerPost =
             !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
 
@@ -1348,9 +1329,8 @@ export default function ChannelWindow({
               id={`channel-post-${p.id}`}
               ref={(el) => observePost(el, p.id)}
               onContextMenu={(e) => openPostMenu(e, p.id)}
-              className={`relative group max-w-[420px] rounded-2xl border overflow-visible ${
-                isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
-              }`}
+              className={`relative group max-w-[420px] rounded-2xl border overflow-visible ${isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
+                }`}
               style={{
                 background: "var(--color-msg-bg)",
               }}
@@ -1453,7 +1433,6 @@ export default function ChannelWindow({
 
       </div>
 
-      {/* Post context menu */}
       {postMenu && (
         <div
           ref={postMenuRef}
@@ -1536,7 +1515,6 @@ export default function ChannelWindow({
         </div>
       )}
 
-      {/* Composer */}
       {isOwner && (
         <div className="relative z-10 flex-none border-t border-white/[0.06] bg-[#0d0b17]/95 backdrop-blur-xl">
           {imagePreview && (
@@ -1569,102 +1547,100 @@ export default function ChannelWindow({
               onChange={handleFileChange}
             />
 
-            <div
-              className="
-                flex-1
-                h-[54px]
-                flex
-                items-center
-                gap-3
-                px-4
-                rounded-full
-                bg-[#12111f]/80
-                backdrop-blur-xl
-                border border-white/[0.07]
-                shadow-[inset_0_0_20px_rgba(124,92,255,0.03)]
-                transition-all
-                focus-within:border-[#7c5cff]/40
-              "
-            >
-              <button
-                onClick={() => fileRef.current?.click()}
-                title="Attach photo"
-                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
-              >
-                <Paperclip size={18} />
-              </button>
-
-              {/* Emoji + stickers — identical to GroupWindow/ChatWindow:
-                  unicode emoji insert as plain chars, custom stickers
-                  insert as ::sticker_id:: tokens, both land at the caret
-                  position inside the post text */}
-              <div className="relative shrink-0" ref={emojiPanelRef}>
-                <button
-                  onClick={() => setEmojiPanelOpen((v) => !v)}
-                  title="Emoji & stickers"
-                  className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
-                >
-                  <Smile size={18} />
-                </button>
-
-                {emojiPanelOpen && (
-                  <div
-                    className="reaction-picker chat-scroll absolute z-50 bottom-full mb-3 left-0 p-3 w-[248px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* plain unicode emoji — inserted into the post text at
-                        the caret position, can sit anywhere before/after
-                        words */}
-                    <div className="grid grid-cols-6 gap-1 mb-2">
-                      {TEXT_EMOJIS.map((em) => (
-                        <button
-                          key={em}
-                          onClick={() => insertEmoji(em)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg leading-none transition hover:scale-110"
-                        >
-                          {em}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="h-px bg-white/[0.06] mb-2" />
-
-                    {/* custom stickers — inserted as ::id:: tokens,
-                        rendered as small inline images inside the post
-                        text (or big, if the post ends up sticker-only) */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {CUSTOM_EMOJIS.map((e) => (
-                        <button
-                          key={e.id}
-                          onClick={() => insertEmoji(`::${e.id}::`)}
-                          className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
-                        >
-                          <img
-                            src={e.url}
-                            alt={e.id}
-                            className="w-9 h-9 object-contain"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <input
-                ref={inputRef}
-                value={text}
-                onChange={handleTyping}
-                onKeyDown={handleKeyDown}
-                onKeyUp={trackCaret}
-                onClick={trackCaret}
-                onPaste={handlePaste}
-                placeholder="Write a post…"
-                className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-white placeholder:text-zinc-600"
+            <div className="flex-1 relative isolate rounded-full">
+              <div
+                className="composer-tint absolute inset-0 z-0 rounded-full pointer-events-none"
                 style={{
-                  caretColor: "#7c5cff",
+                  background: "rgba(18,17,31,0.55)",
+                  border: composerFocused
+                    ? "1px solid rgba(124,92,255,0.45)"
+                    : "1px solid rgba(124,92,255,0.16)",
+                  boxShadow: composerFocused
+                    ? "inset 0 0 24px rgba(124,92,255,0.10)"
+                    : "inset 0 0 20px rgba(124,92,255,0.03)",
                 }}
               />
+              <div
+                className="absolute inset-0 z-0 rounded-full pointer-events-none"
+                style={{
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                  filter: "url(#glass-distortion-composer)",
+                  WebkitFilter: "url(#glass-distortion-composer)",
+                }}
+              />
+
+              <div className="relative z-10 h-[54px] flex items-center gap-3 px-4">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  title="Attach photo"
+                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Paperclip size={18} />
+                </button>
+                <div className="relative shrink-0" ref={emojiPanelRef}>
+                  <button
+                    onClick={() => setEmojiPanelOpen((v) => !v)}
+                    title="Emoji & stickers"
+                    className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Smile size={18} />
+                  </button>
+
+                  {emojiPanelOpen && (
+                    <div
+                      className="reaction-picker chat-scroll absolute z-50 bottom-full mb-3 left-0 p-3 w-[248px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#12111f] border border-white/[0.08] shadow-xl shadow-black/50"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="grid grid-cols-6 gap-1 mb-2">
+                        {TEXT_EMOJIS.map((em) => (
+                          <button
+                            key={em}
+                            onClick={() => insertEmoji(em)}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] cursor-pointer text-lg leading-none transition hover:scale-110"
+                          >
+                            {em}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="h-px bg-white/[0.06] mb-2" />
+                      <div className="grid grid-cols-4 gap-2">
+                        {CUSTOM_EMOJIS.map((e) => (
+                          <button
+                            key={e.id}
+                            onClick={() => insertEmoji(`::${e.id}::`)}
+                            className="w-12 h-12 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer transition hover:scale-110"
+                          >
+                            <img
+                              src={e.url}
+                              alt={e.id}
+                              className="w-9 h-9 object-contain"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={handleTyping}
+                  onKeyDown={handleKeyDown}
+                  onKeyUp={trackCaret}
+                  onClick={trackCaret}
+                  onPaste={handlePaste}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
+                  placeholder="Write a post…"
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-white placeholder:text-zinc-600"
+                  style={{
+                    caretColor: "#7c5cff",
+                  }}
+                />
+              </div>
             </div>
 
             <button
