@@ -75,11 +75,6 @@ Built with Next.js, TypeScript, Firebase, and Electron.
 
 ---
 
-## 📌 Roadmap ideas
-
-* Message search
-* Mobile companion app
-
 ---
 
 ## 📄 License
