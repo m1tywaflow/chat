@@ -32,8 +32,6 @@ import {
 
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "😮", "😢", "🙏", "🎉"];
 
-// Keep the comment composer in sync with ChannelWindow: Unicode emoji are
-// inserted as text and custom stickers are stored as inline ::id:: tokens.
 const TEXT_EMOJIS = [
   "😀", "😁", "😂", "🤣", "😊", "😉", "😍", "🥰", "😘", "😎", "🤔", "🤨",
   "😐", "🙄", "😏", "😴", "😢", "😭", "😡", "🤯", "🥳", "🥵", "🤗", "😅",
@@ -501,11 +499,10 @@ export default function PostCommentsView({
                         <button
                           key={token}
                           onClick={() => handleReact(c.id, token)}
-                          className={`flex items-center gap-1 px-1.5 py-[3px] rounded-full text-[11px] border transition-colors cursor-pointer ${
-                            mine
+                          className={`flex items-center gap-1 px-1.5 py-[3px] rounded-full text-[11px] border transition-colors cursor-pointer ${mine
                               ? "bg-[#A78BFA]/15 border-[#A78BFA]/40 text-[#A78BFA]"
                               : "bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:border-white/20"
-                          }`}
+                            }`}
                         >
                           <span className="leading-none">{token}</span>
                           <span>{uids.length}</span>

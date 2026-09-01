@@ -28,9 +28,11 @@
 //   trailing?: React.ReactNode;
 // }) {
 //   return (
-//     <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5 focus-within:border-[#7c5cff]/40 transition-colors">
+//     <div
+//       className="field-glass rounded-xl px-3.5 py-2.5 transition-all duration-200"
+//     >
 //       <div className="flex items-center justify-between mb-1">
-//         <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
+//         <span className="text-[10px] uppercase tracking-[0.18em] text-white/35">
 //           {label}
 //         </span>
 //         {trailing}
@@ -91,12 +93,129 @@
 
 //   return (
 //     <div
-//       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+//       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70"
 //       onClick={onClose}
 //     >
+//       <svg width="0" height="0" style={{ position: "absolute" }}>
+//         <defs>
+//           <filter
+//             id="glass-distortion-channel-modal"
+//             x="0%"
+//             y="0%"
+//             width="100%"
+//             height="100%"
+//           >
+//             <feTurbulence
+//               type="fractalNoise"
+//               baseFrequency="0.008 0.008"
+//               numOctaves={2}
+//               seed={92}
+//               result="noise"
+//             />
+//             <feGaussianBlur in="noise" stdDeviation="1.5" result="blurred" />
+//             <feDisplacementMap
+//               in="SourceGraphic"
+//               in2="blurred"
+//               scale={22}
+//               xChannelSelector="R"
+//               yChannelSelector="G"
+//             />
+//           </filter>
+//         </defs>
+//       </svg>
+
 //       <style>{`
 //         @keyframes modalIn { from { opacity:0; transform:scale(0.94) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
-//         @keyframes ringSpin { to { transform: rotate(360deg); } }
+
+//         /* Liquid glass window background */
+//         .channel-modal-glass {
+//           position: relative;
+//           isolation: isolate;
+//           box-shadow: 0px 0px 21px -8px rgba(255, 255, 255, 0.3);
+//         }
+
+//         /* tint + inner shadow */
+//         .channel-modal-glass::before {
+//           content: '';
+//           position: absolute;
+//           inset: 0;
+//           z-index: 0;
+//           border-radius: inherit;
+//           box-shadow: inset 0 0 20px -4px rgba(255, 255, 255, 0.18),
+//             inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+//           background: linear-gradient(
+//             160deg,
+//             rgba(18, 15, 32, 0.82) 0%,
+//             rgba(7, 6, 13, 0.88) 100%
+//           );
+//           pointer-events: none;
+//         }
+
+//         /* backdrop blur + turbulence distortion (kept subtle — background is
+//            already dark, so this just adds texture, not visibility loss) */
+//         .channel-modal-glass::after {
+//           content: '';
+//           position: absolute;
+//           inset: 0;
+//           z-index: -1;
+//           border-radius: inherit;
+//           backdrop-filter: blur(18px) saturate(140%);
+//           -webkit-backdrop-filter: blur(18px) saturate(140%);
+//           filter: url(#glass-distortion-channel-modal);
+//           -webkit-filter: url(#glass-distortion-channel-modal);
+//           isolation: isolate;
+//           pointer-events: none;
+//         }
+
+//         .channel-modal-glass > * {
+//           position: relative;
+//           z-index: 10;
+//         }
+
+//         /* Fields — a soft inner glow so they read as "lit" glass panes
+//            against the dark card, instead of near-invisible flat boxes */
+//         .field-glass {
+//           background: linear-gradient(
+//             180deg,
+//             rgba(255, 255, 255, 0.055) 0%,
+//             rgba(255, 255, 255, 0.02) 100%
+//           );
+//           border: 1px solid rgba(255, 255, 255, 0.1);
+//           box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+//             0 1px 2px rgba(0, 0, 0, 0.15);
+//         }
+//         .field-glass:hover {
+//           border-color: rgba(255, 255, 255, 0.16);
+//           background: linear-gradient(
+//             180deg,
+//             rgba(255, 255, 255, 0.07) 0%,
+//             rgba(255, 255, 255, 0.03) 100%
+//           );
+//         }
+//         .field-glass:focus-within {
+//           border-color: rgba(124, 92, 255, 0.55);
+//           box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+//             0 0 0 3px rgba(124, 92, 255, 0.15),
+//             0 0 18px -4px rgba(124, 92, 255, 0.35);
+//         }
+
+//         /* Submit button — brighter gradient + glass rim so it pops
+//            instead of blending into the card */
+//         .submit-glow {
+//           position: relative;
+//           box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
+//             0 8px 24px -8px rgba(124, 92, 255, 0.65),
+//             0 0 0 1px rgba(255, 255, 255, 0.08);
+//         }
+//         .submit-glow:not(:disabled):hover {
+//           box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+//             0 10px 28px -6px rgba(124, 92, 255, 0.8),
+//             0 0 0 1px rgba(255, 255, 255, 0.12);
+//           transform: translateY(-1px);
+//         }
+//         .submit-glow:not(:disabled):active {
+//           transform: translateY(0);
+//         }
 //       `}</style>
 
 //       <div
@@ -104,12 +223,10 @@
 //         style={{ animation: "modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1)" }}
 //         onClick={(e) => e.stopPropagation()}
 //       >
-//         {/* glow field behind the card */}
 //         <div className="pointer-events-none absolute -top-24 -left-16 w-64 h-64 rounded-full bg-[#5b3df0]/25 blur-[90px]" />
 //         <div className="pointer-events-none absolute -bottom-24 -right-10 w-56 h-56 rounded-full bg-[#2b1f78]/25 blur-[90px]" />
 
-//         <div className="relative rounded-[26px] border border-white/[0.07] bg-[#0d0b17]/95 backdrop-blur-xl shadow-[0_0_70px_-15px_rgba(91,61,240,0.4)]">
-//           {/* header */}
+//         <div className="channel-modal-glass rounded-[26px] shadow-[0_0_70px_-15px_rgba(91,61,240,0.4)]">
 //           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/[0.06]">
 //             <div className="flex items-center gap-2.5">
 //               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7c5cff] to-[#4028b0] flex items-center justify-center shrink-0">
@@ -133,7 +250,6 @@
 //           </div>
 
 //           <div className="px-6 pt-5 pb-6 flex flex-col gap-4">
-//             {/* avatar */}
 //             <div className="flex items-center gap-4">
 //               <input
 //                 ref={fileRef}
@@ -172,8 +288,6 @@
 //                 Optional — a letter badge is used if you skip it
 //               </div>
 //             </div>
-
-//             {/* name */}
 //             <Field label="Name">
 //               <input
 //                 value={name}
@@ -182,8 +296,6 @@
 //                 className="w-full bg-transparent text-[15px] text-white placeholder-white/20 outline-none"
 //               />
 //             </Field>
-
-//             {/* description */}
 //             <Field
 //               label="Description"
 //               trailing={
@@ -200,12 +312,10 @@
 //                 className="w-full bg-transparent text-[14px] text-white placeholder-white/20 outline-none resize-none leading-relaxed"
 //               />
 //             </Field>
-
-//             {/* submit */}
 //             <button
 //               onClick={handleCreate}
 //               disabled={!name.trim() || creating}
-//               className="w-full h-12 mt-1 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] shadow-[0_8px_24px_-8px_rgba(124,92,255,0.6)] flex items-center justify-center gap-2"
+//               className="submit-glow w-full h-12 mt-1 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] flex items-center justify-center gap-2"
 //             >
 //               {creating ? (
 //                 <>
@@ -222,6 +332,7 @@
 //     </div>
 //   );
 // }
+
 "use client";
 
 import { useState, useRef } from "react";
@@ -242,6 +353,11 @@ async function uploadAvatar(file: File): Promise<string> {
   return data.secure_url;
 }
 
+// same glass tokens as ChannelInfoModal, so every modal in the app reads
+// as one consistent surface
+const GLASS_PANEL =
+  "bg-[rgba(13,11,23,0.55)] [backdrop-filter:blur(24px)_saturate(160%)] [-webkit-backdrop-filter:blur(24px)_saturate(160%)] border border-[rgba(168,147,255,0.16)] shadow-[0_10px_40px_0_rgba(8,4,24,0.55),inset_0_0_1px_1px_rgba(255,255,255,0.05)]";
+
 function Field({
   label,
   children,
@@ -252,9 +368,9 @@ function Field({
   trailing?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5 focus-within:border-[#7c5cff]/40 transition-colors">
+    <div className="field-glass rounded-xl px-3.5 py-2.5 transition-all duration-200">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
+        <span className="text-[10px] uppercase tracking-[0.18em] text-white/35">
           {label}
         </span>
         {trailing}
@@ -315,50 +431,55 @@ export default function CreateChannelModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70"
       onClick={onClose}
     >
       <style>{`
         @keyframes modalIn { from { opacity:0; transform:scale(0.94) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        @keyframes ringSpin { to { transform: rotate(360deg); } }
 
-        /* Glassmorphism window background */
-        .channel-modal-glass {
+        /* Fields — a soft inner glow so they read as "lit" glass panes
+           against the dark card, instead of near-invisible flat boxes */
+        .field-glass {
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.055) 0%,
+            rgba(255, 255, 255, 0.02) 100%
+          );
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+            0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+        .field-glass:hover {
+          border-color: rgba(255, 255, 255, 0.16);
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.07) 0%,
+            rgba(255, 255, 255, 0.03) 100%
+          );
+        }
+        .field-glass:focus-within {
+          border-color: rgba(124, 92, 255, 0.55);
+          box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+            0 0 0 3px rgba(124, 92, 255, 0.15),
+            0 0 18px -4px rgba(124, 92, 255, 0.35);
+        }
+
+        /* Submit button — brighter gradient + glass rim so it pops
+           instead of blending into the card */
+        .submit-glow {
           position: relative;
-          background: rgba(250, 250, 250, 0.18);
-          backdrop-filter: blur(8px) saturate(60%);
-          -webkit-backdrop-filter: blur(8px) saturate(60%);
-          border: 0px solid rgba(255, 255, 255, 0.2);
-          box-shadow: -4px 12px 20px 0 rgba(51, 51, 51, 0.22),
-            inset 0px 0px 4px 2px rgba(255, 255, 255, 0.45);
-          overflow: hidden;
+          box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
+            0 8px 24px -8px rgba(124, 92, 255, 0.65),
+            0 0 0 1px rgba(255, 255, 255, 0.08);
         }
-
-        /* angled edge reflection */
-        .channel-modal-glass::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          border-radius: inherit;
-          background: linear-gradient(to left top, rgba(255,255,255,0.225) 0%, rgba(255,255,255,0) 50%);
-          z-index: 1;
+        .submit-glow:not(:disabled):hover {
+          box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+            0 10px 28px -6px rgba(124, 92, 255, 0.8),
+            0 0 0 1px rgba(255, 255, 255, 0.12);
+          transform: translateY(-1px);
         }
-
-        /* subtle top-to-bottom sheen */
-        .channel-modal-glass::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          border-radius: inherit;
-          background: linear-gradient(to bottom, rgba(255,255,255,0.135) 0%, rgba(255,255,255,0) 100%);
-          z-index: 1;
-        }
-
-        .channel-modal-glass > * {
-          position: relative;
-          z-index: 10;
+        .submit-glow:not(:disabled):active {
+          transform: translateY(0);
         }
       `}</style>
 
@@ -367,12 +488,10 @@ export default function CreateChannelModal({
         style={{ animation: "modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* glow field behind the card */}
         <div className="pointer-events-none absolute -top-24 -left-16 w-64 h-64 rounded-full bg-[#5b3df0]/25 blur-[90px]" />
         <div className="pointer-events-none absolute -bottom-24 -right-10 w-56 h-56 rounded-full bg-[#2b1f78]/25 blur-[90px]" />
 
-        <div className="channel-modal-glass rounded-[26px] shadow-[0_0_70px_-15px_rgba(91,61,240,0.4)]">
-          {/* header */}
+        <div className={`relative rounded-[26px] ${GLASS_PANEL}`}>
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7c5cff] to-[#4028b0] flex items-center justify-center shrink-0">
@@ -396,7 +515,6 @@ export default function CreateChannelModal({
           </div>
 
           <div className="px-6 pt-5 pb-6 flex flex-col gap-4">
-            {/* avatar */}
             <div className="flex items-center gap-4">
               <input
                 ref={fileRef}
@@ -435,8 +553,6 @@ export default function CreateChannelModal({
                 Optional — a letter badge is used if you skip it
               </div>
             </div>
-
-            {/* name */}
             <Field label="Name">
               <input
                 value={name}
@@ -445,8 +561,6 @@ export default function CreateChannelModal({
                 className="w-full bg-transparent text-[15px] text-white placeholder-white/20 outline-none"
               />
             </Field>
-
-            {/* description */}
             <Field
               label="Description"
               trailing={
@@ -463,12 +577,10 @@ export default function CreateChannelModal({
                 className="w-full bg-transparent text-[14px] text-white placeholder-white/20 outline-none resize-none leading-relaxed"
               />
             </Field>
-
-            {/* submit */}
             <button
               onClick={handleCreate}
               disabled={!name.trim() || creating}
-              className="w-full h-12 mt-1 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] shadow-[0_8px_24px_-8px_rgba(124,92,255,0.6)] flex items-center justify-center gap-2"
+              className="submit-glow w-full h-12 mt-1 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] hover:from-[#8d70ff] hover:to-[#6c4dff] flex items-center justify-center gap-2"
             >
               {creating ? (
                 <>
