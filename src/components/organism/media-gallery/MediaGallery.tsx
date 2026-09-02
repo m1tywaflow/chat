@@ -9,23 +9,29 @@ import { isCustomEmojiUrl } from "@/lib/customEmoji";
 
 type Props =
   | {
-      chatId: string;
-      groupId?: undefined;
-      channelId?: undefined;
-      onClose: () => void;
-    }
+    chatId: string;
+    groupId?: undefined;
+    channelId?: undefined;
+    onClose: () => void;
+  }
   | {
-      groupId: string;
-      chatId?: undefined;
-      channelId?: undefined;
-      onClose: () => void;
-    }
+    groupId: string;
+    chatId?: undefined;
+    channelId?: undefined;
+    onClose: () => void;
+  }
   | {
-      channelId: string;
-      chatId?: undefined;
-      groupId?: undefined;
-      onClose: () => void;
-    };
+    channelId: string;
+    chatId?: undefined;
+    groupId?: undefined;
+    onClose: () => void;
+  };
+
+const GLASS_PANEL =
+  "bg-[rgba(13,11,23,0.55)] [backdrop-filter:blur(24px)_saturate(160%)] [-webkit-backdrop-filter:blur(24px)_saturate(160%)] border border-[rgba(168,147,255,0.16)] shadow-[0_10px_40px_0_rgba(8,4,24,0.55),inset_0_0_1px_1px_rgba(255,255,255,0.05)]";
+
+const GLASS_SURFACE =
+  "bg-[rgba(124,92,255,0.06)] [backdrop-filter:blur(12px)_saturate(140%)] [-webkit-backdrop-filter:blur(12px)_saturate(140%)] border border-white/[0.08]";
 
 export default function MediaGallery({
   chatId,
@@ -47,8 +53,8 @@ export default function MediaGallery({
       const collectionRef = groupId
         ? collection(db, "groups", groupId, "messages")
         : channelId
-        ? collection(db, "channels", channelId, "posts")
-        : collection(db, "chats", chatId as string, "messages");
+          ? collection(db, "channels", channelId, "posts")
+          : collection(db, "chats", chatId as string, "messages");
       const q = query(collectionRef, orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
       const loaded = snap.docs
@@ -85,16 +91,31 @@ export default function MediaGallery({
     return () => window.removeEventListener("keydown", handleKey);
   }, [lightbox, onClose]);
 
+  const closeBtnClass =
+    "w-7 h-7 flex items-center justify-center rounded-lg " +
+    GLASS_SURFACE +
+    " text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-colors cursor-pointer";
+
+  const lightboxBtnClass =
+    "w-9 h-9 flex items-center justify-center rounded-xl " +
+    GLASS_SURFACE +
+    " text-white hover:bg-white/[0.15] transition-colors";
+
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 [backdrop-filter:blur(6px)] [-webkit-backdrop-filter:blur(6px)]"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg mx-4 rounded-2xl bg-[#0d0b14] border border-white/[0.08] shadow-2xl overflow-hidden"
+        className={"relative w-full max-w-lg mx-4 rounded-2xl " + GLASS_PANEL + " overflow-hidden"}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute -top-24 -left-16 w-[280px] h-[280px] rounded-full bg-[#5b3df0]/15 blur-[100px]" />
+          <div className="absolute -bottom-28 -right-16 w-[240px] h-[240px] rounded-full bg-[#7c5cff]/10 blur-[100px]" />
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <div className="flex items-center gap-2.5">
             <ImageIcon size={15} className="text-[#A78BFA]" />
             <span className="text-sm font-semibold text-white/80">Media</span>
@@ -104,15 +125,12 @@ export default function MediaGallery({
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
+          <button onClick={onClose} className={closeBtnClass}>
             <X size={15} />
           </button>
         </div>
 
-        <div className="p-4 max-h-[70vh] overflow-y-auto scrollbar-purple">
+        <div className="relative z-10 p-4 max-h-[70vh] overflow-y-auto scrollbar-purple">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-5 h-5 border-2 border-white/20 border-t-[#A78BFA] rounded-full animate-spin" />
@@ -145,7 +163,7 @@ export default function MediaGallery({
 
       {lightbox && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/95"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/85 [backdrop-filter:blur(8px)] [-webkit-backdrop-filter:blur(8px)]"
           onClick={() => setLightbox(null)}
         >
           <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -155,14 +173,11 @@ export default function MediaGallery({
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className={lightboxBtnClass}
             >
               <Download size={16} />
             </a>
-            <button
-              onClick={() => setLightbox(null)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-            >
+            <button onClick={() => setLightbox(null)} className={lightboxBtnClass}>
               <X size={16} />
             </button>
           </div>
