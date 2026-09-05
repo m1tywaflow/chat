@@ -109,7 +109,6 @@ export function subscribeToIncomingCalls(
   });
 }
 
-// Listen to a specific call doc (both sides use this to know when it ends/declines)
 export function subscribeToCall(
   callId: string,
   callback: (call: CallDoc | null) => void
