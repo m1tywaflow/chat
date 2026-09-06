@@ -445,12 +445,6 @@ export default function ChatWindow() {
   }, [chatId, myUid]);
 
   useLayoutEffect(() => {
-    // Intentionally NOT clearing `messages` / `wallpaper` / `pinnedMessage`
-    // here. They stay on screen (from the previous chat) until the new
-    // chat's Firestore snapshot arrives and replaces them - this avoids the
-    // "blank flash" when switching chats. Both setters below are already
-    // guarded by `activeChatIdRef.current !== chatId`, so stale data can
-    // never leak into the wrong conversation.
     setPendingMessages([]);
     setFirstUnreadId(null);
     setShowScrollButton(false);
@@ -482,13 +476,6 @@ export default function ChatWindow() {
       }
 
       if (mineCount > mineMsgCountRef.current) {
-        // Reconcile on every snapshot, including the first one for this
-        // chat - if a message was sent before this initial snapshot
-        // arrived, `mineCount` already includes it, so slicing still
-        // correctly drops the now-redundant optimistic copy (slicing past
-        // array length just yields []). Special-casing the first load used
-        // to skip this, leaving that optimistic copy stuck with a
-        // permanent "sending..." clock icon.
         const confirmed = mineCount - mineMsgCountRef.current;
         mineMsgCountRef.current = mineCount;
         setPendingMessages((prev) => (prev.length ? prev.slice(confirmed) : prev));
