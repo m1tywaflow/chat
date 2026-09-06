@@ -25,6 +25,7 @@
 //     const [elapsed, setElapsed] = useState(0);
 //     const [remoteConnected, setRemoteConnected] = useState(false);
 //     const [remoteMicMuted, setRemoteMicMuted] = useState(false);
+//     const [mediaError, setMediaError] = useState<string | null>(null);
 
 
 //     const callId = activeCall?.id;
@@ -46,20 +47,12 @@
 //                 await room.connect(livekitUrl, livekitToken);
 //                 if (cancelled) return;
 
-//                 if (callType === "video") {
-//                     await room.localParticipant.enableCameraAndMicrophone();
-//                 } else {
-//                     await room.localParticipant.setMicrophoneEnabled(true);
-//                 }
-//                 if (cancelled) return;
-
-//                 const localTrack = room.localParticipant.videoTrackPublications
-//                     .values()
-//                     .next().value;
-//                 if (localTrack?.track && localVideoRef.current) {
-//                     localTrack.track.attach(localVideoRef.current);
-//                 }
-
+//                 // Register remote-track / lifecycle listeners BEFORE requesting
+//                 // local camera/mic. If enableCameraAndMicrophone() below throws
+//                 // (permission denied, device busy, etc.) we must still be able to
+//                 // receive and render the other participant's tracks - otherwise
+//                 // this side gets stuck on "Calling…" forever even though the
+//                 // remote side connected fine.
 //                 const attachRemoteTrack = (
 //                     track: any,
 //                     participant: { name?: string; identity: string }
@@ -77,7 +70,6 @@
 //                 room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
 //                     attachRemoteTrack(track, participant);
 //                 });
-
 
 //                 room.on(RoomEvent.TrackMuted, (pub, participant) => {
 //                     if (
@@ -100,7 +92,8 @@
 //                     handleEnd();
 //                 });
 
-
+//                 // Pick up any tracks from participants who were already in the
+//                 // room before we finished connecting.
 //                 room.remoteParticipants.forEach((participant) => {
 //                     participant.trackPublications.forEach((pub) => {
 //                         if (pub.track) attachRemoteTrack(pub.track, participant);
@@ -109,8 +102,38 @@
 //                         }
 //                     });
 //                 });
-//             } catch (err) {
 
+//                 if (cancelled) return;
+
+//                 // Local media is requested separately so a camera/mic failure
+//                 // (permission denied, device in use, etc.) never prevents the
+//                 // listeners above from working - the call can still connect and
+//                 // play the remote stream, just without our own track.
+//                 try {
+//                     if (callType === "video") {
+//                         await room.localParticipant.enableCameraAndMicrophone();
+//                     } else {
+//                         await room.localParticipant.setMicrophoneEnabled(true);
+//                     }
+//                     if (cancelled) return;
+
+//                     const localTrack = room.localParticipant.videoTrackPublications
+//                         .values()
+//                         .next().value;
+//                     if (localTrack?.track && localVideoRef.current) {
+//                         localTrack.track.attach(localVideoRef.current);
+//                     }
+//                 } catch (mediaErr) {
+//                     console.error("Local media error:", mediaErr);
+//                     if (!cancelled) {
+//                         setMediaError(
+//                             callType === "video"
+//                                 ? "Не удалось включить камеру/микрофон"
+//                                 : "Не удалось включить микрофон"
+//                         );
+//                     }
+//                 }
+//             } catch (err) {
 //                 if (!cancelled) {
 //                     console.error("Call connection error:", err);
 //                 }
@@ -316,6 +339,16 @@
 //                     </div>
 
 
+//                     {mediaError && (
+//                         <div className="flex-none flex items-center justify-center pb-2">
+//                             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-400/20">
+//                                 <span className="text-[11px] font-medium text-red-300 tracking-wide">
+//                                     {mediaError}
+//                                 </span>
+//                             </div>
+//                         </div>
+//                     )}
+
 //                     {remoteConnected && remoteMicMuted && (
 //                         <div className="flex-none flex items-center justify-center pb-3">
 //                             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08]">
@@ -405,6 +438,7 @@
 //     );
 // }
 
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -434,11 +468,9 @@ export default function CallWindow() {
     const [remoteMicMuted, setRemoteMicMuted] = useState(false);
     const [mediaError, setMediaError] = useState<string | null>(null);
 
-
     const callId = activeCall?.id;
     const roomName = activeCall?.roomName;
     const callType = activeCall?.type;
-
 
     useEffect(() => {
         if (!roomName || !livekitToken) return;
@@ -454,12 +486,6 @@ export default function CallWindow() {
                 await room.connect(livekitUrl, livekitToken);
                 if (cancelled) return;
 
-                // Register remote-track / lifecycle listeners BEFORE requesting
-                // local camera/mic. If enableCameraAndMicrophone() below throws
-                // (permission denied, device busy, etc.) we must still be able to
-                // receive and render the other participant's tracks - otherwise
-                // this side gets stuck on "Calling…" forever even though the
-                // remote side connected fine.
                 const attachRemoteTrack = (
                     track: any,
                     participant: { name?: string; identity: string }
@@ -476,6 +502,10 @@ export default function CallWindow() {
 
                 room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
                     attachRemoteTrack(track, participant);
+                });
+
+                room.on(RoomEvent.TrackUnsubscribed, (track) => {
+                    track.detach();
                 });
 
                 room.on(RoomEvent.TrackMuted, (pub, participant) => {
@@ -499,8 +529,6 @@ export default function CallWindow() {
                     handleEnd();
                 });
 
-                // Pick up any tracks from participants who were already in the
-                // room before we finished connecting.
                 room.remoteParticipants.forEach((participant) => {
                     participant.trackPublications.forEach((pub) => {
                         if (pub.track) attachRemoteTrack(pub.track, participant);
@@ -512,10 +540,6 @@ export default function CallWindow() {
 
                 if (cancelled) return;
 
-                // Local media is requested separately so a camera/mic failure
-                // (permission denied, device in use, etc.) never prevents the
-                // listeners above from working - the call can still connect and
-                // play the remote stream, just without our own track.
                 try {
                     if (callType === "video") {
                         await room.localParticipant.enableCameraAndMicrophone();
@@ -549,12 +573,18 @@ export default function CallWindow() {
 
         return () => {
             cancelled = true;
+            try {
+                room.localParticipant.videoTrackPublications.forEach((pub) =>
+                    pub.track?.detach()
+                );
+                room.localParticipant.audioTrackPublications.forEach((pub) =>
+                    pub.track?.detach()
+                );
+            } catch { }
             room.disconnect();
             roomRef.current = null;
         };
-
     }, [roomName, livekitToken, callType]);
-
 
     useEffect(() => {
         if (!callId) return;
@@ -564,9 +594,7 @@ export default function CallWindow() {
             }
         });
         return () => unsubscribe();
-
     }, [callId]);
-
 
     useEffect(() => {
         if (!remoteConnected) return;
@@ -585,14 +613,30 @@ export default function CallWindow() {
     const handleToggleMute = async () => {
         const room = roomRef.current;
         if (!room) return;
-        await room.localParticipant.setMicrophoneEnabled(isMuted);
+        const enable = isMuted; // сейчас выключен -> хотим включить
+        await room.localParticipant.setMicrophoneEnabled(enable);
         toggleMute();
     };
 
     const handleToggleCamera = async () => {
         const room = roomRef.current;
         if (!room) return;
-        await room.localParticipant.setCameraEnabled(isCameraOff);
+        const enable = isCameraOff; // сейчас выключена -> хотим включить
+        await room.localParticipant.setCameraEnabled(enable);
+
+        if (enable) {
+            // после повторного включения LiveKit создаёт новый video track —
+            // его нужно заново привязать к <video>
+            const pub = room.localParticipant.videoTrackPublications
+                .values()
+                .next().value;
+            if (pub?.track && localVideoRef.current) {
+                pub.track.attach(localVideoRef.current);
+            }
+        } else {
+            localVideoRef.current?.pause();
+        }
+
         toggleCamera();
     };
 
@@ -628,36 +672,39 @@ export default function CallWindow() {
           to { opacity: 1; }
         }
         @keyframes callPanelIn {
-          from { opacity: 0; transform: scale(0.96) translateY(10px); }
+          from { opacity: 0; transform: scale(0.94) translateY(14px); }
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
         @keyframes ringPulse {
           0% { transform: scale(1); opacity: 0.55; }
-          70% { transform: scale(1.55); opacity: 0; }
-          100% { transform: scale(1.55); opacity: 0; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.6); opacity: 0; }
         }
         @keyframes avatarGlow {
           0%, 100% { box-shadow: 0 0 40px rgba(124,92,255,0.25), 0 0 0 1px rgba(124,92,255,0.25) inset; }
-          50% { box-shadow: 0 0 60px rgba(124,92,255,0.4), 0 0 0 1px rgba(124,92,255,0.35) inset; }
+          50% { box-shadow: 0 0 65px rgba(124,92,255,0.42), 0 0 0 1px rgba(124,92,255,0.4) inset; }
+        }
+        @keyframes statusPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
         }
         .call-overlay { animation: callFadeIn 0.2s ease-out; }
-        .call-panel { animation: callPanelIn 0.28s cubic-bezier(0.34, 1.2, 0.64, 1); }
+        .call-panel { animation: callPanelIn 0.32s cubic-bezier(0.34, 1.2, 0.64, 1); }
         .call-ring { animation: ringPulse 2.2s ease-out infinite; }
         .call-avatar { animation: avatarGlow 3.2s ease-in-out infinite; }
+        .status-dot-ringing { animation: statusPulse 1.4s ease-in-out infinite; }
 
-        /* glass panel — pure CSS backdrop-filter, aether-css style, tinted to app violet */
         .glass-panel {
-          background: rgba(30, 22, 66, 0.28);
-          backdrop-filter: blur(24px) saturate(160%);
-          -webkit-backdrop-filter: blur(24px) saturate(160%);
+          background: rgba(30, 22, 66, 0.32);
+          backdrop-filter: blur(28px) saturate(160%);
+          -webkit-backdrop-filter: blur(28px) saturate(160%);
           border: 1px solid rgba(169, 150, 255, 0.18);
           box-shadow:
-            0 10px 40px 0 rgba(10, 6, 30, 0.4),
+            0 20px 60px 0 rgba(10, 6, 30, 0.5),
             inset 0 0 4px 2px rgba(255, 255, 255, 0.05),
             inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
         }
 
-        /* glass buttons — same recipe, lighter blur since they're small */
         .glass-btn {
           background: rgba(255, 255, 255, 0.06);
           border: 1px solid rgba(255, 255, 255, 0.14);
@@ -675,14 +722,12 @@ export default function CallWindow() {
       `}</style>
 
             <div className="call-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-
                 <div className="pointer-events-none absolute inset-0 overflow-hidden">
                     <div className="absolute -top-32 -left-24 w-[460px] h-[460px] rounded-full bg-[#5b3df0]/25 blur-[130px]" />
                     <div className="absolute -bottom-40 -right-20 w-[420px] h-[420px] rounded-full bg-[#2b1f78]/28 blur-[130px]" />
                 </div>
 
-                <div className="call-panel glass-panel relative w-full max-w-md h-[85vh] max-h-[640px] flex flex-col overflow-hidden">
-
+                <div className="call-panel glass-panel relative w-full max-w-md h-[85vh] max-h-[640px] flex flex-col overflow-hidden rounded-[32px]">
                     <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
                     <audio ref={remoteAudioRef} autoPlay />
@@ -692,8 +737,8 @@ export default function CallWindow() {
                         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08]">
                             <span
                                 className={`w-1.5 h-1.5 rounded-full ${remoteConnected
-                                    ? "bg-[#34D399] shadow-[0_0_6px_#34D399]"
-                                    : "bg-[#a996ff] animate-pulse"
+                                        ? "bg-[#34D399] shadow-[0_0_6px_#34D399]"
+                                        : "bg-[#a996ff] status-dot-ringing"
                                     }`}
                             />
                             <span className="text-[11px] font-medium text-white/60 tracking-wide">
@@ -701,7 +746,6 @@ export default function CallWindow() {
                             </span>
                         </div>
                     </div>
-
 
                     <div className="flex-1 relative flex items-center justify-center min-h-0">
                         {callType === "video" ? (
@@ -715,24 +759,36 @@ export default function CallWindow() {
                                 {!remoteConnected && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-[#0d0b17]/60 backdrop-blur-md">
                                         <div className="flex flex-col items-center gap-4">
-                                            <Avatar initial={initial} avatarUrl={displayAvatar} ringing muted={remoteConnected && remoteMicMuted} />
+                                            <Avatar
+                                                initial={initial}
+                                                avatarUrl={displayAvatar}
+                                                ringing
+                                                muted={remoteConnected && remoteMicMuted}
+                                            />
                                             <p className="text-white/90 text-base font-medium">
                                                 {displayName}
                                             </p>
                                         </div>
                                     </div>
                                 )}
-                                <video
-                                    ref={localVideoRef}
-                                    autoPlay
-                                    playsInline
-                                    muted
-                                    className="glass-btn absolute bottom-4 right-4 w-28 h-40 object-cover"
-                                />
+                                {!isCameraOff && (
+                                    <video
+                                        ref={localVideoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        className="absolute bottom-4 right-4 w-28 h-40 object-cover rounded-2xl border border-white/[0.14] shadow-lg shadow-black/40"
+                                    />
+                                )}
                             </>
                         ) : (
                             <div className="flex flex-col items-center gap-5">
-                                <Avatar initial={initial} avatarUrl={displayAvatar} ringing={!remoteConnected} muted={remoteConnected && remoteMicMuted} />
+                                <Avatar
+                                    initial={initial}
+                                    avatarUrl={displayAvatar}
+                                    ringing={!remoteConnected}
+                                    muted={remoteConnected && remoteMicMuted}
+                                />
                                 <div className="text-center">
                                     <p className="text-white text-xl font-semibold tracking-tight">
                                         {displayName}
@@ -744,7 +800,6 @@ export default function CallWindow() {
                             </div>
                         )}
                     </div>
-
 
                     {mediaError && (
                         <div className="flex-none flex items-center justify-center pb-2">
@@ -767,12 +822,11 @@ export default function CallWindow() {
                         </div>
                     )}
 
-
                     <div className="flex-none flex items-center justify-center gap-4 px-6 py-7 border-t border-white/[0.06]">
                         <button
                             onClick={handleToggleMute}
                             title={isMuted ? "Unmute" : "Mute"}
-                            className={`glass-btn w-[52px] h-[52px] flex items-center justify-center ${isMuted ? "active text-[#0d0b17]" : "text-white"
+                            className={`glass-btn w-[52px] h-[52px] rounded-full flex items-center justify-center ${isMuted ? "active text-[#0d0b17]" : "text-white"
                                 }`}
                         >
                             {isMuted ? <MicOff size={19} /> : <Mic size={19} />}
@@ -782,7 +836,7 @@ export default function CallWindow() {
                             <button
                                 onClick={handleToggleCamera}
                                 title={isCameraOff ? "Turn camera on" : "Turn camera off"}
-                                className={`glass-btn w-[52px] h-[52px] flex items-center justify-center ${isCameraOff ? "active text-[#0d0b17]" : "text-white"
+                                className={`glass-btn w-[52px] h-[52px] rounded-full flex items-center justify-center ${isCameraOff ? "active text-[#0d0b17]" : "text-white"
                                     }`}
                             >
                                 {isCameraOff ? <VideoOff size={19} /> : <Video size={19} />}
@@ -792,7 +846,7 @@ export default function CallWindow() {
                         <button
                             onClick={handleEnd}
                             title="End call"
-                            className="glass-btn w-[52px] h-[52px] flex items-center justify-center !bg-gradient-to-br !from-red-500 !to-red-600 !border-red-400/40 text-white shadow-[0_0_28px_rgba(239,68,68,0.45)] hover:!shadow-[0_0_36px_rgba(239,68,68,0.6)]"
+                            className="glass-btn w-[52px] h-[52px] rounded-full flex items-center justify-center !bg-gradient-to-br !from-red-500 !to-red-600 !border-red-400/40 text-white shadow-[0_0_28px_rgba(239,68,68,0.45)] hover:!shadow-[0_0_36px_rgba(239,68,68,0.6)]"
                         >
                             <PhoneOff size={19} />
                         </button>
@@ -818,9 +872,9 @@ function Avatar({
         <div className="relative w-28 h-28 flex items-center justify-center">
             {ringing && (
                 <>
-                    <span className="call-ring absolute inset-0 border-2 border-[#7c5cff]/50" />
+                    <span className="call-ring absolute inset-0 rounded-full border-2 border-[#7c5cff]/50" />
                     <span
-                        className="call-ring absolute inset-0 border-2 border-[#7c5cff]/50"
+                        className="call-ring absolute inset-0 rounded-full border-2 border-[#7c5cff]/50"
                         style={{ animationDelay: "0.6s" }}
                     />
                 </>
@@ -829,10 +883,10 @@ function Avatar({
                 <img
                     src={avatarUrl}
                     alt={initial}
-                    className="call-avatar relative w-24 h-24 object-cover border border-[#a996ff]/30"
+                    className="call-avatar relative w-24 h-24 rounded-full object-cover border border-[#a996ff]/30"
                 />
             ) : (
-                <div className="call-avatar relative w-24 h-24 flex items-center justify-center bg-gradient-to-br from-[#6b46f0] via-[#5b3df0] to-[#4028b0] border border-[#a996ff]/30 text-white text-3xl font-semibold">
+                <div className="call-avatar relative w-24 h-24 rounded-full flex items-center justify-center bg-gradient-to-br from-[#6b46f0] via-[#5b3df0] to-[#4028b0] border border-[#a996ff]/30 text-white text-3xl font-semibold">
                     {initial}
                 </div>
             )}

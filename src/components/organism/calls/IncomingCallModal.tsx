@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { useCallStore } from "@/store/call-store";
 import { acceptCall, declineCall, fetchLiveKitToken } from "@/lib/calls";
@@ -9,26 +10,40 @@ export default function IncomingCallModal() {
     const { incomingCall, setIncomingCall, setActiveCall, setLivekitToken, setMyUid } =
         useCallStore();
     const { firebaseUser } = useCurrentUser();
+    const [isResponding, setIsResponding] = useState(false);
 
     if (!incomingCall) return null;
 
     const handleAccept = async () => {
-        if (!firebaseUser) return;
-        await acceptCall(incomingCall.id);
-        const token = await fetchLiveKitToken(
-            incomingCall.roomName,
-            firebaseUser.uid,
-            incomingCall.calleeName || firebaseUser.displayName || "User"
-        );
-        setLivekitToken(token);
-        setMyUid(firebaseUser.uid);
-        setActiveCall(incomingCall);
-        setIncomingCall(null);
+        if (!firebaseUser || isResponding) return;
+        setIsResponding(true);
+        try {
+            await acceptCall(incomingCall.id);
+            const token = await fetchLiveKitToken(
+                incomingCall.roomName,
+                firebaseUser.uid,
+                incomingCall.calleeName || firebaseUser.displayName || "User"
+            );
+            setLivekitToken(token);
+            setMyUid(firebaseUser.uid);
+            setActiveCall(incomingCall);
+            setIncomingCall(null);
+        } catch (err) {
+            console.error("Accept call failed:", err);
+            setIsResponding(false);
+        }
     };
 
     const handleDecline = async () => {
-        await declineCall(incomingCall.id);
-        setIncomingCall(null);
+        if (isResponding) return;
+        setIsResponding(true);
+        try {
+            await declineCall(incomingCall.id);
+        } catch (err) {
+            console.error("Decline call failed:", err);
+        } finally {
+            setIncomingCall(null);
+        }
     };
 
     const initial = (incomingCall.callerName || "?")[0]?.toUpperCase();
@@ -55,7 +70,6 @@ export default function IncomingCallModal() {
         .incoming-ring { animation: incomingRing 2.2s ease-out infinite; }
         .incoming-avatar { animation: incomingAvatarGlow 3.2s ease-in-out infinite; }
 
-        /* glass panel — pure CSS backdrop-filter, same recipe as CallWindow */
         .glass-panel {
           background: rgba(30, 22, 66, 0.28);
           backdrop-filter: blur(24px) saturate(160%);
@@ -67,15 +81,15 @@ export default function IncomingCallModal() {
             inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
         }
 
-        /* glass buttons — same recipe, tint kept via !bg on top */
         .incoming-btn {
           backdrop-filter: blur(10px) saturate(150%);
           -webkit-backdrop-filter: blur(10px) saturate(150%);
           box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
         }
         .incoming-btn:hover { transform: translateY(-2px); }
         .incoming-btn:active { transform: translateY(0) scale(0.94); }
+        .incoming-btn:disabled { opacity: 0.5; pointer-events: none; }
       `}</style>
 
             <div className="incoming-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -84,23 +98,23 @@ export default function IncomingCallModal() {
                     <div className="absolute -bottom-40 -right-20 w-[420px] h-[420px] rounded-full bg-[#2b1f78]/28 blur-[130px]" />
                 </div>
 
-                <div className="incoming-panel glass-panel relative w-full max-w-[340px] flex flex-col items-center overflow-hidden px-8 py-9 gap-5">
+                <div className="incoming-panel glass-panel relative w-full max-w-[340px] flex flex-col items-center overflow-hidden px-8 py-9 gap-5 rounded-[28px]">
                     <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
                     <div className="relative w-24 h-24 flex items-center justify-center">
-                        <span className="incoming-ring absolute inset-0 border-2 border-[#7c5cff]/50" />
+                        <span className="incoming-ring absolute inset-0 rounded-full border-2 border-[#7c5cff]/50" />
                         <span
-                            className="incoming-ring absolute inset-0 border-2 border-[#7c5cff]/50"
+                            className="incoming-ring absolute inset-0 rounded-full border-2 border-[#7c5cff]/50"
                             style={{ animationDelay: "0.6s" }}
                         />
                         {incomingCall.callerAvatar ? (
                             <img
                                 src={incomingCall.callerAvatar}
                                 alt={incomingCall.callerName}
-                                className="incoming-avatar relative w-20 h-20 object-cover border border-[#a996ff]/30"
+                                className="incoming-avatar relative w-20 h-20 rounded-full object-cover border border-[#a996ff]/30"
                             />
                         ) : (
-                            <div className="incoming-avatar relative w-20 h-20 flex items-center justify-center bg-gradient-to-br from-[#6b46f0] via-[#5b3df0] to-[#4028b0] border border-[#a996ff]/30 text-white text-2xl font-semibold">
+                            <div className="incoming-avatar relative w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-[#6b46f0] via-[#5b3df0] to-[#4028b0] border border-[#a996ff]/30 text-white text-2xl font-semibold">
                                 {initial}
                             </div>
                         )}
@@ -123,15 +137,17 @@ export default function IncomingCallModal() {
                     <div className="flex items-center gap-5 mt-2 relative z-10">
                         <button
                             onClick={handleDecline}
+                            disabled={isResponding}
                             title="Decline"
-                            className="incoming-btn w-14 h-14 flex items-center justify-center !bg-gradient-to-br !from-red-500 !to-red-600 !border !border-red-400/30 text-white shadow-[0_0_28px_rgba(239,68,68,0.45)] hover:!shadow-[0_0_36px_rgba(239,68,68,0.6)]"
+                            className="incoming-btn w-14 h-14 rounded-full flex items-center justify-center !bg-gradient-to-br !from-red-500 !to-red-600 !border !border-red-400/30 text-white shadow-[0_0_28px_rgba(239,68,68,0.45)] hover:!shadow-[0_0_36px_rgba(239,68,68,0.6)]"
                         >
                             <PhoneOff size={20} />
                         </button>
                         <button
                             onClick={handleAccept}
+                            disabled={isResponding}
                             title="Accept"
-                            className="incoming-btn w-14 h-14 flex items-center justify-center !bg-gradient-to-br !from-[#7c5cff] !to-[#5b3df0] !border !border-[#a996ff]/30 text-white shadow-[0_0_28px_rgba(124,92,255,0.5)] hover:!shadow-[0_0_36px_rgba(124,92,255,0.65)]"
+                            className="incoming-btn w-14 h-14 rounded-full flex items-center justify-center !bg-gradient-to-br !from-[#7c5cff] !to-[#5b3df0] !border !border-[#a996ff]/30 text-white shadow-[0_0_28px_rgba(124,92,255,0.5)] hover:!shadow-[0_0_36px_rgba(124,92,255,0.65)]"
                         >
                             <Phone size={20} />
                         </button>
