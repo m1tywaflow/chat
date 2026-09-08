@@ -1,102 +1,14 @@
-// "use client";
-
-// import { useState } from "react";
-// import { useRouter } from "next/navigation";
-// import { loginUser } from "@/lib/auth";
-// import Link from "next/link";
-
-// export default function LoginPage() {
-//   const router = useRouter();
-//   const [username, setUsername] = useState("");
-//   const [password, setPassword] = useState("");
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     setError("");
-//     setLoading(true);
-
-//     try {
-//       await loginUser(username, password);
-//       router.push("/");
-//     } catch {
-//       setError("Incorrect username or password");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#09090F] px-6 text-white">
-//       {/* bg glow */}
-//       <div className="absolute inset-0">
-//         <div className="absolute left-1/2 top-[-220px] h-[650px] w-[650px] -translate-x-1/2 rounded-full bg-violet-600/20 blur-[180px]" />
-//       </div>
-
-//       <div className="relative z-10 w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-8 backdrop-blur-md">
-//         <h1 className="text-3xl font-bold tracking-tight">Login</h1>
-
-//         <p className="mt-2 text-sm text-zinc-400">Log in to your account</p>
-
-//         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-//           <div>
-//             <label className="mb-2 block text-sm text-zinc-300">Username</label>
-
-//             <input
-//               type="text"
-//               value={username}
-//               onChange={(e) => setUsername(e.target.value)}
-//               autoComplete="username"
-//               className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 text-white outline-none transition-all placeholder:text-zinc-500 focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="mb-2 block text-sm text-zinc-300">Password</label>
-
-//             <input
-//               type="password"
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//               autoComplete="current-password"
-//               className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 text-white outline-none transition-all placeholder:text-zinc-500 focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20"
-//             />
-//           </div>
-
-//           {error && <p className="text-sm text-red-400">{error}</p>}
-
-//           <button
-//             type="submit"
-//             disabled={loading}
-//             className="mt-2 flex h-12 w-full items-center justify-center rounded-xl border border-violet-500/30 bg-zinc-900 font-medium transition-all duration-300 hover:border-violet-400 hover:bg-zinc-800 hover:shadow-[0_0_25px_rgba(139,92,246,.2)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-//           >
-//             {loading ? "Let's go..." : "Login"}
-//           </button>
-//         </form>
-
-//         <p className="mt-6 text-center text-sm text-zinc-500">
-//           Don't have an account?{" "}
-//           <Link
-//             href="/register"
-//             className="text-violet-400 transition hover:text-violet-300"
-//           >
-//             Register
-//           </Link>
-//         </p>
-//       </div>
-//     </main>
-//   );
-// }
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser } from "@/lib/auth";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -104,6 +16,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
@@ -118,79 +31,123 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#07060d] px-6 text-white">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#08080D] px-6 text-white">
       <style>{`
-        @keyframes cardIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-        .lp-card { animation: cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+        @keyframes cardIn {
+          from {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .lp-card {
+          animation: cardIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .nexo-input {
+          color-scheme: dark;
+        }
+
+        .nexo-input:-webkit-autofill,
+        .nexo-input:-webkit-autofill:hover,
+        .nexo-input:-webkit-autofill:focus,
+        .nexo-input:-webkit-autofill:active {
+          -webkit-text-fill-color: #ffffff !important;
+          -webkit-box-shadow: 0 0 0 1000px #09090f inset !important;
+          box-shadow: 0 0 0 1000px #09090f inset !important;
+          background-color: #09090f !important;
+          caret-color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.06) !important;
+          transition: background-color 9999s ease-in-out 0s;
+        }
+
+        .nexo-input:focus:-webkit-autofill {
+          -webkit-box-shadow: 0 0 0 1000px #0b0b13 inset !important;
+          box-shadow: 0 0 0 1000px #0b0b13 inset !important;
+          border-color: rgba(139, 92, 246, 0.5) !important;
+        }
       `}</style>
 
-      {/* bg glow */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-[-220px] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[#7c5cff]/[0.16] blur-[160px]" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-1/2 top-[-280px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/[0.12] blur-[180px]" />
+
+        <div className="absolute bottom-[-350px] left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-indigo-600/[0.05] blur-[160px]" />
       </div>
 
-      <div className="lp-card relative z-10 w-full max-w-[360px]">
-        {/* Mark — soft glow behind the logo itself, no bright box hiding it */}
+      <div className="lp-card relative z-10 w-full max-w-[390px]">
         <div className="mb-7 flex justify-center">
           <div className="relative">
-            <div className="pointer-events-none absolute inset-0 rounded-full bg-[#7c5cff]/30 blur-2xl" />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm">
-              <img
+            <div className="pointer-events-none absolute inset-0 scale-125 rounded-full bg-violet-500/20 blur-2xl" />
+
+            <div className="relative rounded-[22px] border border-white/[0.07] bg-[#11111A]/80 p-3 shadow-2xl shadow-violet-950/20 backdrop-blur-xl">
+              <Image
                 src="/logo.png"
                 alt="Nexo"
-                width={38}
-                height={38}
-                className="object-contain drop-shadow-[0_2px_8px_rgba(124,92,255,0.35)]"
+                width={64}
+                height={64}
+                priority
+                className="select-none rounded-[15px]"
               />
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-8 backdrop-blur-md">
-          <h1 className="text-[24px] font-semibold tracking-tight">Log in</h1>
-          <p className="mt-1.5 text-[13.5px] text-white/40">
-            Welcome back to Nexo
+        <div className="rounded-[24px] border border-white/[0.07] bg-[#0E0E16]/85 p-7 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
+          <h1 className="text-[25px] font-semibold tracking-[-0.02em]">
+            Welcome back
+          </h1>
+
+          <p className="mt-1.5 text-[13.5px] text-zinc-500">
+            Log in to continue to Nexo.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-[12.5px] font-medium text-white/50">
+              <label className="mb-2 block text-[12.5px] font-medium text-zinc-400">
                 Username
               </label>
+
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 autoFocus
-                className="h-11 w-full rounded-lg border border-white/[0.08] bg-black/25 px-3.5 text-[14px] text-white outline-none transition-colors placeholder:text-white/20 focus:border-[#7c5cff]/50 focus:bg-black/35"
+                className="nexo-input h-12 w-full appearance-none rounded-xl border border-white/[0.06] bg-[#09090F] px-4 text-[14px] text-white caret-white outline-none transition-all duration-200 placeholder:text-zinc-700 hover:border-white/[0.1] focus:border-violet-500/50 focus:bg-[#0B0B13] focus:ring-4 focus:ring-violet-500/[0.08]"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-[12.5px] font-medium text-white/50">
+              <label className="mb-2 block text-[12.5px] font-medium text-zinc-400">
                 Password
               </label>
+
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                className="h-11 w-full rounded-lg border border-white/[0.08] bg-black/25 px-3.5 text-[14px] text-white outline-none transition-colors placeholder:text-white/20 focus:border-[#7c5cff]/50 focus:bg-black/35"
+                className="nexo-input h-12 w-full appearance-none rounded-xl border border-white/[0.06] bg-[#09090F] px-4 text-[14px] text-white caret-white outline-none transition-all duration-200 placeholder:text-zinc-700 hover:border-white/[0.1] focus:border-violet-500/50 focus:bg-[#0B0B13] focus:ring-4 focus:ring-violet-500/[0.08]"
               />
             </div>
 
             {error && (
-              <p className="text-[12.5px] text-red-400">{error}</p>
+              <div className="rounded-xl border border-red-500/10 bg-red-500/[0.06] px-3.5 py-3 text-[12.5px] text-red-400">
+                {error}
+              </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="mt-1.5 flex h-11 w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#7c5cff] to-[#5b3df0] text-[13.5px] font-semibold text-white transition-all hover:from-[#8d70ff] hover:to-[#6c4dff] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_10px_28px_-10px_rgba(124,92,255,0.55)]"
+              className="mt-1 flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 text-[14px] font-semibold text-white shadow-[0_10px_30px_-12px_rgba(124,92,255,0.7)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_14px_35px_-12px_rgba(124,92,255,0.85)] active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
-                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
               ) : (
                 "Log in"
               )}
@@ -198,11 +155,11 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-5 text-center text-[13px] text-white/35">
+        <p className="mt-5 text-center text-[13px] text-zinc-500">
           Don&apos;t have an account?{" "}
           <Link
             href="/register"
-            className="font-medium text-[#a996ff] transition-colors hover:text-white"
+            className="font-medium text-violet-400 transition-colors hover:text-violet-300"
           >
             Register
           </Link>
