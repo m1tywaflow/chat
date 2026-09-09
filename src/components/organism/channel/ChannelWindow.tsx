@@ -244,12 +244,12 @@ function ReactionPill({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1 h-6 px-2 rounded-full text-xs cursor-pointer border transition-colors ${mine
+      className={`flex items-center gap-1.5 h-7 px-2.5 rounded-full text-sm cursor-pointer border transition-colors ${mine
         ? "bg-[#7c5cff]/20 border-[#7c5cff]/50 text-[#a893ff]"
         : "bg-black/20 border-white/15 text-zinc-400 hover:border-white/25"
         }`}
     >
-      <ReactionGlyph token={token} size={15} />
+      <ReactionGlyph token={token} size={18} />
 
       <span className="font-medium leading-none">{count}</span>
     </button>
