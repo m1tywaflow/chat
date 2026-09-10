@@ -455,7 +455,7 @@ export default function SideBar() {
       `}</style>
 
       <section
-        className="h-full w-80 flex flex-col border-r transition-colors duration-200 relative"
+        className="w-full h-full flex flex-col border-r transition-colors duration-200 relative"
         style={{
           background: theme.sideBarBg,
           borderColor: border,
