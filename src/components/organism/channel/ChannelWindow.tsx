@@ -267,7 +267,7 @@ function PostMeta({
   isPinned?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 select-none">
+    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 select-none">
       {isPinned && <Pin size={10} className="text-[#a893ff] shrink-0" />}
 
       <span className="tabular-nums">{time}</span>
@@ -459,6 +459,8 @@ export default function ChannelWindow({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
   const editInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isNearBottomRef = useRef(true);
@@ -648,7 +650,36 @@ export default function ChannelWindow({
       isNearBottomRef.current = true;
     }
     scrollIntentRef.current = null;
-  }, [channelId, channel, posts]);
+  }, [channelId, posts]);
+
+  // Content height can change after the initial render for reasons React
+  // never tells us about directly: images/stickers finishing decode,
+  // reactions being added, a post being edited to a longer text, the
+  // pinned-post bar appearing/disappearing, etc. Watching the actual
+  // content box (instead of only hooking <img onLoad>) is what makes the
+  // "stick to bottom while following new posts" behavior reliable instead
+  // of randomly breaking depending on what changed the layout.
+  useEffect(() => {
+    const contentEl = contentRef.current;
+
+    if (!contentEl) return;
+
+    const ro = new ResizeObserver(() => {
+      const intent = scrollIntentRef.current;
+
+      if (intent === "initial" || intent === "force") {
+        scrollToBottomInstant();
+        isNearBottomRef.current = true;
+        scrollIntentRef.current = null;
+      } else if (isNearBottomRef.current) {
+        scrollToBottomInstant();
+      }
+    });
+
+    ro.observe(contentEl);
+
+    return () => ro.disconnect();
+  }, [channelId]);
 
   useEffect(() => {
     checkIsSubscribed(channelId, myUid).then((subscribed) => {
@@ -1250,187 +1281,188 @@ export default function ChannelWindow({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="chat-scroll relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-4"
+        className="chat-scroll relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4"
       >
-        {displayPosts.map((p) => {
-          const isImageStickerPost =
-            !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
+        <div ref={contentRef} className="flex flex-col gap-3">
+          {displayPosts.map((p) => {
+            const isImageStickerPost =
+              !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
 
-          const isTextStickerPost = !p.imageUrl && isStickerOnlyText(p.text);
+            const isTextStickerPost = !p.imageUrl && isStickerOnlyText(p.text);
 
-          const isStickerPost = isImageStickerPost || isTextStickerPost;
+            const isStickerPost = isImageStickerPost || isTextStickerPost;
 
-          const isEditing = editingPostId === p.id;
+            const isEditing = editingPostId === p.id;
 
-          const isPinned = channel.pinnedPostId === p.id;
+            const isPinned = channel.pinnedPostId === p.id;
 
-          const views = (p as any).views as number | undefined;
+            const views = (p as any).views as number | undefined;
 
-          if (isStickerPost) {
+            if (isStickerPost) {
+              return (
+                <div
+                  key={p.id}
+                  id={`channel-post-${p.id}`}
+                  ref={(el) => observePost(el, p.id)}
+                  onContextMenu={(e) => openPostMenu(e, p.id)}
+                  className="relative group max-w-[380px] flex flex-col items-start gap-1.5"
+                >
+                  {p.forwardedFrom && <ForwardedFrom source={p.forwardedFrom} />}
+                  {isImageStickerPost ? (
+                    <img
+                      src={p.imageUrl!}
+                      alt="sticker"
+                      onLoad={handleMediaLoad}
+                      className="w-32 h-32 object-contain"
+                    />
+                  ) : (
+                    <div className="inline-flex flex-wrap items-end gap-1">
+                      <RichText text={p.text} variant="large" />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 px-1">
+                    <PostMeta
+                      time={formatTime(p.createdAt)}
+                      views={views}
+                      isPinned={isPinned}
+                    />
+
+                    {isOwner && (
+                      <>
+                        {isTextStickerPost && (
+                          <button
+                            onClick={() => startEdit(p)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-[#a893ff] cursor-pointer"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setDeleteConfirmId(p.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-400 cursor-pointer"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="px-1">
+                    <PostActionsBar post={p} />
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={p.id}
                 id={`channel-post-${p.id}`}
                 ref={(el) => observePost(el, p.id)}
                 onContextMenu={(e) => openPostMenu(e, p.id)}
-                className="relative group max-w-[420px] flex flex-col items-start gap-1.5"
+                className={`relative group max-w-[380px] rounded-2xl border overflow-visible shadow-sm shadow-black/20 transition-colors ${isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
+                  }`}
+                style={{
+                  background: "var(--color-msg-bg)",
+                }}
               >
                 {p.forwardedFrom && <ForwardedFrom source={p.forwardedFrom} />}
-                {isImageStickerPost ? (
+                {p.imageUrl && (
                   <img
-                    src={p.imageUrl!}
-                    alt="sticker"
+                    src={p.imageUrl}
+                    alt="post"
                     onLoad={handleMediaLoad}
-                    className="w-32 h-32 object-contain"
+                    onClick={() => setLightboxUrl(p.imageUrl!)}
+                    className="w-full max-h-[300px] object-cover cursor-zoom-in rounded-t-2xl"
                   />
-                ) : (
-                  <div className="inline-flex flex-wrap items-end gap-1">
-                    <RichText text={p.text} variant="large" />
-                  </div>
                 )}
 
-                <div className="flex items-center gap-2 px-1">
-                  <PostMeta
-                    time={formatTime(p.createdAt)}
-                    views={views}
-                    isPinned={isPinned}
-                  />
+                <div className="px-3.5 py-2.5">
+                  {isEditing ? (
+                    <div className="flex flex-col gap-2">
+                      <textarea
+                        ref={editInputRef}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => handleEditKeyDown(e, p.id)}
+                        rows={2}
+                        className="w-full resize-none rounded-lg bg-black/20 border border-[#7c5cff]/30 px-2.5 py-2 text-sm text-white outline-none focus:border-[#7c5cff]/60 transition-colors"
+                      />
 
-                  {isOwner && (
-                    <>
-                      {isTextStickerPost && (
+                      <div className="flex items-center gap-2 justify-end">
                         <button
-                          onClick={() => startEdit(p)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-[#a893ff] cursor-pointer"
+                          onClick={cancelEdit}
+                          className="px-2.5 py-1 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
                         >
-                          <Pencil size={12} />
+                          Cancel
                         </button>
+
+                        <button
+                          onClick={() => saveEdit(p.id)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[#a893ff] bg-[#7c5cff]/10 hover:bg-[#7c5cff]/20 transition-colors cursor-pointer"
+                        >
+                          <Check size={11} />
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {p.text && (
+                        <div className="text-[14px] leading-[1.45] whitespace-pre-wrap break-words">
+                          <RichText text={p.text} />
+
+                          {p.edited && (
+                            <span className="text-[11px] ml-1 opacity-50">
+                              (edited)
+                            </span>
+                          )}
+                        </div>
                       )}
-                      <button
-                        onClick={() => setDeleteConfirmId(p.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-400 cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <PostMeta
+                          time={formatTime(p.createdAt)}
+                          views={views}
+                          isPinned={isPinned}
+                        />
+
+                        {isOwner && (
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => startEdit(p)}
+                              className="text-zinc-600 hover:text-[#a893ff] cursor-pointer"
+                            >
+                              <Pencil size={13} />
+                            </button>
+
+                            <button
+                              onClick={() => setDeleteConfirmId(p.id)}
+                              className="text-zinc-600 hover:text-red-400 cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-2">
+                        <PostActionsBar post={p} />
+                      </div>
                     </>
                   )}
                 </div>
-
-                <div className="px-1">
-                  <PostActionsBar post={p} />
-                </div>
               </div>
             );
-          }
+          })}
 
-          return (
-            <div
-              key={p.id}
-              id={`channel-post-${p.id}`}
-              ref={(el) => observePost(el, p.id)}
-              onContextMenu={(e) => openPostMenu(e, p.id)}
-              className={`relative group max-w-[420px] rounded-2xl border overflow-visible ${isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
-                }`}
-              style={{
-                background: "var(--color-msg-bg)",
-              }}
-            >
-              {p.forwardedFrom && <ForwardedFrom source={p.forwardedFrom} />}
-              {p.imageUrl && (
-                <img
-                  src={p.imageUrl}
-                  alt="post"
-                  onLoad={handleMediaLoad}
-                  onClick={() => setLightboxUrl(p.imageUrl!)}
-                  className="w-full max-h-[360px] object-cover cursor-zoom-in"
-                />
-              )}
-
-              <div className="px-4 py-3">
-                {isEditing ? (
-                  <div className="flex flex-col gap-2">
-                    <textarea
-                      ref={editInputRef}
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => handleEditKeyDown(e, p.id)}
-                      rows={2}
-                      className="w-full resize-none rounded-lg bg-black/20 border border-[#7c5cff]/30 px-2.5 py-2 text-sm text-white outline-none focus:border-[#7c5cff]/60 transition-colors"
-                    />
-
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={cancelEdit}
-                        className="px-2.5 py-1 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-
-                      <button
-                        onClick={() => saveEdit(p.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[#a893ff] bg-[#7c5cff]/10 hover:bg-[#7c5cff]/20 transition-colors cursor-pointer"
-                      >
-                        <Check size={11} />
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {p.text && (
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        <RichText text={p.text} />
-
-                        {p.edited && (
-                          <span className="text-[10px] ml-1 opacity-50">
-                            (edited)
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-2">
-                      <PostMeta
-                        time={formatTime(p.createdAt)}
-                        views={views}
-                        isPinned={isPinned}
-                      />
-
-                      {isOwner && (
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => startEdit(p)}
-                            className="text-zinc-600 hover:text-[#a893ff] cursor-pointer"
-                          >
-                            <Pencil size={13} />
-                          </button>
-
-                          <button
-                            onClick={() => setDeleteConfirmId(p.id)}
-                            className="text-zinc-600 hover:text-red-400 cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-2">
-                      <PostActionsBar post={p} />
-                    </div>
-                  </>
-                )}
-              </div>
+          {displayPosts.length === 0 && (
+            <div className="text-center text-zinc-600 text-sm py-10">
+              No posts yet
             </div>
-          );
-        })}
-
-        {displayPosts.length === 0 && (
-          <div className="text-center text-zinc-600 text-sm py-10">
-            No posts yet
-          </div>
-        )}
-
+          )}
+        </div>
       </div>
 
       {postMenu && (

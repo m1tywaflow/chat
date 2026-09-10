@@ -981,7 +981,7 @@ export default function ChatWindow() {
       callerAvatar: myAvatar,
       calleeId: otherUser.id,
       calleeName: otherUser.username ?? "User",
-      calleeAvatar: otherUser.avatar ?? null, // было otherUser.avatarUrl
+      calleeAvatar: otherUser.avatar ?? null,
       chatId,
     } as any);
   }
@@ -989,12 +989,21 @@ export default function ChatWindow() {
   if (!chatId) {
     return (
       <div
-        className="flex w-full justify-center items-center h-full gap-3 text-zinc-500"
-        style={{ background: "var(--color-chat-bg)" }}
+        className="relative flex w-full h-full items-center justify-center overflow-hidden text-zinc-500"
+        style={{
+          background: "var(--color-chat-bg)",
+          color: "var(--color-text)",
+        }}
       >
-        <span className="text-sm font-bold">
-          Select a conversation in the Nexo
-        </span>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
+          <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
+        </div>
+        <div className="relative z-10 flex items-center gap-3">
+          <span className="text-sm font-bold text-zinc-500">
+            Select a conversation in the Nexo
+          </span>
+        </div>
       </div>
     );
   }
