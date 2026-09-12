@@ -84,6 +84,56 @@ function formatTime(ts: any): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function cloudinaryUrl(url: string, transform: string) {
+  if (!url?.includes("/upload/")) return url;
+  return url.replace("/upload/", `/upload/${transform}/`);
+}
+
+const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto"); // ~1-2кб placeholder
+const fullSrc = (url: string, w = 520) => cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
+
+function ChatImage({
+  url,
+  onClick,
+  onLoad,
+  priority = false,
+}: {
+  url: string;
+  onClick?: () => void;
+  onLoad?: () => void;
+  priority?: boolean;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="relative rounded-xl overflow-hidden max-w-[260px] w-full bg-white/[0.03]">
+      <img
+        src={tinySrc(url)}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="absolute inset-0 w-full h-full object-cover scale-105"
+        style={{ filter: "blur(10px)" }}
+      />
+      <img
+        src={fullSrc(url)}
+        alt="image"
+        decoding="async"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        draggable={false}
+        onLoad={() => {
+          setLoaded(true);
+          onLoad?.();
+        }}
+        onClick={onClick}
+        className="chat-img relative w-full object-cover block transition-opacity duration-150"
+        style={{ opacity: loaded ? 1 : 0 }}
+      />
+    </div>
+  );
+}
+
 function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
   const custom = getCustomEmoji(token);
   if (custom) {
@@ -350,10 +400,6 @@ export default function GroupWindow() {
   }, [myUid]);
 
   useEffect(() => {
-    // Not clearing `messages` here on purpose - same blank-flash issue as
-    // ChatWindow.tsx had. Old group's messages stay on screen until the new
-    // group's Firestore snapshot arrives and replaces them (subscription
-    // callback below is already guarded by `activeGroupIdRef`).
     setPendingMessages([]);
     setShowScrollButton(false);
     isNearBottom.current = true;
@@ -377,15 +423,6 @@ export default function GroupWindow() {
       receivedSnapshotRef.current = true;
 
       if (mineMessageCount > mineMessageCountRef.current) {
-        // Reconcile optimistic pending messages against confirmed ones on
-        // EVERY snapshot, including the very first one for this chat. If a
-        // message was sent before this initial snapshot arrived, Firestore's
-        // local cache already reflects it here, so `mineMessageCount` already
-        // includes it - slicing still correctly drops the now-redundant
-        // optimistic copy (slicing past array length just yields []).
-        // Special-casing "initial" here used to skip this entirely, which
-        // left that optimistic copy stuck on screen forever with a
-        // permanent "sending..." clock icon.
         const delta = mineMessageCount - mineMessageCountRef.current;
         setPendingMessages((prev) => (prev.length ? prev.slice(delta) : prev));
         mineMessageCountRef.current = mineMessageCount;
@@ -1080,7 +1117,7 @@ export default function GroupWindow() {
           className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 min-h-0"
         >
           <div className="space-y-1">
-            {displayMessages.map((m) => {
+            {displayMessages.map((m, msgIndex) => {
               const isMine = m.senderId === myUid;
               const reactionSummary = getReactionSummary(m.reactions);
               const hasReactions = reactionSummary.length > 0;
@@ -1097,6 +1134,7 @@ export default function GroupWindow() {
               const time = formatTime(m.createdAt);
               const readCount = (m.readBy || []).length;
               const isVoiceMsg = !!m.voiceUrl;
+              const isImagePriority = msgIndex >= displayMessages.length - 8;
 
               return (
                 <div key={m.id}>
@@ -1320,10 +1358,9 @@ export default function GroupWindow() {
                                   </div>
                                 </div>
                               ) : (
-                                <img
-                                  src={m.imageUrl}
-                                  alt="image"
-                                  className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                <ChatImage
+                                  url={m.imageUrl}
+                                  priority={isImagePriority}
                                   onLoad={handleMediaLoad}
                                   onClick={() =>
                                     !m.pending && setLightboxUrl(m.imageUrl)
