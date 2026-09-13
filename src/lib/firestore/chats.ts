@@ -143,6 +143,17 @@
 //   const userUnsubs = new Map<string, () => void>();
 //   const userCache = new Map<string, any>();
 //   const prevUnread = new Map<string, number>();
+//   // Firestore's serverTimestamp() reads back as null in the local
+//   // "optimistic" snapshot that fires immediately after a write, and only
+//   // gets its real value once the server has assigned it (a following
+//   // snapshot). Sorting the sidebar by `lastMessageTime` directly off that
+//   // field means an existing chat's timestamp would momentarily collapse to
+//   // null (sorts as oldest) right when you send a message, then jump back
+//   // once the real value arrives a moment later - a visible flash even for
+//   // a chat that never actually needed to move. Caching the last known good
+//   // timestamp per chat and falling back to it while a write is still
+//   // pending keeps the sort order stable through that transient gap.
+//   const lastKnownTime = new Map<string, any>();
 //   let chatCache: any[] = [];
 //   let isFirstSnapshot = true;
 
@@ -190,6 +201,10 @@
 //       }
 //       prevUnread.set(chat.id, unreadCount);
 
+//       if (chat.lastMessageTime) {
+//         lastKnownTime.set(d.id, chat.lastMessageTime);
+//       }
+
 //       return {
 //         id: chat.id,
 //         _otherUid: otherUid,
@@ -200,7 +215,8 @@
 //           online: false,
 //         },
 //         lastMessage: chat.lastMessage || "",
-//         lastMessageTime: chat.lastMessageTime || null,
+//         lastMessageTime:
+//           chat.lastMessageTime || lastKnownTime.get(d.id) || null,
 //         unreadCount,
 //         deleted: chat.deleted?.[myUid] || false,
 //       };
@@ -345,6 +361,7 @@
 //     lastMessageAt: serverTimestamp(),
 //   });
 // }
+
 import {
   collection,
   doc,
@@ -361,12 +378,14 @@ import {
   arrayUnion,
   arrayRemove,
   getDoc,
+  limit,
+  startAfter,
 } from "firebase/firestore";
-
+ 
 import { db } from "@/lib/firebase";
 import type { ForwardableContent } from "@/types/forward";
 import { buildForwardedFrom } from "@/lib/forwarding";
-
+ 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
 }
@@ -376,15 +395,15 @@ export async function setTyping(
   isTyping: boolean
 ) {
   const ref = doc(db, "chats", chatId);
-
+ 
   await updateDoc(ref, {
     [`typing.${uid}`]: isTyping,
   });
 }
-
+ 
 export async function createOrGetChat(myUid: string, otherUid: string) {
   const chatId = [myUid, otherUid].sort().join("_");
-
+ 
   await setDoc(
     doc(db, "chats", chatId),
     {
@@ -397,17 +416,17 @@ export async function createOrGetChat(myUid: string, otherUid: string) {
     },
     { merge: true }
   );
-
+ 
   return chatId;
 }
-
+ 
 export async function searchUsers(search: string) {
   const q = search?.toLowerCase().trim();
-
+ 
   if (!q) return [];
-
+ 
   const snap = await getDocs(collection(db, "users"));
-
+ 
   return snap.docs
     .map((d) => ({
       id: d.id,
@@ -415,7 +434,7 @@ export async function searchUsers(search: string) {
     }))
     .filter((u: any) => (u.username || "").toLowerCase().includes(q));
 }
-
+ 
 export async function sendMessage(
   chatId: string,
   myUid: string,
@@ -424,11 +443,11 @@ export async function sendMessage(
   imageUrl?: string
 ) {
   if (!chatId || !myUid || (!text.trim() && !imageUrl)) return;
-
+ 
   const [uid1, uid2] = chatId.split("_");
   const otherUid = uid1 === myUid ? uid2 : uid1;
-
-  await addDoc(collection(db, "chats", chatId, "messages"), {
+ 
+  const docRef = await addDoc(collection(db, "chats", chatId, "messages"), {
     senderId: myUid,
     text: text.trim(),
     imageUrl: imageUrl || null,
@@ -442,33 +461,74 @@ export async function sendMessage(
         }
       : null,
   });
-
+ 
   await updateDoc(doc(db, "chats", chatId), {
     lastMessage: imageUrl && !text.trim() ? "📷 Photo" : text.trim(),
     lastMessageTime: serverTimestamp(),
     updatedAt: serverTimestamp(),
     [`unreadCount.${otherUid}`]: increment(1),
   });
+ 
+  return docRef.id;
 }
-
-export function subscribeToMessages(chatId: string, cb: (m: any[]) => void) {
+ 
+// Only the last MESSAGES_PAGE_SIZE messages are subscribed to in real time.
+// Loading a whole chat's history on every open used to pull every message
+// ever sent (unbounded Firestore reads, slow first paint, ever-growing
+// memory/render cost). Older messages are now fetched on demand via
+// loadOlderMessages() as the user scrolls up.
+const MESSAGES_PAGE_SIZE = 50;
+ 
+export function subscribeToMessages(
+  chatId: string,
+  cb: (m: any[], hasMore: boolean) => void,
+  pageSize: number = MESSAGES_PAGE_SIZE
+) {
   if (!chatId) return () => {};
-
+ 
   const q = query(
     collection(db, "chats", chatId, "messages"),
-    orderBy("createdAt", "asc")
+    orderBy("createdAt", "desc"),
+    limit(pageSize)
   );
-
+ 
   return onSnapshot(q, (snap) => {
+    const docs = [...snap.docs].reverse();
     cb(
-      snap.docs.map((d) => ({
+      docs.map((d) => ({
         id: d.id,
         ...d.data(),
-      }))
+      })),
+      snap.docs.length === pageSize
     );
   });
 }
-
+ 
+// One-off fetch of the page of messages older than `beforeMessage`.
+// Used to lazily back-fill history when the user scrolls to the top
+// of the chat, instead of loading everything up front.
+export async function loadOlderMessages(
+  chatId: string,
+  beforeMessage: { createdAt: any },
+  pageSize: number = MESSAGES_PAGE_SIZE
+): Promise<{ messages: any[]; hasMore: boolean }> {
+  if (!chatId || !beforeMessage) return { messages: [], hasMore: false };
+ 
+  const q = query(
+    collection(db, "chats", chatId, "messages"),
+    orderBy("createdAt", "desc"),
+    startAfter(beforeMessage.createdAt),
+    limit(pageSize)
+  );
+ 
+  const snap = await getDocs(q);
+  const docs = [...snap.docs].reverse();
+  return {
+    messages: docs.map((d) => ({ id: d.id, ...d.data() })),
+    hasMore: snap.docs.length === pageSize,
+  };
+}
+ 
 export function subscribeToUserChats(
   myUid: string,
   cb: (c: any[]) => void,
@@ -480,13 +540,13 @@ export function subscribeToUserChats(
   }) => void
 ) {
   if (!myUid) return () => {};
-
+ 
   const q = query(
     collection(db, "chats"),
     where("participantIds", "array-contains", myUid),
     orderBy("updatedAt", "desc")
   );
-
+ 
   const userUnsubs = new Map<string, () => void>();
   const userCache = new Map<string, any>();
   const prevUnread = new Map<string, number>();
@@ -503,7 +563,7 @@ export function subscribeToUserChats(
   const lastKnownTime = new Map<string, any>();
   let chatCache: any[] = [];
   let isFirstSnapshot = true;
-
+ 
   function rebuild() {
     cb(
       chatCache
@@ -514,13 +574,13 @@ export function subscribeToUserChats(
         .filter((c) => !c.deleted)
     );
   }
-
+ 
   const chatUnsub = onSnapshot(q, (snap) => {
     chatCache = snap.docs.map((d) => {
       const chat = d.data() as any;
       const otherUid =
         chat?.participantIds?.find((id: string) => id !== myUid) || "";
-
+ 
       if (otherUid && !userUnsubs.has(otherUid)) {
         const unsub = onSnapshot(doc(db, "users", otherUid), (userSnap) => {
           if (userSnap.exists()) {
@@ -530,9 +590,9 @@ export function subscribeToUserChats(
         });
         userUnsubs.set(otherUid, unsub);
       }
-
+ 
       const unreadCount = chat.unreadCount?.[myUid] || 0;
-
+ 
       // детект нового входящего: счётчик непрочитанных вырос с прошлого snapshot
       if (!isFirstSnapshot && onNewMessage && !chat.deleted?.[myUid]) {
         const prev = prevUnread.get(chat.id) ?? 0;
@@ -547,11 +607,11 @@ export function subscribeToUserChats(
         }
       }
       prevUnread.set(chat.id, unreadCount);
-
+ 
       if (chat.lastMessageTime) {
         lastKnownTime.set(d.id, chat.lastMessageTime);
       }
-
+ 
       return {
         id: chat.id,
         _otherUid: otherUid,
@@ -568,11 +628,11 @@ export function subscribeToUserChats(
         deleted: chat.deleted?.[myUid] || false,
       };
     });
-
+ 
     isFirstSnapshot = false;
     rebuild();
   });
-
+ 
   return () => {
     chatUnsub();
     userUnsubs.forEach((unsub) => unsub());
@@ -613,7 +673,7 @@ export async function toggleReaction(
     });
   }
 }
-
+ 
 export async function editMessage(
   chatId: string,
   messageId: string,
@@ -624,7 +684,7 @@ export async function editMessage(
     edited: true,
   });
 }
-
+ 
 export async function deleteMessage(chatId: string, messageId: string) {
   await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
     deleted: true,
@@ -632,7 +692,7 @@ export async function deleteMessage(chatId: string, messageId: string) {
     imageUrl: null,
   });
 }
-
+ 
 export async function pinMessage(
   chatId: string,
   messageId: string | null,
@@ -642,7 +702,7 @@ export async function pinMessage(
     pinnedMessage: messageId ? { id: messageId, text: messageText } : null,
   });
 }
-
+ 
 export async function togglePinChat(
   userId: string,
   chatId: string,
@@ -659,7 +719,7 @@ export async function forwardMessageToChat(
 ) {
   const [uid1, uid2] = targetChatId.split("_");
   const otherUid = uid1 === myUid ? uid2 : uid1;
-
+ 
   await addDoc(collection(db, "chats", targetChatId, "messages"), {
     senderId: myUid,
     text: original.text || "",
@@ -671,7 +731,7 @@ export async function forwardMessageToChat(
     replyTo: null,
     forwardedFrom: buildForwardedFrom(original),
   });
-
+ 
   await updateDoc(doc(db, "chats", targetChatId), {
     lastMessage:
       original.imageUrl && !original.text ? "📷 Photo" : original.text,
@@ -680,7 +740,7 @@ export async function forwardMessageToChat(
     [`unreadCount.${otherUid}`]: increment(1),
   });
 }
-
+ 
 export async function sendVoiceMessage(
   chatId: string,
   senderId: string,
@@ -702,9 +762,10 @@ export async function sendVoiceMessage(
     readBy: [],
     reactions: {},
   });
-
+ 
   await updateDoc(doc(db, "chats", chatId), {
     lastMessage: "Voice message",
     lastMessageAt: serverTimestamp(),
   });
 }
+ 
