@@ -51,6 +51,7 @@ import {
   LogOut,
   Users,
   MessagesSquare,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -449,8 +450,18 @@ export default function SideBar() {
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
-        .sidebar-search input:focus {
-          box-shadow: 0 0 0 3px rgba(82,47,183,0.18);
+        .sidebar-search-box {
+          border: 1px solid rgba(167,139,250,0.12);
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .sidebar-search-box:hover {
+          border-color: rgba(167,139,250,0.22);
+        }
+        .sidebar-search-box:focus-within {
+          border-color: rgba(167,139,250,0.55);
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.25), 0 0 0 3px rgba(82,47,183,0.18);
+          background: #221a3a;
         }
       `}</style>
 
@@ -468,19 +479,27 @@ export default function SideBar() {
           style={{ borderColor: "rgba(36,29,87,0.6)" }}
         >
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+            <div className="sidebar-search-box relative flex-1 flex items-center rounded-2xl" style={{ background: SEARCH_BG }}>
               <Search
                 size={16}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2"
+                className="absolute left-3.5 pointer-events-none"
                 style={{ color: "#8B85A0" }}
               />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search users..."
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl outline-none border border-transparent focus:border-[#3b2f78] transition-all duration-200 text-sm"
-                style={{ background: SEARCH_BG, color: "#F3F1FA" }}
+                className="w-full pl-10 pr-9 py-2.5 rounded-2xl outline-none bg-transparent text-sm"
+                style={{ color: "#F3F1FA" }}
               />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  className="absolute right-2.5 w-5 h-5 flex items-center justify-center rounded-full text-[#8B85A0] hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
             <div className="relative shrink-0" ref={channelMenuRef}>
               <button

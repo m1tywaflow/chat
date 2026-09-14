@@ -23,6 +23,7 @@ import {
   SmilePlus,
   Paperclip,
   Smile,
+  ShieldCheck,
 } from "lucide-react";
 import {
   CUSTOM_EMOJIS,
@@ -69,7 +70,7 @@ function RichText({
                 className={
                   variant === "large"
                     ? "inline-block w-28 h-28 object-contain"
-                    : "inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
+                    : "inline-block align-text-bottom w-7 h-7 object-contain mx-0.5"
                 }
               />
             );
@@ -172,7 +173,11 @@ export default function PostCommentsView({
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastCaretPos = useRef(0);
 
+  // Owner always has moderation rights. Admins list is optional on the
+  // Channel type — add `admins?: string[]` to Channel if it isn't there yet.
   const isOwner = channel?.ownerId === myUid;
+  const isAdmin = !!channel && (channel as any).admins?.includes?.(myUid);
+  const canModerate = isOwner || isAdmin;
 
   useEffect(() => {
     const unsub = subscribeToChannelDoc(channelId, setChannel);
@@ -407,10 +412,13 @@ export default function PostCommentsView({
         </div>
       </div>
 
-      <div className="chat-scroll flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="chat-scroll flex-1 overflow-y-auto px-4 py-4 space-y-5">
         {comments.map((c) => {
           const profile = profiles[c.authorId];
-          const canDelete = isOwner || c.authorId === myUid;
+          const canDelete = canModerate || c.authorId === myUid;
+          const authorIsStaff =
+            c.authorId === channel.ownerId ||
+            (channel as any).admins?.includes?.(c.authorId);
           const reactions = c.reactions || {};
           const reactionEntries = Object.entries(reactions).filter(
             ([, uids]) => uids && uids.length > 0
@@ -425,9 +433,9 @@ export default function PostCommentsView({
               ref={(el) => {
                 commentRefs.current[c.id] = el;
               }}
-              className="relative group flex items-start gap-2.5 rounded-lg transition-colors"
+              className="relative group flex items-start gap-3 rounded-lg transition-colors"
             >
-              <div className="shrink-0 w-7 h-7 rounded-full bg-[#A78BFA]/15 flex items-center justify-center overflow-hidden text-[#A78BFA] text-[11px] font-semibold">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-[#A78BFA]/15 flex items-center justify-center overflow-hidden text-[#A78BFA] text-sm font-semibold">
                 {profile?.avatarUrl ? (
                   <img
                     src={profile.avatarUrl}
@@ -440,20 +448,31 @@ export default function PostCommentsView({
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-medium text-[#A78BFA]">
-                  {profile?.username || "..."}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-semibold text-[#A78BFA]">
+                    {profile?.username || "..."}
+                  </span>
+                  {authorIsStaff && (
+                    <ShieldCheck
+                      size={13}
+                      className="text-[#A78BFA]/70 shrink-0"
+                      title={
+                        c.authorId === channel.ownerId ? "Owner" : "Admin"
+                      }
+                    />
+                  )}
                 </div>
 
                 {c.replyTo && (
                   <button
                     onClick={() => scrollToComment(c.replyTo!.commentId)}
-                    className="flex items-start gap-1.5 mb-1 pl-2 border-l-2 border-[#A78BFA]/40 text-left cursor-pointer max-w-full"
+                    className="flex items-start gap-1.5 mt-1 mb-1.5 pl-2 border-l-2 border-[#A78BFA]/40 text-left cursor-pointer max-w-full"
                   >
                     <div className="min-w-0">
-                      <div className="text-[10px] font-medium text-[#A78BFA]/80 truncate">
+                      <div className="text-[11px] font-medium text-[#A78BFA]/80 truncate">
                         {c.replyTo.authorUsername}
                       </div>
-                      <div className="text-[11px] text-zinc-500 truncate">
+                      <div className="text-[12px] text-zinc-500 truncate">
                         {c.replyTo.text}
                       </div>
                     </div>
@@ -464,7 +483,7 @@ export default function PostCommentsView({
                   <img
                     src={c.imageUrl!}
                     alt="sticker"
-                    className="w-20 h-20 object-contain -ml-1"
+                    className="w-24 h-24 object-contain -ml-1 mt-1"
                   />
                 ) : (
                   <>
@@ -473,11 +492,11 @@ export default function PostCommentsView({
                         src={c.imageUrl}
                         alt="comment attachment"
                         onClick={() => setLightboxUrl(c.imageUrl!)}
-                        className="max-w-[220px] max-h-[220px] rounded-lg object-cover mb-1 cursor-zoom-in border border-white/[0.06]"
+                        className="max-w-[260px] max-h-[260px] rounded-lg object-cover mb-1.5 mt-1 cursor-zoom-in border border-white/[0.06]"
                       />
                     )}
                     {c.text && (
-                      <div className="text-[13px] text-zinc-200 leading-relaxed whitespace-pre-wrap break-words">
+                      <div className="text-[15px] text-zinc-200 leading-relaxed whitespace-pre-wrap break-words mt-0.5">
                         <RichText
                           text={c.text}
                           variant={isStickerOnly ? "large" : "inline"}
@@ -487,21 +506,21 @@ export default function PostCommentsView({
                   </>
                 )}
 
-                <div className="text-[10px] text-zinc-500 mt-0.5">
+                <div className="text-[11px] text-zinc-500 mt-1">
                   {formatTime(c.createdAt)}
                 </div>
 
                 {reactionEntries.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
+                  <div className="flex flex-wrap gap-1.5 mt-2">
                     {reactionEntries.map(([token, uids]) => {
                       const mine = uids.includes(myUid);
                       return (
                         <button
                           key={token}
                           onClick={() => handleReact(c.id, token)}
-                          className={`flex items-center gap-1 px-1.5 py-[3px] rounded-full text-[11px] border transition-colors cursor-pointer ${mine
-                              ? "bg-[#A78BFA]/15 border-[#A78BFA]/40 text-[#A78BFA]"
-                              : "bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:border-white/20"
+                          className={`flex items-center gap-1 px-2 py-1 rounded-full text-[12px] border transition-colors cursor-pointer ${mine
+                            ? "bg-[#A78BFA]/15 border-[#A78BFA]/40 text-[#A78BFA]"
+                            : "bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:border-white/20"
                             }`}
                         >
                           <span className="leading-none">{token}</span>
@@ -513,7 +532,7 @@ export default function PostCommentsView({
                 )}
               </div>
 
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 mt-0.5 relative">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shrink-0 mt-1 relative">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -521,38 +540,42 @@ export default function PostCommentsView({
                       id === c.id ? null : c.id
                     );
                   }}
-                  className="text-zinc-600 hover:text-[#A78BFA] cursor-pointer p-0.5"
+                  className="text-zinc-600 hover:text-[#A78BFA] cursor-pointer p-1"
                   title="React"
                 >
-                  <SmilePlus size={13} />
+                  <SmilePlus size={16} />
                 </button>
                 <button
                   onClick={() => startReply(c)}
-                  className="text-zinc-600 hover:text-white cursor-pointer p-0.5"
+                  className="text-zinc-600 hover:text-white cursor-pointer p-1"
                   title="Reply"
                 >
-                  <CornerUpLeft size={13} />
+                  <CornerUpLeft size={16} />
                 </button>
                 {canDelete && (
                   <button
                     onClick={() => setDeleteConfirmId(c.id)}
-                    className="text-zinc-600 hover:text-red-400 cursor-pointer p-0.5"
-                    title="Delete"
+                    className="text-zinc-600 hover:text-red-400 cursor-pointer p-1"
+                    title={
+                      c.authorId === myUid
+                        ? "Delete"
+                        : "Delete (moderator action)"
+                    }
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={15} />
                   </button>
                 )}
 
                 {openReactionPickerId === c.id && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-6 z-30 flex flex-wrap gap-1 p-2 rounded-2xl border border-white/[0.08] bg-[#141220] shadow-xl shadow-black/50 w-[168px]"
+                    className="absolute right-0 top-7 z-30 flex flex-wrap gap-1 p-2 rounded-2xl border border-white/[0.08] bg-[#141220] shadow-xl shadow-black/50 w-[180px]"
                   >
                     {QUICK_REACTIONS.map((emoji) => (
                       <button
                         key={emoji}
                         onClick={() => handleReact(c.id, emoji)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.08] transition-colors cursor-pointer text-[17px]"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.08] transition-colors cursor-pointer text-[19px]"
                       >
                         {emoji}
                       </button>
@@ -577,10 +600,10 @@ export default function PostCommentsView({
             <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
               <CornerUpLeft size={13} className="text-[#A78BFA] shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-medium text-[#A78BFA] truncate">
+                <div className="text-[12px] font-medium text-[#A78BFA] truncate">
                   {replyingTo.authorUsername}
                 </div>
-                <div className="text-[11px] text-zinc-500 truncate">
+                <div className="text-[12px] text-zinc-500 truncate">
                   {replyingTo.text}
                 </div>
               </div>
@@ -748,8 +771,11 @@ export default function PostCommentsView({
                 Delete comment?
               </h3>
               <p className="text-[13px] text-zinc-400 leading-relaxed">
-                This action cannot be undone. The comment will be permanently
-                deleted.
+                {deleteConfirmId &&
+                  comments.find((c) => c.id === deleteConfirmId)?.authorId !==
+                  myUid
+                  ? "You're deleting this as a moderator. This action cannot be undone."
+                  : "This action cannot be undone. The comment will be permanently deleted."}
               </p>
             </div>
             <div className="flex border-t border-white/[0.06]">
