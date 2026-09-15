@@ -473,49 +473,96 @@ export default function SideBar() {
           color: theme.text,
         }}
       >
-        {/* search */}
+        {/* search & actions */}
         <div
-          className="p-4 pb-3 border-b sidebar-search"
+          className="px-4 pt-4 pb-3 border-b"
           style={{ borderColor: "rgba(36,29,87,0.6)" }}
         >
-          <div className="flex items-center gap-2">
-            <div className="sidebar-search-box relative flex-1 flex items-center rounded-2xl" style={{ background: SEARCH_BG }}>
+          <div className="relative">
+            <div className="sidebar-search-box relative flex items-center w-full h-11 rounded-[15px]">
               <Search
-                size={16}
+                size={17}
                 className="absolute left-3.5 pointer-events-none"
                 style={{ color: "#8B85A0" }}
               />
+
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search users..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-2xl outline-none bg-transparent text-sm"
+                className="w-full h-full pl-10 pr-10 rounded-[15px] outline-none bg-transparent text-[13.5px]"
                 style={{ color: "#F3F1FA" }}
               />
-              {query && (
+
+              {query ? (
                 <button
                   onClick={() => setQuery("")}
-                  className="absolute right-2.5 w-5 h-5 flex items-center justify-center rounded-full text-[#8B85A0] hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  className="absolute right-3 flex h-5 w-5 items-center justify-center rounded-full text-[#8B85A0] hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
+              ) : (
+                <div
+                  className="absolute right-3 pointer-events-none flex items-center justify-center"
+                  style={{ color: "#77718D" }}
+                >
+                  <UserCircle size={16} strokeWidth={1.7} />
+                </div>
               )}
             </div>
-            <div className="relative shrink-0" ref={channelMenuRef}>
+
+            {/* New menu */}
+            <div className="relative mt-2.5" ref={channelMenuRef}>
               <button
                 onClick={() => setChannelMenuOpen((v) => !v)}
-                title="Channels"
-                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-150 cursor-pointer hover:brightness-125"
-                style={{ background: SEARCH_BTN_BG, color: accent }}
+                className="group w-full h-10 flex items-center justify-between rounded-[13px] px-3.5 border transition-all duration-200 cursor-pointer"
+                style={{
+                  background: channelMenuOpen
+                    ? "rgba(82,47,183,0.14)"
+                    : "rgba(255,255,255,0.025)",
+                  borderColor: channelMenuOpen
+                    ? "rgba(139,108,255,0.28)"
+                    : "rgba(255,255,255,0.06)",
+                }}
               >
-                <Megaphone size={16} />
+                <span className="flex items-center gap-2.5">
+                  <span
+                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors"
+                    style={{
+                      background: "rgba(139,108,255,0.12)",
+                      color: "#9B83FF",
+                    }}
+                  >
+                    <Plus size={14} />
+                  </span>
+
+                  <span
+                    className="text-[13px] font-medium"
+                    style={{ color: "#D9D5E7" }}
+                  >
+                    New
+                  </span>
+                </span>
+
+                <ChevronsRight
+                  size={14}
+                  className={`transition-transform duration-200 ${channelMenuOpen ? "rotate-90" : ""
+                    }`}
+                  style={{ color: "#716B83" }}
+                />
               </button>
+
               {channelMenuOpen && (
                 <div
-                  className="absolute right-0 top-12 w-48 rounded-xl border shadow-xl shadow-black/40 overflow-hidden z-50"
+                  className="absolute left-0 right-0 top-[45px] rounded-[14px] border overflow-hidden z-50 p-1.5"
                   style={{
-                    background: mode === "light" ? "#ffffff" : "#0d0b14",
-                    borderColor: border,
+                    background: mode === "light" ? "#ffffff" : "#11101a",
+                    borderColor:
+                      mode === "light"
+                        ? "#e5e7eb"
+                        : "rgba(255,255,255,0.08)",
+                    boxShadow:
+                      "0 18px 45px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25)",
                   }}
                 >
                   <button
@@ -523,7 +570,7 @@ export default function SideBar() {
                       setCreateChannelOpen(true);
                       setChannelMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
                     style={{ color: menuText }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.background = hoverBg)
@@ -532,15 +579,76 @@ export default function SideBar() {
                       (e.currentTarget.style.background = "transparent")
                     }
                   >
-                    <Plus size={14} />
-                    Create a channel
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: "rgba(139,108,255,0.11)",
+                        color: "#9B83FF",
+                      }}
+                    >
+                      <Megaphone size={15} />
+                    </span>
+
+                    <span className="flex flex-col">
+                      <span className="text-[13px] font-medium">
+                        New channel
+                      </span>
+                      <span className="text-[11px] text-zinc-500">
+                        Broadcast to subscribers
+                      </span>
+                    </span>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      setCreateGroupOpen(true);
+                      setChannelMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
+                    style={{ color: menuText }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = hoverBg)
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "transparent")
+                    }
+                  >
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: "rgba(139,108,255,0.11)",
+                        color: "#9B83FF",
+                      }}
+                    >
+                      <Users size={15} />
+                    </span>
+
+                    <span className="flex flex-col">
+                      <span className="text-[13px] font-medium">
+                        New group
+                      </span>
+                      <span className="text-[11px] text-zinc-500">
+                        Chat with multiple people
+                      </span>
+                    </span>
+                  </button>
+
+                  <div
+                    className="my-1.5 h-px"
+                    style={{
+                      background:
+                        mode === "light"
+                          ? "#e5e7eb"
+                          : "rgba(255,255,255,0.06)",
+                    }}
+                  />
+
                   <button
                     onClick={() => {
                       setSearchChannelOpen(true);
                       setChannelMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
                     style={{ color: menuText }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.background = hoverBg)
@@ -549,21 +657,27 @@ export default function SideBar() {
                       (e.currentTarget.style.background = "transparent")
                     }
                   >
-                    <Search size={14} />
-                    Find a channel
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        color: "#8B85A0",
+                      }}
+                    >
+                      <Search size={15} />
+                    </span>
+
+                    <span className="flex flex-col">
+                      <span className="text-[13px] font-medium">
+                        Find a channel
+                      </span>
+                      <span className="text-[11px] text-zinc-500">
+                        Discover public channels
+                      </span>
+                    </span>
                   </button>
                 </div>
               )}
-            </div>
-            <div className="relative shrink-0">
-              <button
-                onClick={() => setCreateGroupOpen(true)}
-                title="New group"
-                className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-150 cursor-pointer hover:brightness-125"
-                style={{ background: SEARCH_BTN_BG, color: accent }}
-              >
-                <Users size={16} />
-              </button>
             </div>
           </div>
         </div>
