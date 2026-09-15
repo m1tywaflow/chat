@@ -70,81 +70,17 @@
 "use client";
 
 import Image from "next/image";
+import styles from "./AppLoader.module.css";
 
 export default function AppLoader() {
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center bg-[#0d0b14]"
-      role="status"
-      aria-live="polite"
-    >
-      <style>{`
-        @keyframes pulse-ring { 0%{transform:scale(0.8);opacity:0.8} 50%{transform:scale(1.15);opacity:0.3} 100%{transform:scale(0.8);opacity:0.8} }
-        @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+    <div className={styles.wrapper} role="status" aria-live="polite">
+      <div className={styles.iconWrap}>
+        <div className={styles.pulse} />
+        <div className={styles.pulse2} />
 
-        .loader-pulse { animation: pulse-ring 2.2s ease-in-out infinite; will-change: transform, opacity; }
-        .loader-pulse-2 { animation: pulse-ring 2.2s ease-in-out infinite 0.5s; will-change: transform, opacity; }
-        .loader-shimmer { animation: shimmer 2.5s linear infinite; }
-        .loader-name-shimmer {
-          background: linear-gradient(90deg,#c4b5fd,#A78BFA,#7c3aed,#A78BFA,#c4b5fd);
-          background-size: 300% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: shimmer 3s linear infinite;
-        }
-
-        /* Spinning ring done with a masked conic-gradient + rotate.
-           Only "transform" changes per frame (compositor-only), unlike
-           animating an SVG stroke-dashoffset which forces a repaint
-           every frame — cheaper right when the page is busy hydrating. */
-        .loader-ring {
-          background: conic-gradient(
-            from -90deg,
-            transparent 0deg,
-            #a78bfa 90deg,
-            #7c3aed 180deg,
-            transparent 205deg
-          );
-          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-          mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-          animation: spin 1.6s linear infinite;
-          will-change: transform;
-        }
-
-        .loader-dot { width: 5px; height: 5px; border-radius: 50%; background: #A78BFA; }
-        .loader-dot:nth-child(1) { animation: blink 1.4s ease-in-out infinite 0s; }
-        .loader-dot:nth-child(2) { animation: blink 1.4s ease-in-out infinite 0.2s; }
-        .loader-dot:nth-child(3) { animation: blink 1.4s ease-in-out infinite 0.4s; }
-
-        .loader-label { animation: fade-in 0.6s ease both 0.2s; }
-
-        /* Respect users who've asked the OS for less motion, and it
-           also means far less work on low-end devices during boot. */
-        @media (prefers-reduced-motion: reduce) {
-          .loader-pulse,
-          .loader-pulse-2,
-          .loader-shimmer,
-          .loader-name-shimmer,
-          .loader-ring,
-          .loader-dot,
-          .loader-label {
-            animation: none !important;
-          }
-        }
-      `}</style>
-
-      <div className="relative w-[88px] h-[88px] flex items-center justify-center">
-        <div className="loader-pulse absolute inset-[-12px] rounded-full border-2 border-[#A78BFA44]" />
-        <div className="loader-pulse-2 absolute inset-[-24px] rounded-full border border-[#A78BFA22]" />
-
-        <div className="relative z-10 w-[62px] h-[62px] rounded-[20px] bg-gradient-to-br from-[#1e1b2e] to-[#2d1f4e] border border-[#A78BFA33] flex items-center justify-center overflow-hidden">
-          <span className="loader-shimmer absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,#A78BFA22_50%,transparent_70%)] bg-[length:200%_100%]" />
-          {/* next/image + priority: this is above-the-fold on every
-              cold load, so it should be preloaded and skip lazy-loading. */}
+        <div className={styles.badge}>
+          <span className={styles.shimmerLayer} />
           <Image
             src="/logo.png"
             alt="Nexo"
@@ -156,20 +92,18 @@ export default function AppLoader() {
           />
         </div>
 
-        <div className="absolute inset-0 rounded-full border-2 border-[#A78BFA18]" />
-        <div className="loader-ring absolute inset-0 rounded-full" />
+        <div className={styles.ringTrack} />
+        <div className={styles.ring} />
       </div>
 
-      <div className="loader-label flex flex-col items-center gap-3 mt-7">
-        <span className="loader-name-shimmer text-[22px] font-medium tracking-wide">
-          Nexo
-        </span>
-        <div className="flex gap-[6px]" aria-hidden="true">
-          <div className="loader-dot" />
-          <div className="loader-dot" />
-          <div className="loader-dot" />
+      <div className={styles.label}>
+        <span className={styles.name}>Nexo</span>
+        <div className={styles.dots} aria-hidden="true">
+          <div className={styles.dot} />
+          <div className={styles.dot} />
+          <div className={styles.dot} />
         </div>
-        <span className="sr-only">Loading Nexo…</span>
+        <span className={styles.srOnly}>Loading Nexo…</span>
       </div>
     </div>
   );
