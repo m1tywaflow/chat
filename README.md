@@ -1,266 +1,261 @@
 <div align="center">
 
-<img src="public/logo.png" width="96" alt="Nexo logo" />
+<img src="public/logo.png" width="88" alt="Nexo" />
 
 # Nexo
 
-### A modern real-time messaging platform built for seamless communication.
+### Communication, redesigned.
 
-**Chat. Connect. Call. Share.**
+A modern real-time messaging platform built for fast conversations,
+communities, calls, and a seamless desktop experience.
 
-Nexo is a full-featured real-time messenger designed around fast communication, rich interactions, and a modern desktop experience. It combines private conversations, group chats, channels, voice & video calls, customizable profiles, and a native Windows application in one unified platform.
+**Chat · Connect · Call · Share**
 
-Built with **Next.js, TypeScript, Firebase, and Electron**.
+<br />
 
-[**🚀 Live Demo**](https://chat-vert-nu-34.vercel.app/)
+[**Live Demo →**](https://chat-vert-nu-34.vercel.app/)
+
+<br />
 
 </div>
 
 ---
 
-## ✨ Overview
+## Nexo
 
-Nexo is more than a simple chat application.
+Nexo is a full-featured real-time messenger designed around one idea:
 
-The platform is designed to provide a complete communication experience — from instant private messaging and communities to public channels and real-time voice & video calls.
+**communication should feel instant, natural, and connected.**
 
-The interface focuses on **speed, responsiveness, customization, and a consistent experience across web and desktop**.
+Private conversations, group chats, channels, voice & video calls,
+custom profiles, themes, and a native Windows client come together
+in one unified experience.
+
+Built with **Next.js, TypeScript, Firebase, LiveKit, Cloudinary, and Electron.**
+
+---
+
+## What you can do
+
+| | Feature | Description |
+| --- | --- | --- |
+| 💬 | **Private & Group Chats** | Real-time conversations with instant message synchronization |
+| 📢 | **Channels** | Publish posts, build communities, and interact with subscribers |
+| 📞 | **Voice & Video** | Start real-time calls directly from conversations |
+| 👤 | **Profiles** | Customize your identity with avatars, banners, decorations, and gifts |
+| 🎨 | **Themes** | Use dark, light, or fully customized themes |
+| 🖥️ | **Desktop App** | Native Windows client with updates and desktop notifications |
 
 ---
 
 ## 💬 Messaging
 
-A powerful real-time messaging system built around Firestore subscriptions and optimistic UI.
+Nexo's messaging system is built around real-time Firestore subscriptions
+and optimistic UI, making conversations feel immediate even while data
+is being synchronized in the background.
 
-* **Real-time conversations** — instant 1-on-1 and group messaging
-* **Optimistic sending** — messages appear immediately while synchronization happens in the background
-* **Message editing** — update sent messages without breaking the conversation flow
-* **Message forwarding** — forward messages between chats, groups, and channels with source attribution
-* **Message deletion** — remove messages with synchronized updates
-* **Pinned messages** — keep important information easily accessible
-* **Emoji reactions** — react to messages with a custom reaction system
-* **Read receipts** — track message delivery and reading status
-* **Unread counters** — per-conversation unread tracking with race-condition-safe read handling
-* **Voice messages** — record and send audio directly inside conversations
-* **Media sharing** — send images and other media with Cloudinary-powered storage
+- Real-time 1-on-1 conversations
+- Real-time group messaging
+- Optimistic message sending
+- Message editing
+- Message forwarding
+- Message deletion
+- Pinned messages
+- Emoji reactions
+- Read receipts
+- Per-conversation unread counters
+- Voice messages
+- Image and media sharing
+- Source attribution when forwarding content
 
 ---
 
-## 📞 Voice & Video Calls
+## 📞 Voice & Video
 
 Real-time communication goes beyond text.
 
-Nexo includes integrated **voice and video calling**, allowing users to start a call directly from their conversations.
+Nexo integrates **LiveKit** for voice and video communication directly
+inside the messaging experience.
 
-* **Voice calls** — communicate without leaving the messenger
-* **Video calls** — real-time camera communication
-* **Microphone controls** — enable or disable your microphone during a call
-* **Camera controls** — toggle video whenever needed
-* **Conversation-based calling** — start calls directly from a chat or contact
-* **Real-time communication** — powered by LiveKit
+- Voice calls
+- Video calls
+- Microphone controls
+- Camera controls
+- Conversation-based calling
+- Real-time connection management
+
+No separate application is required to start a call.
 
 ---
 
 ## 📢 Channels
 
-A dedicated broadcasting system inspired by modern community platforms.
+Channels provide a dedicated space for broadcasting content and building
+communities around shared interests.
 
-Channels allow creators and communities to publish content to their subscribers while keeping discussions organized.
+Creators can publish posts while subscribers can interact through comments
+and reactions.
 
-* **Public channels** — create and manage dedicated communities
-* **Broadcast posts** — publish updates to all subscribers
-* **Real-time view counters** — track post engagement using dwell-time-aware view tracking
-* **Comments** — dedicated threaded discussion under channel posts
-* **Subscriber-gated interactions** — control who can participate in discussions
-* **Post editing** — modify published content with an inline editor
-* **Pinned posts** — highlight important announcements
-* **Post deletion** — remove outdated or unwanted content
-* **Forwarding** — forward channel posts into private chats and groups while preserving their original source
-* **Unified navigation** — channels, groups, and chats live together inside the main sidebar
+- Public channels
+- Broadcast posts
+- Subscriber management
+- Comments and discussions
+- Subscriber-gated interactions
+- Post editing
+- Pinned posts
+- Post deletion
+- Forwarding to chats and groups
+- Real-time view counters
+- Unified sidebar navigation
 
----
-
-## 👤 Profiles & Customization
-
-Nexo puts a strong focus on personalization.
-
-Users can customize their profiles and create a visual identity that feels unique to them.
-
-* **Custom avatars** — upload and crop profile images
-* **Profile banners** — personalized profile headers
-* **Avatar decorations** — additional visual customization
-* **Avatar borders** — customizable profile styling
-* **Custom profile colors** — personalize the appearance of your profile card
-* **Collectible gifts** — gifts with different rarity tiers and animated details
-* **Featured gifts** — highlight a favorite collectible directly next to your profile
-* **Gift cloud** — animated gift presentation inside the full profile view
+Chats, groups, and channels are treated as part of the same communication
+system rather than isolated features.
 
 ---
 
-## 🎨 Themes
+## 👤 Profiles
 
-A flexible theming system designed to keep the interface personal.
+Profiles are designed to be more than a username and avatar.
 
-* **Dark theme**
-* **Light theme**
-* **Custom themes**
-* **Cross-device synchronization**
-* **Persistent user preferences powered by Firestore**
+Users can create a visual identity that carries across the application.
 
-Your interface follows you across devices.
-
----
-
-## 🖥️ Native Desktop Experience
-
-Nexo isn't limited to the browser.
-
-The project includes a dedicated **Windows desktop application built with Electron**, providing a more native messaging experience.
-
-* **Native Windows client**
-* **Electron-based desktop architecture**
-* **NSIS installer**
-* **Automatic updates**
-* **GitHub Releases integration**
-* **Dedicated web download page**
-* **Hardened IPC communication**
-* **Version-mismatch protection between application builds**
-* **Native desktop notifications**
-
-### 🔔 Desktop Notifications
-
-Nexo uses a custom notification system instead of relying solely on browser notifications.
-
-Notifications are rendered through a **native frameless Electron window** with:
-
-* Always-on-top behavior
-* Custom UI
-* Mouse passthrough
-* Native desktop integration
+- Custom avatars
+- Profile banners
+- Avatar decorations
+- Custom avatar borders
+- Profile colors
+- Collectible gifts
+- Gift rarity tiers
+- Featured gifts
+- Animated gift presentation
 
 ---
 
-## ⚡ Real-Time Experience
+## 🎨 Personalization
 
-Real-time synchronization is one of the core principles behind Nexo.
+Nexo provides a flexible theming system so the interface can adapt to
+different preferences.
 
-The application uses Firebase Firestore subscriptions to keep conversations and user state synchronized without requiring manual refreshes.
+- Dark theme
+- Light theme
+- Custom themes
+- Persistent preferences
+- Cross-device synchronization
+- Firestore-backed user settings
 
-The interface also uses **optimistic UI patterns** wherever possible, allowing actions such as sending messages to feel instant even while the backend is processing the request.
-
-This combination provides a responsive experience while maintaining synchronization between clients.
-
----
-
-## 🧩 UX & Interaction
-
-A large part of Nexo is built around small interaction details that make the application feel polished.
-
-* **Online / offline presence**
-* **Last seen timestamps**
-* **Context menus**
-* **Pin / unpin actions**
-* **Mark as read**
-* **Leave groups and channels**
-* **Drag-and-drop sidebar organization**
-* **Recency-based conversation ordering**
-* **Responsive message interactions**
-* **Optimistic UI updates**
-* **Custom desktop notifications**
-* **Persistent preferences**
-
-Chats, groups, and channels are designed to behave as one unified communication system rather than separate parts of the application.
+Your interface stays consistent wherever you use Nexo.
 
 ---
 
-## 🛠️ Tech Stack
+## 🖥️ Windows Desktop
 
-| Layer                       | Technology              |
-| :-------------------------- | :---------------------- |
-| **Framework**               | Next.js — App Router    |
-| **Language**                | TypeScript              |
-| **Styling**                 | Tailwind CSS v4         |
-| **State Management**        | Zustand                 |
-| **Authentication**          | Firebase Authentication |
-| **Database**                | Firebase Firestore      |
-| **Real-Time Communication** | LiveKit                 |
-| **Media Storage**           | Cloudinary              |
-| **Desktop Client**          | Electron                |
-| **Application Packaging**   | electron-builder / NSIS |
-| **Icons**                   | Lucide React            |
+Nexo is not limited to the browser.
+
+The project includes a dedicated **Windows desktop application built with Electron**,
+designed to provide a more native messaging experience.
+
+### Desktop features
+
+- Native Windows client
+- Electron architecture
+- NSIS installer
+- Automatic updates
+- GitHub Releases integration
+- Dedicated download page
+- Hardened IPC communication
+- Version-mismatch protection
+- Native desktop notifications
+
+### Notifications
+
+Nexo uses a custom Electron notification system instead of relying
+entirely on browser notifications.
+
+Notifications are displayed through a native frameless window with:
+
+- Always-on-top behavior
+- Custom interface
+- Mouse passthrough
+- Native desktop integration
+
+---
+
+## ⚡ Real-Time Architecture
+
+Real-time synchronization is one of the foundations of Nexo.
+
+Firestore subscriptions keep conversations and user state synchronized
+between clients without requiring manual refreshes.
+
+Optimistic UI is used wherever possible so actions such as sending messages,
+editing content, and interacting with conversations feel immediate.
+
+The result is an interface that stays responsive while the backend handles
+synchronization in the background.
+
+---
+
+## ✦ Interaction & UX
+
+A large part of Nexo's experience comes from small details.
+
+- Online / offline presence
+- Last seen timestamps
+- Context menus
+- Pin and unpin actions
+- Mark as read
+- Leave groups and channels
+- Drag-and-drop sidebar organization
+- Recency-based conversation ordering
+- Optimistic UI updates
+- Responsive message interactions
+- Persistent preferences
+- Custom desktop notifications
+
+The goal is to make the application feel coherent rather than like
+a collection of separate features.
+
+---
+
+## 🛠️ Technology
+
+Nexo is built with a modern web and desktop stack.
+
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | Next.js — App Router |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS v4 |
+| **State** | Zustand |
+| **Authentication** | Firebase Authentication |
+| **Database** | Firebase Firestore |
+| **Real-Time Calls** | LiveKit |
+| **Media** | Cloudinary |
+| **Desktop** | Electron |
+| **Packaging** | electron-builder / NSIS |
+| **Icons** | Lucide React |
 
 ---
 
 ## 🏗️ Architecture
 
-Nexo follows a modern web application architecture built around a real-time client and cloud-backed services.
-
 ```text
-                         ┌─────────────────────┐
-                         │        Nexo         │
-                         │   Client Interface  │
-                         └──────────┬──────────┘
-                                    │
-                 ┌──────────────────┼──────────────────┐
-                 │                  │                  │
-                 ▼                  ▼                  ▼
-          ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-          │   Firebase  │   │   LiveKit   │   │ Cloudinary  │
-          │ Auth/DB     │   │ Calls       │   │ Media       │
-          └─────────────┘   └─────────────┘   └─────────────┘
-                 │                  │                  │
-                 └──────────────────┼──────────────────┘
-                                    ▼
-                           ┌─────────────────┐
-                           │ Electron Client │
-                           │ Windows Desktop │
-                           └─────────────────┘
-```
-
----
-
-## 🚀 Highlights
-
-Nexo currently brings together:
-
-**💬 Real-time messaging**
-Private chats, groups, forwarding, reactions, read receipts, voice messages and media sharing.
-
-**📢 Channels**
-Broadcasting, subscribers, comments, pinned posts, views and post management.
-
-**📞 Voice & Video**
-Real-time calls directly from conversations.
-
-**👤 Custom Profiles**
-Avatars, banners, decorations, borders, colors and collectible gifts.
-
-**🎨 Personalization**
-Dark, light and custom themes synchronized across devices.
-
-**🖥️ Desktop Application**
-A native Windows client with automatic updates and custom notifications.
-
----
-
-## 📈 Project Status
-
-Nexo is an actively developed personal project focused on exploring how a modern real-time communication platform can be designed and built from the ground up.
-
-The project is continuously evolving with new features, UI improvements, performance optimizations, and infrastructure updates.
-
----
-
-## 📄 License
-
-This project is intended for **personal and portfolio use**.
-
----
-
-<div align="center">
-
-### Built with ❤️ and a lot of code.
-
-**Nexo — communication, redesigned.**
-
-</div>
+                         ┌──────────────────────┐
+                         │         Nexo         │
+                         │    Client Interface  │
+                         └───────────┬──────────┘
+                                     │
+                  ┌──────────────────┼──────────────────┐
+                  │                  │                  │
+                  ▼                  ▼                  ▼
+           ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+           │   Firebase  │    │   LiveKit   │    │ Cloudinary  │
+           │ Auth / DB   │    │ Voice/Video │    │   Media     │
+           └─────────────┘    └─────────────┘    └─────────────┘
+                  │                  │                  │
+                  └──────────────────┼──────────────────┘
+                                     ▼
+                          ┌────────────────────┐
+                          │  Electron Client   │
+                          │   Windows Desktop  │
+                          └────────────────────┘
