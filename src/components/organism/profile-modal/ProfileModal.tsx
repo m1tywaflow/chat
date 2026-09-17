@@ -62,6 +62,68 @@
 //   return (rarity && colors[rarity]) || ACCENT;
 // }
 
+// // --- Cloudinary image optimization helpers (same pattern as Channel/GroupWindow) ---
+// // no-ops safely on non-Cloudinary URLs (local blob previews, third-party gift/badge assets)
+// function cloudinaryUrl(url: string, transform: string) {
+//   if (!url?.includes("/upload/")) return url;
+//   return url.replace("/upload/", `/upload/${transform}/`);
+// }
+
+// const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto");
+// const fullSrc = (url: string, w = 320) => cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
+
+// function SmartImage({
+//   src,
+//   alt = "",
+//   className = "",
+//   imgClassName = "",
+//   rounded = "rounded-xl",
+//   priority = false,
+//   onLoad,
+//   onClick,
+//   style,
+// }: {
+//   src: string;
+//   alt?: string;
+//   className?: string;
+//   imgClassName?: string;
+//   rounded?: string;
+//   priority?: boolean;
+//   onLoad?: () => void;
+//   onClick?: () => void;
+//   style?: React.CSSProperties;
+// }) {
+//   const [loaded, setLoaded] = useState(false);
+
+//   return (
+//     <div className={`relative overflow-hidden ${rounded} ${className}`} style={style}>
+//       <img
+//         src={tinySrc(src)}
+//         alt=""
+//         aria-hidden="true"
+//         draggable={false}
+//         className="absolute inset-0 w-full h-full object-cover scale-105"
+//         style={{ filter: "blur(8px)" }}
+//       />
+//       <img
+//         src={fullSrc(src)}
+//         alt={alt}
+//         decoding="async"
+//         loading={priority ? "eager" : "lazy"}
+//         fetchPriority={priority ? "high" : "auto"}
+//         draggable={false}
+//         onLoad={() => {
+//           setLoaded(true);
+//           onLoad?.();
+//         }}
+//         onClick={onClick}
+//         className={`relative w-full h-full object-cover block transition-opacity duration-150 ${imgClassName}`}
+//         style={{ opacity: loaded ? 1 : 0 }}
+//       />
+//     </div>
+//   );
+// }
+
 // async function uploadToCloudinary(
 //   file: Blob | File,
 //   folder: string
@@ -194,11 +256,11 @@
 //       setOwnedChannel(
 //         ch
 //           ? {
-//               id: ch.id,
-//               name: ch.name,
-//               avatarUrl: ch.avatarUrl,
-//               subscriberCount: ch.subscriberCount,
-//             }
+//             id: ch.id,
+//             name: ch.name,
+//             avatarUrl: ch.avatarUrl,
+//             subscriberCount: ch.subscriberCount,
+//           }
 //           : null
 //       );
 //     });
@@ -369,13 +431,6 @@
 //     ? avatarLocalPreview || draftAvatar || avatar
 //     : avatar;
 //   const activeCardColor = editing ? draftCardColor : cardColor;
-//   const bannerStyle = activeBannerIsImage
-//     ? {
-//         backgroundImage: `url(${activeBannerValue})`,
-//         backgroundSize: "cover",
-//         backgroundPosition: "center",
-//       }
-//     : { background: activeBannerValue };
 
 //   return (
 //     <>
@@ -424,6 +479,8 @@
 //                     <img
 //                       src={gift.imageUrl}
 //                       alt={gift.name}
+//                       loading="eager"
+//                       decoding="async"
 //                       className="w-52 h-52 object-contain relative z-10"
 //                       style={{ filter: `drop-shadow(0 0 28px ${color}45)` }}
 //                     />
@@ -465,18 +522,28 @@
 
 //           {/* banner */}
 //           <div
-//             className="w-full h-[84px] relative z-0 shrink-0"
-//             style={bannerStyle}
+//             className="w-full h-[84px] relative z-0 shrink-0 overflow-hidden"
+//             style={!activeBannerIsImage ? { background: activeBannerValue } : undefined}
 //           >
+//             {activeBannerIsImage && activeBannerValue && (
+//               <SmartImage
+//                 key={activeBannerValue}
+//                 src={activeBannerValue}
+//                 alt="banner"
+//                 className="absolute inset-0"
+//                 rounded=""
+//                 priority
+//               />
+//             )}
 //             {bannerUploading && (
-//               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+//               <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
 //                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
 //               </div>
 //             )}
 //             {editing && (
 //               <button
 //                 onClick={() => bannerInputRef.current?.click()}
-//                 className="absolute inset-0 flex items-center justify-center bg-black/25 hover:bg-black/45 transition-colors group"
+//                 className="absolute inset-0 z-10 flex items-center justify-center bg-black/25 hover:bg-black/45 transition-colors group"
 //               >
 //                 <div className="flex items-center gap-1.5 text-white/50 group-hover:text-white text-[10px] tracking-widest transition-colors">
 //                   <Upload size={12} />
@@ -486,7 +553,7 @@
 //             )}
 //             <button
 //               onClick={onClose}
-//               className="absolute top-3 right-3 text-white/45 hover:text-white transition-colors"
+//               className="absolute top-3 right-3 z-10 text-white/45 hover:text-white transition-colors"
 //             >
 //               <X size={17} />
 //             </button>
@@ -507,6 +574,8 @@
 //                     <img
 //                       src={activeDecoration}
 //                       alt=""
+//                       loading="eager"
+//                       decoding="async"
 //                       className="absolute pointer-events-none select-none"
 //                       style={{
 //                         width: 152,
@@ -542,10 +611,13 @@
 //                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
 //                     </div>
 //                   ) : activeAvatar ? (
-//                     <img
+//                     <SmartImage
+//                       key={activeAvatar}
 //                       src={activeAvatar}
 //                       alt="avatar"
-//                       className="w-full h-full rounded-full object-cover"
+//                       className="w-full h-full"
+//                       rounded="rounded-full"
+//                       priority
 //                     />
 //                   ) : (
 //                     <span className="text-white text-base font-medium">
@@ -629,6 +701,8 @@
 //                         src={gift.imageUrl}
 //                         alt={gift.name}
 //                         title={gift.name}
+//                         loading="eager"
+//                         decoding="async"
 //                         className="w-[18px] h-[18px] object-contain shrink-0"
 //                       />
 //                     );
@@ -651,6 +725,8 @@
 //                       <img
 //                         src={badgeData.url}
 //                         alt={badgeData.label}
+//                         loading="lazy"
+//                         decoding="async"
 //                         className="w-5 h-5 object-contain"
 //                       />
 //                     )}
@@ -675,10 +751,11 @@
 //               >
 //                 <div className="shrink-0 w-9 h-9 rounded-full bg-white/[0.05] flex items-center justify-center overflow-hidden text-white/60 text-sm font-medium">
 //                   {ownedChannel.avatarUrl ? (
-//                     <img
+//                     <SmartImage
 //                       src={ownedChannel.avatarUrl}
 //                       alt={ownedChannel.name}
-//                       className="w-full h-full object-cover"
+//                       className="w-full h-full"
+//                       rounded=""
 //                     />
 //                   ) : (
 //                     ownedChannel.name.charAt(0).toUpperCase()
@@ -713,8 +790,8 @@
 //                           background: p.value,
 //                           outline:
 //                             !draftBannerIsImage &&
-//                             !bannerLocalPreview &&
-//                             draftBanner === p.value
+//                               !bannerLocalPreview &&
+//                               draftBanner === p.value
 //                               ? `2px solid ${ACCENT}`
 //                               : "2px solid transparent",
 //                           outlineOffset: "2px",
@@ -756,15 +833,16 @@
 //                         <img
 //                           src={draftDecoration}
 //                           alt=""
+//                           loading="lazy"
+//                           decoding="async"
 //                           className="w-4 h-4 object-contain opacity-70"
 //                         />
 //                       )}
 //                     </p>
 //                     <ChevronDown
 //                       size={13}
-//                       className={`text-white/30 transition-transform duration-200 ${
-//                         decorationsOpen ? "rotate-180" : ""
-//                       }`}
+//                       className={`text-white/30 transition-transform duration-200 ${decorationsOpen ? "rotate-180" : ""
+//                         }`}
 //                     />
 //                   </button>
 
@@ -796,6 +874,8 @@
 //                             <img
 //                               src={d.url}
 //                               alt={d.label}
+//                               loading="lazy"
+//                               decoding="async"
 //                               className="w-full h-full object-contain"
 //                             />
 //                           ) : (
@@ -843,6 +923,8 @@
 //                             <img
 //                               src={gift.imageUrl}
 //                               alt={gift.name}
+//                               loading="lazy"
+//                               decoding="async"
 //                               className="w-6 h-6 object-contain"
 //                             />
 //                           </button>
@@ -950,17 +1032,16 @@
 //                       Gifts
 //                     </div>
 //                     <div
-//                       className={`grid grid-cols-2 gap-3 ${
-//                         validGifts.length > 4
-//                           ? "max-h-[380px] overflow-y-auto pr-1"
-//                           : ""
-//                       }`}
+//                       className={`grid grid-cols-2 gap-3 ${validGifts.length > 4
+//                         ? "max-h-[380px] overflow-y-auto pr-1"
+//                         : ""
+//                         }`}
 //                       style={
 //                         validGifts.length > 4
 //                           ? {
-//                               scrollbarWidth: "thin",
-//                               scrollbarColor: `${ACCENT}40 transparent`,
-//                             }
+//                             scrollbarWidth: "thin",
+//                             scrollbarColor: `${ACCENT}40 transparent`,
+//                           }
 //                           : {}
 //                       }
 //                     >
@@ -977,6 +1058,8 @@
 //                               <img
 //                                 src={gift.imageUrl}
 //                                 alt={gift.name}
+//                                 loading={i < 4 ? "eager" : "lazy"}
+//                                 decoding="async"
 //                                 className="w-3/5 h-3/5 object-contain"
 //                               />
 //                             </div>
@@ -1056,9 +1139,10 @@
 //     </div>
 //   );
 // }
+
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, memo } from "react";
 import { signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
@@ -1130,7 +1214,9 @@ function cloudinaryUrl(url: string, transform: string) {
 const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto");
 const fullSrc = (url: string, w = 320) => cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
 
-function SmartImage({
+// memoized: avoids re-decoding/re-mounting the blur+full image pair on every
+// parent re-render (e.g. typing in the bio field, toggling other accordions)
+const SmartImage = memo(function SmartImage({
   src,
   alt = "",
   className = "",
@@ -1180,7 +1266,7 @@ function SmartImage({
       />
     </div>
   );
-}
+});
 
 async function uploadToCloudinary(
   file: Blob | File,
@@ -1242,8 +1328,6 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [giftModal, setGiftModal] = useState<string | null>(null);
   const [avatarDecoration, setAvatarDecoration] = useState<string | null>(null);
   const [draftDecoration, setDraftDecoration] = useState<string | null>(null);
-  const [decorationsOpen, setDecorationsOpen] = useState(false);
-  const [decorationsHeight, setDecorationsHeight] = useState(0);
   const [featuredGift, setFeaturedGift] = useState<string | null>(null);
   const [draftFeaturedGift, setDraftFeaturedGift] = useState<string | null>(
     null
@@ -1259,14 +1343,16 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   const [draftShowChannelInProfile, setDraftShowChannelInProfile] =
     useState(false);
 
-  const decorationsRef = useRef<HTMLDivElement>(null);
-
   const currentUser = auth.currentUser;
   const targetUid = userId ?? currentUser?.uid;
   const isOwnProfile = !userId || userId === currentUser?.uid;
 
   // filter out gift ids that no longer exist in the catalog — keeps grid clean
-  const validGifts = gifts.filter((id) => !!GIFTS[id]);
+  // memoized so it isn't recomputed on every keystroke/re-render, only when gifts change
+  const validGifts = useMemo(
+    () => gifts.filter((id) => !!GIFTS[id]),
+    [gifts]
+  );
 
   useEffect(() => {
     if (!targetUid) return;
@@ -1324,14 +1410,6 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     });
   }, [targetUid]);
 
-  useEffect(() => {
-    if (decorationsOpen && decorationsRef.current) {
-      setDecorationsHeight(decorationsRef.current.scrollHeight);
-    } else {
-      setDecorationsHeight(0);
-    }
-  }, [decorationsOpen, editing]);
-
   function openEdit() {
     setDraftBanner(bannerGradient);
     setDraftBannerIsImage(bannerIsImage);
@@ -1341,7 +1419,6 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
     setBannerLocalPreview(null);
     setAvatarLocalPreview(null);
     setDraftDecoration(avatarDecoration);
-    setDecorationsOpen(false);
     setEditing(true);
     setDraftFeaturedGift(featuredGift);
     setDraftShowChannelInProfile(showChannelInProfile);
@@ -1832,8 +1909,28 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
             )}
 
             {editing ? (
-              <div className="w-full flex flex-col gap-5 mb-5">
-                <EditSection label="Banner">
+              <div className="w-full flex flex-col gap-1.5 mb-5">
+                <AccordionSection
+                  label="Banner"
+                  badge={
+                    <span
+                      className="w-4 h-4 rounded-md shrink-0"
+                      style={
+                        bannerLocalPreview
+                          ? {
+                            backgroundImage: `url(${bannerLocalPreview})`,
+                            backgroundSize: "cover",
+                          }
+                          : draftBannerIsImage
+                            ? {
+                              backgroundImage: `url(${fullSrc(draftBanner, 32)})`,
+                              backgroundSize: "cover",
+                            }
+                            : { background: draftBanner }
+                      }
+                    />
+                  }
+                >
                   <div className="grid grid-cols-4 gap-2">
                     {BANNER_PRESETS.map((p) => (
                       <button
@@ -1857,9 +1954,17 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                       />
                     ))}
                   </div>
-                </EditSection>
+                </AccordionSection>
 
-                <EditSection label="Avatar border">
+                <AccordionSection
+                  label="Avatar border"
+                  badge={
+                    <span
+                      className="w-4 h-4 rounded-full shrink-0"
+                      style={{ background: draftBorder }}
+                    />
+                  }
+                >
                   <div className="grid grid-cols-6 gap-2">
                     {AVATAR_BORDERS.map((b) => (
                       <button
@@ -1877,78 +1982,72 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                       />
                     ))}
                   </div>
-                </EditSection>
+                </AccordionSection>
 
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setDecorationsOpen((v) => !v)}
-                    className="w-full flex items-center justify-between"
-                  >
-                    <p className="text-[10px] text-white/35 uppercase tracking-[0.18em] flex items-center gap-2">
-                      Decoration
-                      {draftDecoration && (
+                <AccordionSection
+                  label="Decoration"
+                  badge={
+                    draftDecoration ? (
+                      <img
+                        src={draftDecoration}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="w-4 h-4 object-contain opacity-70"
+                      />
+                    ) : undefined
+                  }
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    {AVATAR_DECORATIONS.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setDraftDecoration(d.url)}
+                        className="relative rounded-full flex items-center justify-center transition-all"
+                        style={{
+                          width: 52,
+                          height: 52,
+                          background: "rgba(255,255,255,0.04)",
+                          outline:
+                            draftDecoration === d.url
+                              ? `2px solid ${ACCENT}`
+                              : "2px solid transparent",
+                          outlineOffset: "2px",
+                        }}
+                      >
+                        {d.url ? (
+                          <img
+                            src={d.url}
+                            alt={d.label}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-white/30 text-[10px]">
+                            None
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </AccordionSection>
+
+                {validGifts.length > 0 && (
+                  <AccordionSection
+                    label="Featured gift"
+                    badge={
+                      draftFeaturedGift && GIFTS[draftFeaturedGift] ? (
                         <img
-                          src={draftDecoration}
+                          src={GIFTS[draftFeaturedGift].imageUrl}
                           alt=""
                           loading="lazy"
                           decoding="async"
-                          className="w-4 h-4 object-contain opacity-70"
+                          className="w-4 h-4 object-contain"
                         />
-                      )}
-                    </p>
-                    <ChevronDown
-                      size={13}
-                      className={`text-white/30 transition-transform duration-200 ${decorationsOpen ? "rotate-180" : ""
-                        }`}
-                    />
-                  </button>
-
-                  <div
-                    style={{ maxHeight: decorationsHeight }}
-                    className="overflow-hidden transition-[max-height] duration-300 ease-in-out"
+                      ) : undefined
+                    }
                   >
-                    <div
-                      ref={decorationsRef}
-                      className="flex gap-2 flex-wrap pt-2 pb-1"
-                    >
-                      {AVATAR_DECORATIONS.map((d) => (
-                        <button
-                          key={d.id}
-                          onClick={() => setDraftDecoration(d.url)}
-                          className="relative w-13 h-13 rounded-full flex items-center justify-center transition-all"
-                          style={{
-                            width: 52,
-                            height: 52,
-                            background: "rgba(255,255,255,0.04)",
-                            outline:
-                              draftDecoration === d.url
-                                ? `2px solid ${ACCENT}`
-                                : "2px solid transparent",
-                            outlineOffset: "2px",
-                          }}
-                        >
-                          {d.url ? (
-                            <img
-                              src={d.url}
-                              alt={d.label}
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-full object-contain"
-                            />
-                          ) : (
-                            <span className="text-white/30 text-[10px]">
-                              None
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {validGifts.length > 0 && (
-                  <EditSection label="Featured gift">
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setDraftFeaturedGift(null)}
@@ -1989,11 +2088,11 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                         );
                       })}
                     </div>
-                  </EditSection>
+                  </AccordionSection>
                 )}
 
                 {ownedChannel && (
-                  <EditSection label="Channel">
+                  <div className="pt-1">
                     <button
                       onClick={() => setDraftShowChannelInProfile((v) => !v)}
                       className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
@@ -2020,10 +2119,18 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                         />
                       </span>
                     </button>
-                  </EditSection>
+                  </div>
                 )}
 
-                <EditSection label="Card color">
+                <AccordionSection
+                  label="Card color"
+                  badge={
+                    <span
+                      className="w-4 h-4 rounded-md shrink-0"
+                      style={{ background: draftCardColor }}
+                    />
+                  }
+                >
                   <div className="flex items-center gap-2">
                     <div className="grid grid-cols-8 gap-1.5 flex-1">
                       {CARD_COLOR_PRESETS.map((c) => (
@@ -2052,9 +2159,9 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                       </div>
                     </button>
                   </div>
-                </EditSection>
+                </AccordionSection>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-2">
                   <button
                     onClick={() => {
                       setEditing(false);
@@ -2154,7 +2261,7 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
                       className="flex items-center gap-1.5 text-[11px] text-white/30 hover:text-white/70 tracking-widest transition-colors"
                     >
                       <Pencil size={12} />
-                      EDIT
+                      CUSTOMIZE
                     </button>
                   )}
                 </div>
@@ -2181,19 +2288,68 @@ export default function ProfileModal({ onClose, userId }: ProfileModalProps) {
   );
 }
 
-function EditSection({
+// Generic collapsible section used for every customization block (banner,
+// avatar border, decoration, featured gift, card color). Closed by default
+// so the edit panel doesn't dump every grid on screen at once, and content
+// is only mounted while open — one less chunk of DOM/images to paint when
+// the modal first opens in edit mode.
+function AccordionSection({
   label,
+  badge,
   children,
 }: {
   label: string;
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  // once opened, keep the content mounted forever — that's what lets it
+  // collapse smoothly (height animates down while content is still there)
+  // instead of the content vanishing instantly and the box "jumping" shut
+  const [mounted, setMounted] = useState(false);
+  const [height, setHeight] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted || !bodyRef.current) return;
+    // measure on the frame after mount/content-change, then animate
+    const raf = requestAnimationFrame(() => {
+      if (bodyRef.current) {
+        setHeight(open ? bodyRef.current.scrollHeight : 0);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open, mounted, children]);
+
   return (
-    <div>
-      <p className="text-[10px] text-white/35 uppercase tracking-[0.18em] mb-2">
-        {label}
-      </p>
-      {children}
+    <div className="border-b border-white/[0.04] last:border-b-0 pb-1.5 last:pb-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between py-1"
+      >
+        <p className="text-[10px] text-white/35 uppercase tracking-[0.18em] flex items-center gap-2">
+          {label}
+          {badge}
+        </p>
+        <ChevronDown
+          size={13}
+          className={`text-white/30 transition-transform duration-150 ${open ? "rotate-180" : ""
+            }`}
+        />
+      </button>
+      <div
+        style={{ maxHeight: height }}
+        className="overflow-hidden transition-[max-height] duration-200 ease-out"
+      >
+        <div ref={bodyRef} className="pt-1.5 pb-1">
+          {mounted && children}
+        </div>
+      </div>
     </div>
   );
 }
