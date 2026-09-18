@@ -120,6 +120,13 @@ export const GIFTS: Record<string, Gift> = {
       "https://res.cloudinary.com/dgylh67ms/image/upload/v1785790788/879a0b2613e837a4acd16effb5937d78_m7ojma.gif",
     rarity: "epic",
   },
+  catcat: {
+    id: "catcat",
+    name: "catcat",
+    imageUrl:
+      "https://res.cloudinary.com/dgylh67ms/image/upload/v1789761462/8e0b8a0b089c42398c8fd4b92ec92d67-ezgif.com-remove-background_1_ysajpb.gif",
+    rarity: "divine",
+  },
 };
 
 export const RARITY_COLORS = {
