@@ -25,4 +25,6 @@ export interface ForwardableContent {
   messageId?: string;
   sourceName?: string;
   forwardedFrom?: ForwardedFrom | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
 }

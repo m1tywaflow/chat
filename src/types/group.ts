@@ -53,4 +53,6 @@ export interface GroupMessage {
     added: boolean;
   };
   forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
 }

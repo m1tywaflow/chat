@@ -1442,37 +1442,62 @@ export default function ChatWindow() {
         )}
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
+
             <button
               onClick={() => setProfileOpen(true)}
-              className="flex flex-col items-start cursor-pointer group"
+              className="flex items-center gap-3 cursor-pointer group"
             >
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
-                {otherUser?.username ?? "..."}
-                {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+              <div className="relative shrink-0">
+                {otherUser?.avatar ? (
                   <img
-                    src={GIFTS[otherUser.featuredGift].imageUrl}
-                    alt={GIFTS[otherUser.featuredGift].name}
-                    title={GIFTS[otherUser.featuredGift].name}
-                    className="shrink-0 w-4 h-4 object-contain"
-                    style={{
-                      filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
-                        }90)`,
-                    }}
+                    src={otherUser.avatar}
+                    alt={otherUser.username ?? "User"}
+                    className="w-9 h-9 rounded-full object-cover ring-1 ring-white/[0.08]"
                   />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#522fb7]/30 flex items-center justify-center text-sm font-semibold text-white/80 ring-1 ring-white/[0.08]">
+                    {(otherUser?.username?.[0] ?? "?").toUpperCase()}
+                  </div>
                 )}
-              </span>
-              {otherUser && (
-                <span className="text-[11px] leading-tight">
-                  {isOnline(otherUser) ? (
-                    <span className="text-[#34D399]">Online</span>
-                  ) : (
-                    <span className="text-zinc-500">
-                      {formatLastSeen(otherUser.lastSeen)}
-                    </span>
+
+                {otherUser && isOnline(otherUser) && (
+                  <span className="absolute right-0 bottom-0 w-2.5 h-2.5 rounded-full bg-[#34D399] border-2 border-[#0d0b17]" />
+                )}
+              </div>
+
+              <div className="flex flex-col items-start min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
+                  {otherUser?.username ?? "..."}
+
+                  {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+                    <img
+                      src={GIFTS[otherUser.featuredGift].imageUrl}
+                      alt={GIFTS[otherUser.featuredGift].name}
+                      title={GIFTS[otherUser.featuredGift].name}
+                      className="shrink-0 w-4 h-4 object-contain"
+                      style={{
+                        filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
+                          }90)`,
+                      }}
+                    />
                   )}
                 </span>
-              )}
+
+                {otherUser && (
+                  <span className="text-[11px] leading-tight">
+                    {isOnline(otherUser) ? (
+                      <span className="text-[#34D399]">Online</span>
+                    ) : (
+                      <span className="text-zinc-500">
+                        {formatLastSeen(otherUser.lastSeen)}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
             </button>
+
+
             <div className="flex items-center gap-1">
               <button
                 onClick={() => handleStartCall("audio")}
