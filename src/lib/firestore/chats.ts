@@ -371,6 +371,7 @@ import {
   where,
   onSnapshot,
   orderBy,
+  documentId,
   getDocs,
   updateDoc,
   serverTimestamp,
@@ -400,7 +401,6 @@ export async function setTyping(
     [`typing.${uid}`]: isTyping,
   });
 }
- 
 export async function createOrGetChat(myUid: string, otherUid: string) {
   const chatId = [myUid, otherUid].sort().join("_");
  
@@ -489,6 +489,7 @@ export function subscribeToMessages(
   const q = query(
     collection(db, "chats", chatId, "messages"),
     orderBy("createdAt", "desc"),
+    orderBy(documentId(), "desc"),
     limit(pageSize)
   );
  
@@ -503,13 +504,12 @@ export function subscribeToMessages(
     );
   });
 }
- 
 // One-off fetch of the page of messages older than `beforeMessage`.
 // Used to lazily back-fill history when the user scrolls to the top
 // of the chat, instead of loading everything up front.
 export async function loadOlderMessages(
   chatId: string,
-  beforeMessage: { createdAt: any },
+  beforeMessage: { id: string; createdAt: any },
   pageSize: number = MESSAGES_PAGE_SIZE
 ): Promise<{ messages: any[]; hasMore: boolean }> {
   if (!chatId || !beforeMessage) return { messages: [], hasMore: false };
@@ -517,7 +517,8 @@ export async function loadOlderMessages(
   const q = query(
     collection(db, "chats", chatId, "messages"),
     orderBy("createdAt", "desc"),
-    startAfter(beforeMessage.createdAt),
+    orderBy(documentId(), "desc"),
+    startAfter(beforeMessage.createdAt, beforeMessage.id),
     limit(pageSize)
   );
  
@@ -768,4 +769,3 @@ export async function sendVoiceMessage(
     lastMessageAt: serverTimestamp(),
   });
 }
- 

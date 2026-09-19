@@ -498,12 +498,14 @@ import {
   query,
   where,
   orderBy,
+  documentId,
   onSnapshot,
   arrayUnion,
   arrayRemove,
   getDocs,
   increment,
   limit,
+  startAfter,
   runTransaction,
   writeBatch,
   deleteField,
@@ -581,21 +583,51 @@ export function subscribeToUserGroups(
   });
 }
 
+const GROUP_MESSAGES_PAGE_SIZE = 50;
+
 export function subscribeToGroupMessages(
   groupId: string,
-  callback: (messages: GroupMessage[]) => void
+  callback: (messages: GroupMessage[], hasMore: boolean) => void,
+  pageSize: number = GROUP_MESSAGES_PAGE_SIZE
 ): () => void {
   const q = query(
     collection(db, "groups", groupId, "messages"),
-    orderBy("createdAt", "asc")
+    orderBy("createdAt", "desc"),
+    orderBy(documentId(), "desc"),
+    limit(pageSize)
   );
 
   return onSnapshot(q, (snap) => {
-    const messages = snap.docs.map(
+    const messages = [...snap.docs].reverse().map(
       (d) => ({ id: d.id, ...d.data() } as GroupMessage)
     );
-    callback(messages);
+    callback(messages, snap.docs.length === pageSize);
   });
+}
+
+export async function loadOlderGroupMessages(
+  groupId: string,
+  beforeMessage: Pick<GroupMessage, "id" | "createdAt">,
+  pageSize: number = GROUP_MESSAGES_PAGE_SIZE
+): Promise<{ messages: GroupMessage[]; hasMore: boolean }> {
+  if (!groupId || !beforeMessage?.createdAt) {
+    return { messages: [], hasMore: false };
+  }
+
+  const q = query(
+    collection(db, "groups", groupId, "messages"),
+    orderBy("createdAt", "desc"),
+    orderBy(documentId(), "desc"),
+    startAfter(beforeMessage.createdAt, beforeMessage.id),
+    limit(pageSize)
+  );
+  const snap = await getDocs(q);
+  return {
+    messages: [...snap.docs].reverse().map(
+      (d) => ({ id: d.id, ...d.data() } as GroupMessage)
+    ),
+    hasMore: snap.docs.length === pageSize,
+  };
 }
 
 function buildUnreadIncrement(

@@ -426,6 +426,9 @@ export default function ChatWindow() {
   const dragCounter = useRef(0);
   const lastCaretPos = useRef<number>(0);
   const isLoadingOlderRef = useRef(false);
+  const olderMessageIdsRef = useRef<Set<string>>(new Set());
+  const readReceiptIdsRef = useRef<Set<string>>(new Set());
+  const previewUrlRef = useRef<string | null>(null);
   const preserveScrollRef = useRef<{ height: number; top: number } | null>(
     null
   );
@@ -451,10 +454,24 @@ export default function ChatWindow() {
   }, [chatId, myUid]);
 
   useLayoutEffect(() => {
-    setPendingMessages([]);
+    setPendingMessages((previous) => {
+      previous.forEach((message) => {
+        if (typeof message.imageUrl === "string" && message.imageUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(message.imageUrl);
+        }
+      });
+      return [];
+    });
     setFirstUnreadId(null);
     setShowScrollButton(false);
     setTypingUsers([]);
+    setText("");
+    setReplyMessage(null);
+    setImageFile(null);
+    setImagePreview(null);
+    setIsFileVideo(false);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     initializedChatRef.current = null;
     unreadComputedForChat.current = null;
     isNearBottom.current = true;
@@ -463,16 +480,23 @@ export default function ChatWindow() {
     setHasMoreMessages(false);
     setIsLoadingOlder(false);
     isLoadingOlderRef.current = false;
+    olderMessageIdsRef.current = new Set();
+    readReceiptIdsRef.current = new Set();
     preserveScrollRef.current = null;
   }, [chatId]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      if (chatId && myUid) setTyping(chatId, myUid, false).catch(() => {});
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, [chatId, myUid]);
 
   useEffect(() => {
     if (!chatId) return;
     const unsub = subscribeToMessages(chatId, (msgs, hasMore) => {
       if (activeChatIdRef.current !== chatId) return;
-      // While the user is scrolled up loading older history, don't let a
-      // live update to the recent-messages window stomp on it.
-      if (isLoadingOlderRef.current) return;
       setHasMoreMessages(hasMore);
       const isFirstLoadForThisChat = unreadComputedForChat.current !== chatId;
       const nextIds = new Set(msgs.map((m) => m.id));
@@ -495,12 +519,47 @@ export default function ChatWindow() {
         setFirstUnreadId(firstUnread ? firstUnread.id : null);
       }
 
-      setMessages(msgs);
+      setMessages((previous) => [
+        ...previous.filter(
+          (message) =>
+            olderMessageIdsRef.current.has(message.id) && !nextIds.has(message.id)
+        ),
+        ...msgs,
+      ]);
+
+      setPendingMessages((previous) => {
+        const consumed = new Set<number>();
+        return previous.filter((pending) => {
+          const matchIndex = msgs.findIndex(
+            (message, index) =>
+              !consumed.has(index) &&
+              message.senderId === pending.senderId &&
+              (message.text || "") === (pending.text || "") &&
+              (typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")
+                ? Boolean(message.imageUrl)
+                : (message.imageUrl || null) === (pending.imageUrl || null))
+          );
+          if (matchIndex === -1) return true;
+          consumed.add(matchIndex);
+          if (typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(pending.imageUrl);
+            if (previewUrlRef.current === pending.imageUrl) previewUrlRef.current = null;
+          }
+          return false;
+        });
+      });
 
       if (myUid && isWindowVisible) {
         msgs.forEach((m) => {
-          if (m.senderId !== myUid && !(m.readBy || []).includes(myUid)) {
-            markMessageRead(chatId, m.id, myUid).catch(() => { });
+          if (
+            m.senderId !== myUid &&
+            !(m.readBy || []).includes(myUid) &&
+            !readReceiptIdsRef.current.has(m.id)
+          ) {
+            readReceiptIdsRef.current.add(m.id);
+            markMessageRead(chatId, m.id, myUid).catch(() => {
+              readReceiptIdsRef.current.delete(m.id);
+            });
           }
         });
       }
@@ -592,6 +651,7 @@ export default function ChatWindow() {
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const deduped = older.filter((m) => !existingIds.has(m.id));
+          deduped.forEach((message) => olderMessageIdsRef.current.add(message.id));
           return [...deduped, ...prev];
         });
       }
@@ -726,9 +786,12 @@ export default function ChatWindow() {
   }
 
   function setFileForPreview(file: File) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     setIsFileVideo(file.type.startsWith("video/"));
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
+    setImagePreview(previewUrl);
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -785,6 +848,8 @@ export default function ChatWindow() {
   }
 
   function removeImagePreview() {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     setImageFile(null);
     setImagePreview(null);
     setIsFileVideo(false);
@@ -829,6 +894,7 @@ export default function ChatWindow() {
     setImageFile(null);
     setImagePreview(null);
     setIsFileVideo(false);
+    previewUrlRef.current = null;
     setTyping(chatId, myUid, false);
     isNearBottom.current = true;
     scrollIntentRef.current = "force";
@@ -840,10 +906,10 @@ export default function ChatWindow() {
         imageUrl = await uploadToCloudinary(fileToUpload);
       }
       await sendMessage(chatId, myUid, messageText, currentReply, imageUrl);
-      setPendingMessages((prev) => prev.filter((p) => p.id !== tempId));
     } catch (err) {
       console.error("Send failed:", err);
       setPendingMessages((prev) => prev.filter((p) => p.id !== tempId));
+      if (localPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(localPreviewUrl);
       setText((t) => t || messageText);
     } finally {
       setUploading(false);
