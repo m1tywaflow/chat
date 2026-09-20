@@ -11,6 +11,7 @@ import {
 
 interface GroupStore {
   groups: Group[];
+  groupsLoaded: boolean;
   activeGroupId: string | null;
   messagesByGroup: Record<string, GroupMessage[]>;
 
@@ -54,6 +55,7 @@ interface GroupStore {
 
 export const useGroupStore = create<GroupStore>((set, get) => ({
   groups: [],
+  groupsLoaded: false,
   activeGroupId: null,
   messagesByGroup: {},
 
@@ -63,8 +65,10 @@ export const useGroupStore = create<GroupStore>((set, get) => ({
   initGroups: (uid) => {
     if (get()._groupsUnsub) return;
 
+    set({ groupsLoaded: false });
+
     const unsub = subscribeToUserGroups(uid, (groups) => {
-      set({ groups });
+      set({ groups, groupsLoaded: true });
     });
 
     set({ _groupsUnsub: unsub });
@@ -81,6 +85,7 @@ export const useGroupStore = create<GroupStore>((set, get) => ({
       _groupsUnsub: null,
       _messagesUnsub: {},
       groups: [],
+      groupsLoaded: false,
       messagesByGroup: {},
     });
   },

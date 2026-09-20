@@ -10,6 +10,11 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 import { getCustomEmoji } from "@/lib/customEmoji";
+import { avatarThumb } from "@/lib/avatarThumb";
+import SmoothImage from "@/components/UI/SmoothImage";
+import { memo } from "react";
+import { useGroupStore } from "@/store/group-store";
+import { openConversation } from "@/lib/mergeConversations";
 
 const ACTIVE_ROW_BG =
   "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
@@ -81,18 +86,16 @@ function LastMessageBody({ text }: { text?: string }) {
   );
 }
 
-export default function GroupItem({
+function GroupItem({
   group,
-  active,
   pinned,
-  onClick,
 }: {
   group: Group;
-  active: boolean;
   pinned?: boolean;
-  onClick: () => void;
 }) {
-  const { mode, customTheme } = useThemeStore();
+  const active = useGroupStore((s) => s.activeGroupId === group.id);
+  const mode = useThemeStore((s) => s.mode);
+  const customTheme = useThemeStore((s) => s.customTheme);
 
   const theme =
     mode === "dark"
@@ -137,8 +140,8 @@ export default function GroupItem({
 
   return (
     <button
-      onClick={onClick}
-      className="w-full min-h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px]  transition-colors duration-150 cursor-pointer overflow-hidden relative group"
+      onClick={() => openConversation("group", group.id)}
+      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
       style={{
         background: active ? ACTIVE_ROW_BG : "transparent",
         width: "calc(100% - 9px)",
@@ -156,8 +159,11 @@ export default function GroupItem({
     >
       <div className="shrink-0 relative">
         {group.avatarUrl ? (
-          <img
-            src={group.avatarUrl}
+          <SmoothImage
+            src={avatarThumb(group.avatarUrl, 88)}
+            alt={group.name}
+            width={44}
+            height={44}
             className="w-11 h-11 rounded-full object-cover"
           />
         ) : (
@@ -233,3 +239,5 @@ export default function GroupItem({
     </button>
   );
 }
+
+export default memo(GroupItem);

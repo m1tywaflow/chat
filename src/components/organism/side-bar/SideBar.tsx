@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { useChannelStore } from "@/store/channel-store";
 import { useGroupStore } from "@/store/group-store";
@@ -63,6 +63,9 @@ import {
 } from "@/store/theme-store";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import { openConversation } from "@/lib/mergeConversations";
+import SmoothImage from "@/components/UI/SmoothImage";
+import { avatarThumb } from "@/lib/avatarThumb";
+import SidebarSkeleton from "./SidebarSkeleton";
 
 interface CtxMenu {
   type: "chat" | "channel" | "group";
@@ -92,6 +95,7 @@ export default function SideBar() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
   const groups = useGroupStore((s) => s.groups);
+  const groupsLoaded = useGroupStore((s) => s.groupsLoaded);
   const initGroups = useGroupStore((s) => s.initGroups);
   const disposeGroups = useGroupStore((s) => s.disposeGroups);
   const { firebaseUser } = useCurrentUser();
@@ -120,6 +124,9 @@ export default function SideBar() {
     null
   );
   const [myChannels, setMyChannels] = useState<Channel[]>([]);
+  const [chatsLoadedFor, setChatsLoadedFor] = useState<string | null>(null);
+  const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(null);
+  const [userDocLoadedFor, setUserDocLoadedFor] = useState<string | null>(null);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [searchChannelOpen, setSearchChannelOpen] = useState(false);
@@ -149,7 +156,10 @@ export default function SideBar() {
     if (!firebaseUser) return;
     const unsub = subscribeToUserChats(
       firebaseUser.uid,
-      setChats,
+      (nextChats) => {
+        setChats(nextChats);
+        setChatsLoadedFor(firebaseUser.uid);
+      },
       (payload) => {
         const { activeChatId } = useChatStore.getState();
 
@@ -173,7 +183,11 @@ export default function SideBar() {
 
   useEffect(() => {
     if (!firebaseUser) return;
-    const unsub = subscribeToMyChannels(firebaseUser.uid, setMyChannels);
+    const unsub = subscribeToMyChannels(
+      firebaseUser.uid,
+      setMyChannels,
+      () => setChannelsLoadedFor(firebaseUser.uid)
+    );
     return unsub;
   }, [firebaseUser]);
 
@@ -192,6 +206,7 @@ export default function SideBar() {
       setPinnedGroups(data?.pinnedGroups || {});
       setOrder(data?.order || {});
       setMyUsername(data?.username || "");
+      setUserDocLoadedFor(firebaseUser.uid);
     });
     return () => unsub();
   }, [firebaseUser]);
@@ -316,14 +331,6 @@ export default function SideBar() {
     setDeleteConfirm(null);
   }
 
-  function openChannel(channelId: string) {
-    openConversation("channel", channelId);
-  }
-
-  function openGroup(groupId: string) {
-    openConversation("group", groupId);
-  }
-
   async function handleDrop(bucketIds: string[]) {
     if (
       !draggedId ||
@@ -346,30 +353,29 @@ export default function SideBar() {
     await setConversationOrder(firebaseUser.uid, ids);
   }
 
-  const visibleChats = chats.filter((c) => !c.deleted);
-  const allItems = buildConversationItems(visibleChats, myChannels, groups);
+  const { pinnedList, mergedList } = useMemo(() => {
+    const visibleChats = chats.filter((chat) => !chat.deleted);
+    const allItems = buildConversationItems(visibleChats, myChannels, groups);
+    const isPinned = (item: ConversationItem) =>
+      item.type === "chat"
+        ? pinnedChats[item.id]
+        : item.type === "channel"
+          ? pinnedChannels[item.id]
+          : pinnedGroups[item.id];
 
-  const pinnedItemsRaw = allItems.filter((it) =>
-    it.type === "chat"
-      ? pinnedChats[it.id]
-      : it.type === "channel"
-        ? pinnedChannels[it.id]
-        : pinnedGroups[it.id]
-  );
-  const unpinnedItemsRaw = allItems.filter((it) =>
-    it.type === "chat"
-      ? !pinnedChats[it.id]
-      : it.type === "channel"
-        ? !pinnedChannels[it.id]
-        : !pinnedGroups[it.id]
-  );
+    return {
+      // Pinned items keep their manually-set order (drag-and-drop), falling
+      // back to recency only for pinned items that haven't been reordered yet.
+      pinnedList: sortConversationItems(allItems.filter(isPinned), order),
+      // Regular items are always sorted by latest activity.
+      mergedList: sortByRecency(allItems.filter((item) => !isPinned(item))),
+    };
+  }, [chats, groups, myChannels, order, pinnedChannels, pinnedChats, pinnedGroups]);
 
-  // Pinned items keep their manually-set order (drag-and-drop), falling
-  // back to recency only for pinned items that haven't been reordered yet.
-  const pinnedList = sortConversationItems(pinnedItemsRaw, order);
-  // Regular items are always sorted by latest activity so a new message
-  // instantly moves that chat/group/channel to the top of the section.
-  const mergedList = sortByRecency(unpinnedItemsRaw);
+  const chatsLoaded = chatsLoadedFor === firebaseUser?.uid;
+  const channelsLoaded = channelsLoadedFor === firebaseUser?.uid;
+  const userDocLoaded = userDocLoadedFor === firebaseUser?.uid;
+  const ready = chatsLoaded && channelsLoaded && groupsLoaded && userDocLoaded;
 
   const accent = "#522fb7";
   const border = mode === "light" ? "#d1d5db" : "#1F2A37";
@@ -425,19 +431,9 @@ export default function SideBar() {
         {item.type === "chat" ? (
           <ChatItem chat={item.data} pinned={pinned} />
         ) : item.type === "channel" ? (
-          <ChannelItem
-            channel={item.data as Channel}
-            active={activeChannelId === item.id}
-            pinned={pinned}
-            onClick={() => openChannel(item.id)}
-          />
+          <ChannelItem channel={item.data as Channel} pinned={pinned} />
         ) : (
-          <GroupItem
-            group={item.data as Group}
-            active={activeGroupId === item.id}
-            pinned={pinned}
-            onClick={() => openGroup(item.id)}
-          />
+          <GroupItem group={item.data as Group} pinned={pinned} />
         )}
       </div>
     );
@@ -466,7 +462,7 @@ export default function SideBar() {
       `}</style>
 
       <section
-        className="w-full h-full flex flex-col border-r transition-colors duration-200 relative"
+        className="sidebar-entrance w-full h-full flex flex-col overflow-x-hidden border-r transition-colors duration-200 relative"
         style={{
           background: theme.sideBarBg,
           borderColor: border,
@@ -707,9 +703,11 @@ export default function SideBar() {
                   }
                 >
                   {u.avatar ? (
-                    <img
-                      src={u.avatar}
+                    <SmoothImage
+                      src={avatarThumb(u.avatar, 72)}
                       alt={u.username}
+                      width={36}
+                      height={36}
                       className="w-9 h-9 rounded-full object-cover"
                     />
                   ) : (
@@ -733,7 +731,9 @@ export default function SideBar() {
 
         {/* contacts list — same background as the rest of the sidebar */}
         <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
-          {pinnedList.length === 0 && mergedList.length === 0 ? (
+          {!ready ? (
+            <SidebarSkeleton />
+          ) : pinnedList.length === 0 && mergedList.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2.5 h-full text-center px-6 pb-10">
               <div
                 className="w-11 h-11 rounded-2xl flex items-center justify-center"

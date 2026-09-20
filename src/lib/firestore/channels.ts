@@ -230,7 +230,8 @@ export async function removeSubscriber(channelId: string, uid: string) {
 
 export function subscribeToMyChannels(
   uid: string,
-  callback: (channels: Channel[]) => void
+  callback: (channels: Channel[]) => void,
+  onInitialLoad?: () => void
 ) {
   const subsQuery = query(
     collectionGroup(db, "subscribers"),
@@ -238,10 +239,22 @@ export function subscribeToMyChannels(
   );
   const channelUnsubs = new Map<string, () => void>();
   const channelsMap = new Map<string, Channel>();
+  let initialLoadComplete = false;
+  let receivedInitialList = false;
+  let awaitingInitialChannels = new Set<string>();
+  const completeInitialLoad = () => {
+    if (initialLoadComplete || awaitingInitialChannels.size > 0) return;
+    initialLoadComplete = true;
+    onInitialLoad?.();
+  };
   const emit = () => callback(Array.from(channelsMap.values()));
 
   const unsubList = onSnapshot(subsQuery, (snap) => {
     const currentIds = new Set(snap.docs.map((d) => d.ref.parent.parent!.id));
+    if (!receivedInitialList) {
+      receivedInitialList = true;
+      awaitingInitialChannels = new Set(currentIds);
+    }
     for (const [id, unsub] of channelUnsubs) {
       if (!currentIds.has(id)) {
         unsub();
@@ -256,10 +269,13 @@ export function subscribeToMyChannels(
           channelsMap.set(id, { id: chSnap.id, ...chSnap.data() } as Channel);
           emit();
         }
+        awaitingInitialChannels.delete(id);
+        completeInitialLoad();
       });
       channelUnsubs.set(id, unsub);
     });
     emit();
+    completeInitialLoad();
   });
 
   return () => {

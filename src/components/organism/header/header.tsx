@@ -93,8 +93,6 @@ export default function Header() {
           <span className="h-1 w-1 rounded-full bg-[#a996ff] shadow-[0_0_8px_2px_rgba(124,92,255,0.8)]" />
         </div>
       </div>
-
-      {/* bottom edge: quiet line + a bright spot under the cursor */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#7c5cff]/40 to-transparent" />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-0 transition-opacity duration-500 group-hover:opacity-100"

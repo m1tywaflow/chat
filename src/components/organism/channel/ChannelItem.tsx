@@ -10,6 +10,11 @@ import {
   DEFAULT_LIGHT,
 } from "@/store/theme-store";
 import { getCustomEmoji } from "@/lib/customEmoji";
+import { avatarThumb } from "@/lib/avatarThumb";
+import SmoothImage from "@/components/UI/SmoothImage";
+import { memo } from "react";
+import { useChannelStore } from "@/store/channel-store";
+import { openConversation } from "@/lib/mergeConversations";
 
 const ACTIVE_ROW_BG =
   "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
@@ -81,18 +86,16 @@ function LastMessageBody({ text }: { text?: string }) {
   );
 }
 
-export default function ChannelItem({
+function ChannelItem({
   channel,
-  active,
   pinned,
-  onClick,
 }: {
   channel: Channel;
-  active: boolean;
   pinned?: boolean;
-  onClick: () => void;
 }) {
-  const { mode, customTheme } = useThemeStore();
+  const active = useChannelStore((s) => s.activeChannelId === channel.id);
+  const mode = useThemeStore((s) => s.mode);
+  const customTheme = useThemeStore((s) => s.customTheme);
 
   const theme =
     mode === "dark"
@@ -122,8 +125,8 @@ export default function ChannelItem({
 
   return (
     <button
-      onClick={onClick}
-      className="w-full min-h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px]  transition-colors duration-150 cursor-pointer overflow-hidden relative group"
+      onClick={() => openConversation("channel", channel.id)}
+      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
       style={{
         background: active ? ACTIVE_ROW_BG : "transparent",
         width: "calc(100% - 9px)",
@@ -141,8 +144,11 @@ export default function ChannelItem({
     >
       <div className="shrink-0 relative">
         {channel.avatarUrl ? (
-          <img
-            src={channel.avatarUrl}
+          <SmoothImage
+            src={avatarThumb(channel.avatarUrl, 88)}
+            alt={channel.name}
+            width={44}
+            height={44}
             className="w-11 h-11 rounded-full object-cover"
           />
         ) : (
@@ -215,3 +221,5 @@ export default function ChannelItem({
     </button>
   );
 }
+
+export default memo(ChannelItem);
