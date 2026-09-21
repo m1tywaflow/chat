@@ -95,14 +95,13 @@ function GroupItem({
 }) {
   const active = useGroupStore((s) => s.activeGroupId === group.id);
   const mode = useThemeStore((s) => s.mode);
-  const customTheme = useThemeStore((s) => s.customTheme);
-
-  const theme =
-    mode === "dark"
-      ? DEFAULT_DARK
-      : mode === "light"
-      ? DEFAULT_LIGHT
-      : customTheme;
+  const sideBarBg = useThemeStore((s) =>
+    s.mode === "dark"
+      ? DEFAULT_DARK.sideBarBg
+      : s.mode === "light"
+      ? DEFAULT_LIGHT.sideBarBg
+      : s.customTheme.sideBarBg
+  );
 
   const accent = "#A78BFA";
   const lastMessageTime = group.lastMessage?.createdAt;
@@ -181,7 +180,7 @@ function GroupItem({
           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full flex items-center justify-center border-[2px]"
           style={{
             background: mode === "light" ? "#d1d5db" : "#3f3f46",
-            borderColor: active ? ACTIVE_ROW_BG : theme.sideBarBg,
+            borderColor: active ? ACTIVE_ROW_BG : sideBarBg,
           }}
         >
           <Users size={6} className="text-[#A78BFA]" />

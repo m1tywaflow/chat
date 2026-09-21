@@ -85,14 +85,13 @@ function LastMessagePreview({ text }: { text?: string }) {
 function ChatItem({ chat, pinned }: Props) {
   const isActive = useChatStore((s) => s.activeChatId === chat.id);
   const mode = useThemeStore((s) => s.mode);
-  const customTheme = useThemeStore((s) => s.customTheme);
-
-  const theme =
-    mode === "dark"
-      ? DEFAULT_DARK
-      : mode === "light"
-        ? DEFAULT_LIGHT
-        : customTheme;
+  const sideBarBg = useThemeStore((s) =>
+    s.mode === "dark"
+      ? DEFAULT_DARK.sideBarBg
+      : s.mode === "light"
+        ? DEFAULT_LIGHT.sideBarBg
+        : s.customTheme.sideBarBg
+  );
   const online = isOnline(chat.participant);
 
   const accent = "#A78BFA";
@@ -157,7 +156,7 @@ function ChatItem({ chat, pinned }: Props) {
               : mode === "light"
                 ? "#d1d5db"
                 : "#3f3f46",
-            borderColor: isActive ? ACTIVE_ROW_BG : theme.sideBarBg,
+            borderColor: isActive ? ACTIVE_ROW_BG : sideBarBg,
           }}
         />
       </div>
