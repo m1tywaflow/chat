@@ -6,7 +6,7 @@
 
 ### Communication, redesigned.
 
-A modern messaging platform for private conversations, communities, voice & video calls, and desktop.
+A modern communication platform for conversations, communities, voice & video calls, and desktop.
 
 **Chat · Connect · Call · Share**
 
@@ -20,7 +20,7 @@ A modern messaging platform for private conversations, communities, voice & vide
 
 ## Overview
 
-**Nexo** is a modern communication platform built to bring messaging, communities, calls, and personalization into one seamless experience.
+**Nexo** brings messaging, communities, calls, and personalization together in a single platform designed for everyday communication.
 
 Built with **Next.js, TypeScript, Firebase, LiveKit, Cloudinary, and Electron.**
 
@@ -28,20 +28,20 @@ Built with **Next.js, TypeScript, Firebase, LiveKit, Cloudinary, and Electron.**
 
 ## Features
 
-|     | Feature           | Description                                                                   |
-| --- | ----------------- | ----------------------------------------------------------------------------- |
-| 💬  | **Chats**         | Private and group conversations with messaging, reactions, replies, and media |
-| 📢  | **Channels**      | Posts, subscribers, discussions, reactions, and content sharing               |
-| 📞  | **Voice & Video** | Calls directly inside conversations                                           |
-| 👤  | **Profiles**      | Avatars, banners, decorations, colors, and collectible gifts                  |
-| 🎨  | **Themes**        | Dark, light, and custom themes                                                |
-| 🖥️ | **Desktop**       | Native Windows client with updates and notifications                          |
+|     | Feature           | Description                                                     |
+| --- | ----------------- | --------------------------------------------------------------- |
+| 💬  | **Chats**         | Private and group conversations with rich messaging and media   |
+| 📢  | **Channels**      | Posts, discussions, subscribers, reactions, and content sharing |
+| 📞  | **Voice & Video** | Audio and video calls within conversations                      |
+| 👤  | **Profiles**      | Avatars, banners, decorations, colors, and collectible gifts    |
+| 🎨  | **Themes**        | Dark, light, and custom themes                                  |
+| 🖥️ | **Desktop**       | Native Windows client with notifications and automatic updates  |
 
 ---
 
 ## Messaging
 
-* Private & group chats
+* Private & group conversations
 * Message editing and deletion
 * Forwarding and pinned messages
 * Emoji reactions
@@ -77,9 +77,9 @@ Nexo includes a dedicated **Windows application built with Electron**.
 
 ## Architecture
 
-Nexo uses **Firebase Firestore subscriptions** to synchronize conversations and user state across clients, combined with optimistic updates for a responsive interface.
+Nexo uses **Firebase Firestore** to synchronize conversations and user state across clients, with optimistic updates for a responsive interface.
 
-**LiveKit** powers voice and video communication, while **Cloudinary** handles media delivery.
+**LiveKit** powers voice and video communication, while **Cloudinary** provides media storage and delivery.
 
 ```text
                     ┌───────────────┐
@@ -91,7 +91,7 @@ Nexo uses **Firebase Firestore subscriptions** to synchronize conversations and 
           ▼                 ▼                 ▼
      ┌──────────┐      ┌──────────┐      ┌──────────┐
      │ Firebase │      │ LiveKit  │      │Cloudinary│
-     │ Auth/DB  │      │ Calls    │      │  Media   │
+     │ Auth/DB  │      │  Calls   │      │  Media   │
      └──────────┘      └──────────┘      └──────────┘
                             │
                             ▼
