@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 
 export type CallType = "audio" | "video";
 export type CallStatus =
@@ -88,7 +88,6 @@ export async function endCall(callId: string) {
   });
 }
 
-// Listen for incoming calls addressed to current user
 export function subscribeToIncomingCalls(
   userId: string,
   callback: (call: CallDoc | null) => void
@@ -122,21 +121,43 @@ export function subscribeToCall(
   });
 }
 
+// export async function fetchLiveKitToken(
+//   roomName: string,
+//   userId: string,
+//   userName: string
+// ): Promise<string> {
+//   const res = await fetch("/api/livekit/token", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify({ roomName, userId, userName }),
+//   });
+
+//   if (!res.ok) {
+//     throw new Error("Failed to fetch LiveKit token");
+//   }
+
+//   const data = await res.json();
+//   return data.token;
+// }
+
 export async function fetchLiveKitToken(
+  callId: string,
   roomName: string,
-  userId: string,
   userName: string
 ): Promise<string> {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) throw new Error("Not authenticated");
+
   const res = await fetch("/api/livekit/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomName, userId, userName }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ callId, roomName, userName }),
   });
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch LiveKit token");
-  }
-
+  if (!res.ok) throw new Error("Failed to fetch LiveKit token");
   const data = await res.json();
   return data.token;
 }

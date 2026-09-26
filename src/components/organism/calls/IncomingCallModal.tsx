@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { useCallStore } from "@/store/call-store";
 import { acceptCall, declineCall, fetchLiveKitToken } from "@/lib/calls";
@@ -12,6 +12,10 @@ export default function IncomingCallModal() {
     const { firebaseUser } = useCurrentUser();
     const [isResponding, setIsResponding] = useState(false);
 
+    useEffect(() => {
+        setIsResponding(false);
+    }, [incomingCall?.id]);
+
     if (!incomingCall) return null;
 
     const handleAccept = async () => {
@@ -20,8 +24,9 @@ export default function IncomingCallModal() {
         try {
             await acceptCall(incomingCall.id);
             const token = await fetchLiveKitToken(
+                incomingCall.id,
                 incomingCall.roomName,
-                firebaseUser.uid,
+                // firebaseUser.uid,
                 incomingCall.calleeName || firebaseUser.displayName || "User"
             );
             setLivekitToken(token);
@@ -30,6 +35,8 @@ export default function IncomingCallModal() {
             setIncomingCall(null);
         } catch (err) {
             console.error("Accept call failed:", err);
+            // setIsResponding(false);
+        } finally {
             setIsResponding(false);
         }
     };
@@ -43,6 +50,7 @@ export default function IncomingCallModal() {
             console.error("Decline call failed:", err);
         } finally {
             setIncomingCall(null);
+            setIsResponding(false);
         }
     };
 

@@ -488,7 +488,7 @@ export default function ChatWindow() {
   useEffect(() => {
     return () => {
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
-      if (chatId && myUid) setTyping(chatId, myUid, false).catch(() => {});
+      if (chatId && myUid) setTyping(chatId, myUid, false).catch(() => { });
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, [chatId, myUid]);
@@ -1088,7 +1088,8 @@ export default function ChatWindow() {
       type,
     });
 
-    const token = await fetchLiveKitToken(roomName, myUid, myName);
+    // const token = await fetchLiveKitToken(roomName, myUid, myName);
+    const token = await fetchLiveKitToken(callId, roomName, myName);
 
     setLivekitToken(token);
     setCallStoreMyUid(myUid);
