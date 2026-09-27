@@ -90,7 +90,7 @@
 //   return url.replace("/upload/", `/upload/${transform}/`);
 // }
 
-// const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto"); // ~1-2кб placeholder
+// const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto");
 // const fullSrc = (url: string, w = 520) => cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
 
 // function ChatImage({
@@ -165,7 +165,6 @@
 //     </span>
 //   );
 // }
-
 
 // function RichText({
 //   text,
@@ -418,8 +417,6 @@
 //     return () => unsub();
 //   }, [myUid]);
 
-//   // Reset per-group state BEFORE the scroll layout effect runs (same as ChannelWindow),
-//   // so scrollIntentRef / snapshot refs are never stale after switching groups.
 //   useLayoutEffect(() => {
 //     setPendingMessages((previous) => {
 //       previous.forEach((message) => {
@@ -1210,7 +1207,6 @@
 //           )}
 //         </div>
 
-//         {/* Messages */}
 //         <div
 //           ref={(node) => {
 //             chatScrollRef.current = node;
@@ -1240,7 +1236,10 @@
 //                 !m.imageUrl && isStickerOnlyText(m.text);
 //               const isStickerMsg = isImageStickerMsg || isTextStickerMsg;
 //               const time = formatTime(m.createdAt);
-//               const readCount = (m.readBy || []).length;
+//               const readByOthers = (m.readBy || []).filter(
+//                 (uid: string) => uid !== m.senderId
+//               ).length;
+//               const isMsgRead = readByOthers > 0;
 //               const isVoiceMsg = !!m.voiceUrl;
 //               const isImagePriority = msgIndex >= displayMessages.length - 8;
 
@@ -1398,7 +1397,7 @@
 //                                   time={time}
 //                                   pending={m.pending}
 //                                   isMine={isMine}
-//                                   isRead={readCount > 1}
+//                                   isRead={isMsgRead}
 //                                   variant="inline"
 //                                 />
 //                               </div>
@@ -1418,7 +1417,7 @@
 //                                   time={time}
 //                                   pending={m.pending}
 //                                   isMine={isMine}
-//                                   isRead={readCount > 1}
+//                                   isRead={isMsgRead}
 //                                   variant="pill"
 //                                 />
 //                               </span>
@@ -1433,7 +1432,7 @@
 //                                   time={time}
 //                                   pending={m.pending}
 //                                   isMine={isMine}
-//                                   isRead={readCount > 1}
+//                                   isRead={isMsgRead}
 //                                   variant="pill"
 //                                 />
 //                               </span>
@@ -1526,7 +1525,7 @@
 //                                     time={time}
 //                                     pending={m.pending}
 //                                     isMine={isMine}
-//                                     isRead={readCount > 1}
+//                                     isRead={isMsgRead}
 //                                     variant="inline"
 //                                   />
 //                                 </div>
@@ -1538,7 +1537,7 @@
 //                                   time={time}
 //                                   pending={m.pending}
 //                                   isMine={isMine}
-//                                   isRead={readCount > 1}
+//                                   isRead={isMsgRead}
 //                                   variant="pill"
 //                                 />
 //                               </div>
@@ -1663,7 +1662,7 @@ import { forwardMessageToChat } from "@/lib/firestore/chats";
 import { forwardMessageToChannel } from "@/lib/firestore/channels";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
 
 import {
   X,
@@ -2002,6 +2001,8 @@ export default function GroupWindow() {
   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
   const [myUid, setMyUid] = useState<string | null>(null);
   const [myUsername, setMyUsername] = useState<string>("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [typingNames, setTypingNames] = useState<Record<string, string>>({});
   const [replyMessage, setReplyMessage] = useState<any | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -2071,6 +2072,7 @@ export default function GroupWindow() {
       return [];
     });
     setShowScrollButton(false);
+    setTypingUsers([]);
     isNearBottom.current = true;
     confirmedMessageIdsRef.current = new Set();
     receivedSnapshotRef.current = false;
@@ -2156,6 +2158,15 @@ export default function GroupWindow() {
       setPinnedMessage(data?.pinnedMessage || null);
       setWallpaper(data?.wallpaper || null);
 
+      if (data?.typing) {
+        const typingList = Object.entries(data.typing)
+          .filter(([uid, val]) => val && uid !== myUid)
+          .map(([uid]) => uid);
+        setTypingUsers(typingList);
+      } else {
+        setTypingUsers([]);
+      }
+
       const unread = data?.unreadCounts?.[myUid] || 0;
       if (unread > 0 && isWindowVisible) {
         markGroupAsRead(groupId, myUid).catch(() => { });
@@ -2163,6 +2174,35 @@ export default function GroupWindow() {
     });
     return () => unsub();
   }, [groupId, myUid, isWindowVisible]);
+
+  useEffect(() => {
+    if (typingUsers.length === 0) return;
+    const missing = typingUsers.filter((uid) => !typingNames[uid]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, "users", uid));
+          return [uid, snap.exists() ? snap.data()?.username || "User" : "User"] as const;
+        } catch {
+          return [uid, "User"] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setTypingNames((prev) => {
+        const next = { ...prev };
+        entries.forEach(([uid, name]) => {
+          next[uid] = name;
+        });
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [typingUsers, typingNames]);
   useEffect(() => {
     if (!groupId || !myUid) return;
     markGroupAsRead(groupId, myUid).catch(() => { });
@@ -2562,6 +2602,12 @@ export default function GroupWindow() {
         .ctx-divider { height:1px; background:rgba(255,255,255,0.06); margin:2px 0; }
         .msg-bubble-pending { opacity: 0.75; transition: opacity 0.2s ease-out; }
         .composer-tint { transition: box-shadow 0.15s ease, border-color 0.15s ease; }
+        .typing-dots { display: inline-flex; align-items: center; gap: 3px; }
+        .typing-dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: currentColor; opacity: 0.35; animation: typing-dot-bounce 1.3s infinite ease-in-out; }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.18s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.36s; }
+        @keyframes typing-dot-bounce { 0%,60%,100% { opacity: 0.35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
       `}</style>
 
       {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
@@ -2776,9 +2822,28 @@ export default function GroupWindow() {
                   <span className="text-sm font-semibold text-white/80">
                     {group.name}
                   </span>
-                  <span className="text-[11px] text-zinc-500">
-                    {group.memberCount} member
-                    {group.memberCount === 1 ? "" : "s"}
+                  <span className="text-[11px] leading-tight">
+                    {typingUsers.length > 0 ? (
+                      <span className="flex items-center gap-1 text-[#a893ff]">
+                        {typingUsers.length === 1
+                          ? `${typingNames[typingUsers[0]] || "Someone"} is typing`
+                          : typingUsers.length === 2
+                            ? `${typingUsers
+                              .map((uid) => typingNames[uid] || "Someone")
+                              .join(", ")} are typing`
+                            : `${typingUsers.length} people are typing`}
+                        <span className="typing-dots">
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500">
+                        {group.memberCount} member
+                        {group.memberCount === 1 ? "" : "s"}
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
