@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
+import { decoSrc } from "@/lib/cdn";
 
 interface FullProfileViewProps {
   onClose: () => void;
@@ -60,10 +61,10 @@ export default function FullProfileView({
 
   const bannerStyle = bannerIsImage
     ? {
-        backgroundImage: `url(${bannerGradient})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
+      backgroundImage: `url(${bannerGradient})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    }
     : { background: bannerGradient };
 
   return (
@@ -99,7 +100,7 @@ export default function FullProfileView({
         >
           {avatarDecoration && (
             <img
-              src={avatarDecoration}
+              src={decoSrc(avatarDecoration, 320)}
               alt=""
               className="absolute pointer-events-none select-none"
               style={{
@@ -161,11 +162,9 @@ export default function FullProfileView({
                   ["--gx" as any]: `${p.x}px`,
                   ["--gy" as any]: `${p.y}px`,
                   transform: `translate(calc(-50% + var(--gx)), calc(-50% + var(--gy)))`,
-                  animation: `${p.variant} ${
-                    p.duration
-                  }s ease-in-out infinite ${
-                    p.reverse ? "alternate-reverse" : "alternate"
-                  }`,
+                  animation: `${p.variant} ${p.duration
+                    }s ease-in-out infinite ${p.reverse ? "alternate-reverse" : "alternate"
+                    }`,
                   animationDelay: `${p.delay}s`,
                 }}
               >
