@@ -934,13 +934,11 @@ export async function deleteGroupMessage(
     voiceUrl: null,
   });
 
-  // если удалили не последнее сообщение, превью в сайдбаре трогать не надо
   const groupSnap = await getDoc(groupRef);
   if (!groupSnap.exists()) return;
   const current = (groupSnap.data() as any).lastMessage;
   if (current?.messageId && current.messageId !== messageId) return;
 
-  // ищем новое последнее НЕ удалённое сообщение
   const snap = await getDocs(
     query(
       collection(db, "groups", groupId, "messages"),

@@ -2,7 +2,7 @@ const clamp = (n: number, min: number, max: number) =>
   Math.min(max, Math.max(min, n));
 
 export async function disintegrate(el: HTMLElement, duration = 900): Promise<void> {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   const rect = el.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
