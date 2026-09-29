@@ -357,7 +357,6 @@ export default function FullProfileView({
 
         <div className="relative z-[1]" onClick={(e) => e.stopPropagation()}>
           <TiltCard style={{ width: 400 }}>
-            {/* стеклянная подложка отдельным слоем, без rounded по дизайн-гайду */}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
