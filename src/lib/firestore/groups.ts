@@ -912,12 +912,62 @@ export async function editGroupMessage(
   await updateDoc(msgRef, { text, edited: true });
 }
 
+// export async function deleteGroupMessage(
+//   groupId: string,
+//   messageId: string
+// ): Promise<void> {
+//   const msgRef = doc(db, "groups", groupId, "messages", messageId);
+//   await updateDoc(msgRef, { deleted: true, text: "", imageUrl: null });
+// }
+
 export async function deleteGroupMessage(
   groupId: string,
   messageId: string
 ): Promise<void> {
+  const groupRef = doc(db, "groups", groupId);
   const msgRef = doc(db, "groups", groupId, "messages", messageId);
-  await updateDoc(msgRef, { deleted: true, text: "", imageUrl: null });
+
+  await updateDoc(msgRef, {
+    deleted: true,
+    text: "",
+    imageUrl: null,
+    voiceUrl: null,
+  });
+
+  // если удалили не последнее сообщение, превью в сайдбаре трогать не надо
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) return;
+  const current = (groupSnap.data() as any).lastMessage;
+  if (current?.messageId && current.messageId !== messageId) return;
+
+  // ищем новое последнее НЕ удалённое сообщение
+  const snap = await getDocs(
+    query(
+      collection(db, "groups", groupId, "messages"),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    )
+  );
+  const lastDoc = snap.docs.find((d) => !d.data().deleted);
+
+  if (!lastDoc) {
+    await updateDoc(groupRef, { lastMessage: null });
+    return;
+  }
+
+  const m = lastDoc.data();
+  await updateDoc(groupRef, {
+    lastMessage: {
+      messageId: lastDoc.id,
+      text: m.text ?? "",
+      imageUrl: m.imageUrl ?? null,
+      voiceUrl: m.voiceUrl ?? null,
+      type: m.voiceUrl ? "voice" : m.imageUrl ? "image" : "text",
+      senderId: m.senderId,
+      senderName: m.senderName,
+      createdAt: m.createdAt,
+    },
+  });
 }
 
 export async function toggleGroupReaction(

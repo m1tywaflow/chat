@@ -1,3 +1,244 @@
+// "use client";
+
+// import { Group } from "@/types/group";
+// import { Users, Pin } from "lucide-react";
+// import { formatTime } from "@/lib/format-time";
+// import { auth } from "@/lib/firebase";
+// import {
+//   useThemeStore,
+//   DEFAULT_DARK,
+//   DEFAULT_LIGHT,
+// } from "@/store/theme-store";
+// import { getCustomEmoji } from "@/lib/customEmoji";
+// import { avatarThumb } from "@/lib/avatarThumb";
+// import SmoothImage from "@/components/UI/SmoothImage";
+// import { memo } from "react";
+// import { useGroupStore } from "@/store/group-store";
+// import { openConversation } from "@/lib/mergeConversations";
+
+// const ACTIVE_ROW_BG =
+//   "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
+
+// const ACTIVE_ROW_HOVER_BG =
+//   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
+
+
+// const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+// const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+// const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+// const STICKER_TOKEN_FIND_RE = /::([\w-]+)::/;
+
+// function isStickerOnlyText(text: string): boolean {
+//   if (!text) return false;
+//   const trimmed = text.trim();
+//   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
+// }
+
+// /**
+//  * Renders a group's last-message body the way Telegram's sidebar does:
+//  * plain text as-is, ::sticker_id:: tokens swapped for a tiny inline
+//  * thumbnail, and a sticker-only message collapsed to "thumbnail + Sticker"
+//  * instead of dumping the raw token text into the row. Mirrors ChatItem's
+//  * LastMessagePreview 1:1 so groups and 1:1 chats look identical.
+//  */
+// function LastMessageBody({ text }: { text?: string }) {
+//   if (!text) return null;
+
+//   if (isStickerOnlyText(text)) {
+//     const firstToken = text.match(STICKER_TOKEN_FIND_RE);
+//     const custom = firstToken ? getCustomEmoji(firstToken[1]) : null;
+//     return (
+//       <span className="inline-flex items-center gap-1 align-middle">
+//         {custom && (
+//           <img
+//             src={custom.url}
+//             alt={custom.id}
+//             className="w-4 h-4 object-contain shrink-0"
+//           />
+//         )}
+//         <span>Sticker</span>
+//       </span>
+//     );
+//   }
+
+//   const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+//   return (
+//     <>
+//       {parts.map((part, i) => {
+//         const match = part.match(STICKER_TOKEN_MATCH_RE);
+//         if (match) {
+//           const custom = getCustomEmoji(match[1]);
+//           if (custom) {
+//             return (
+//               <img
+//                 key={i}
+//                 src={custom.url}
+//                 alt={custom.id}
+//                 className="inline-block w-4 h-4 object-contain align-text-bottom mx-0.5"
+//               />
+//             );
+//           }
+//         }
+//         return part ? <span key={i}>{part}</span> : null;
+//       })}
+//     </>
+//   );
+// }
+
+// function GroupItem({
+//   group,
+//   pinned,
+// }: {
+//   group: Group;
+//   pinned?: boolean;
+// }) {
+//   const active = useGroupStore((s) => s.activeGroupId === group.id);
+//   const mode = useThemeStore((s) => s.mode);
+//   const sideBarBg = useThemeStore((s) =>
+//     s.mode === "dark"
+//       ? DEFAULT_DARK.sideBarBg
+//       : s.mode === "light"
+//       ? DEFAULT_LIGHT.sideBarBg
+//       : s.customTheme.sideBarBg
+//   );
+
+//   const accent = "#A78BFA";
+//   const lastMessageTime = group.lastMessage?.createdAt;
+//   const hoverBg = mode === "light" ? "#efeafd" : "rgba(255,255,255,0.04)";
+
+//   const nameColor = "#F3F1FA";
+//   const lastMsgColor = active ? "#D7D1EF" : "#8B85A0";
+//   const timeColor = active ? "#D7D1EF" : "#7C7690";
+//   const pinColor = active ? "#ffffff" : accent;
+
+//   const avatarFallbackBg = active
+//     ? "rgba(255,255,255,0.18)"
+//     : mode === "light"
+//     ? "#ddd6fe"
+//     : "#1e2a3a";
+//   const avatarFallbackColor = active ? "#ffffff" : accent;
+
+//   const myUid = auth.currentUser?.uid;
+//   const unreadCount = myUid ? group.unreadCounts?.[myUid] || 0 : 0;
+
+//   // returns the RAW body (may still contain ::sticker_id:: tokens) —
+//   // token-to-thumbnail conversion happens in LastMessageBody so a sticker
+//   // sent alone or mixed into text renders as an image, not raw markup
+//   function getLastMessageBody(msg: Group["lastMessage"]): string {
+//     if (!msg) return "";
+//     if (msg.type === "voice") return "🎤 Голосовое сообщение";
+//     if (msg.type === "image")
+//       return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
+//     return msg.text || "";
+//   }
+
+//   const lastMessageBody = group.lastMessage
+//     ? getLastMessageBody(group.lastMessage)
+//     : "";
+
+//   return (
+//     <button
+//       onClick={() => openConversation("group", group.id)}
+//       className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
+//       style={{
+//         background: active ? ACTIVE_ROW_BG : "transparent",
+//         width: "calc(100% - 9px)",
+//       }}
+//       onMouseEnter={(e) => {
+//         e.currentTarget.style.background = active
+//           ? ACTIVE_ROW_HOVER_BG
+//           : hoverBg;
+//       }}
+//       onMouseLeave={(e) => {
+//         e.currentTarget.style.background = active
+//           ? ACTIVE_ROW_BG
+//           : "transparent";
+//       }}
+//     >
+//       <div className="shrink-0 relative">
+//         {group.avatarUrl ? (
+//           <SmoothImage
+//             src={avatarThumb(group.avatarUrl, 88)}
+//             alt={group.name}
+//             width={44}
+//             height={44}
+//             className="w-11 h-11 rounded-full object-cover"
+//           />
+//         ) : (
+//           <div
+//             className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold transition-all"
+//             style={{
+//               background: avatarFallbackBg,
+//               color: avatarFallbackColor,
+//             }}
+//           >
+//             {group.name.charAt(0).toUpperCase()}
+//           </div>
+//         )}
+//         <div
+//           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full flex items-center justify-center border-[2px]"
+//           style={{
+//             background: mode === "light" ? "#d1d5db" : "#3f3f46",
+//             borderColor: active ? ACTIVE_ROW_BG : sideBarBg,
+//           }}
+//         >
+//           <Users size={6} className="text-[#A78BFA]" />
+//         </div>
+//       </div>
+
+//       <div className="flex-1 min-w-0 text-left">
+//         <div className="flex items-center justify-between gap-2 mb-[3px]">
+//           <div className="flex items-center gap-1.5 min-w-0">
+//             {pinned && (
+//               <Pin size={9} className="shrink-0" style={{ color: pinColor }} />
+//             )}
+
+//             <h3
+//               className="text-[14.5px] font-semibold truncate leading-none"
+//               style={{ color: nameColor }}
+//             >
+//               {group.name}
+//             </h3>
+//           </div>
+//           <span
+//             className="text-[11px] shrink-0 tabular-nums"
+//             style={{ color: timeColor }}
+//           >
+//             {lastMessageTime ? formatTime(lastMessageTime) : ""}
+//           </span>
+//         </div>
+
+//         <div className="flex items-center justify-between gap-2">
+//           <p
+//             className="text-[13px] font-bold truncate leading-tight"
+//             style={{ color: lastMsgColor }}
+//           >
+//             {group.lastMessage ? (
+//               <>
+//                 {group.lastMessage.senderName}:{" "}
+//                 <LastMessageBody text={lastMessageBody} />
+//               </>
+//             ) : (
+//               "No messages yet"
+//             )}
+//           </p>
+//           {unreadCount > 0 && (
+//             <span
+//               className="shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
+//               style={{
+//                 background: active ? "rgba(255,255,255,0.25)" : "#7c3aed",
+//               }}
+//             >
+//               {unreadCount > 99 ? "99+" : unreadCount}
+//             </span>
+//           )}
+//         </div>
+//       </div>
+//     </button>
+//   );
+// }
+
+// export default memo(GroupItem);
 "use client";
 
 import { Group } from "@/types/group";
@@ -15,6 +256,8 @@ import SmoothImage from "@/components/UI/SmoothImage";
 import { memo } from "react";
 import { useGroupStore } from "@/store/group-store";
 import { openConversation } from "@/lib/mergeConversations";
+import TypingLabel from "@/components/atoms/TypingLabel";
+import { useUsername } from "@/lib/usernameCache";
 
 const ACTIVE_ROW_BG =
   "linear-gradient(135deg, #3f247f 0%, #0a0b16 55%, #070912 100%)";
@@ -22,8 +265,7 @@ const ACTIVE_ROW_BG =
 const ACTIVE_ROW_HOVER_BG =
   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
 
-// same ::sticker_id:: token format used in the chat window composer/bubbles
-// and in ChatItem's sidebar preview
+
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
@@ -35,13 +277,6 @@ function isStickerOnlyText(text: string): boolean {
   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
-/**
- * Renders a group's last-message body the way Telegram's sidebar does:
- * plain text as-is, ::sticker_id:: tokens swapped for a tiny inline
- * thumbnail, and a sticker-only message collapsed to "thumbnail + Sticker"
- * instead of dumping the raw token text into the row. Mirrors ChatItem's
- * LastMessagePreview 1:1 so groups and 1:1 chats look identical.
- */
 function LastMessageBody({ text }: { text?: string }) {
   if (!text) return null;
 
@@ -99,8 +334,8 @@ function GroupItem({
     s.mode === "dark"
       ? DEFAULT_DARK.sideBarBg
       : s.mode === "light"
-      ? DEFAULT_LIGHT.sideBarBg
-      : s.customTheme.sideBarBg
+        ? DEFAULT_LIGHT.sideBarBg
+        : s.customTheme.sideBarBg
   );
 
   const accent = "#A78BFA";
@@ -115,19 +350,31 @@ function GroupItem({
   const avatarFallbackBg = active
     ? "rgba(255,255,255,0.18)"
     : mode === "light"
-    ? "#ddd6fe"
-    : "#1e2a3a";
+      ? "#ddd6fe"
+      : "#1e2a3a";
   const avatarFallbackColor = active ? "#ffffff" : accent;
 
   const myUid = auth.currentUser?.uid;
   const unreadCount = myUid ? group.unreadCounts?.[myUid] || 0 : 0;
 
-  // returns the RAW body (may still contain ::sticker_id:: tokens) —
-  // token-to-thumbnail conversion happens in LastMessageBody so a sticker
-  // sent alone or mixed into text renders as an image, not raw markup
+
+  const typers = Object.entries((group as any).typing ?? {})
+    .filter(([uid, v]) => v && uid !== myUid)
+    .map(([uid]) => uid);
+  const typerName1 = useUsername(typers[0]);
+  const typerName2 = useUsername(typers[1]);
+  const typingText =
+    typers.length === 0
+      ? ""
+      : typers.length === 1
+        ? `${typerName1 || "Someone"} is typing`
+        : typers.length === 2
+          ? `${typerName1 || "Someone"}, ${typerName2 || "Someone"} are typing`
+          : `${typers.length} people are typing`;
+
   function getLastMessageBody(msg: Group["lastMessage"]): string {
     if (!msg) return "";
-    if (msg.type === "voice") return "🎤 Голосовое сообщение";
+    if (msg.type === "voice") return "Voice message";
     if (msg.type === "image")
       return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
     return msg.text || "";
@@ -214,7 +461,12 @@ function GroupItem({
             className="text-[13px] font-bold truncate leading-tight"
             style={{ color: lastMsgColor }}
           >
-            {group.lastMessage ? (
+            {typingText ? (
+              <TypingLabel
+                text={typingText}
+                color={active ? "#ffffff" : accent}
+              />
+            ) : group.lastMessage ? (
               <>
                 {group.lastMessage.senderName}:{" "}
                 <LastMessageBody text={lastMessageBody} />

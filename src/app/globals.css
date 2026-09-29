@@ -67,3 +67,35 @@ body {
   }
 }
 
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+  animation: typing-dot-bounce 1.3s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes typing-dot-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}

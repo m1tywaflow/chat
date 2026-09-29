@@ -16,6 +16,8 @@ import { getCustomEmoji } from "@/lib/customEmoji";
 import SmoothImage from "@/components/UI/SmoothImage";
 import { avatarThumb } from "@/lib/avatarThumb";
 import { memo } from "react";
+import { auth } from "@/lib/firebase";
+import TypingLabel from "@/components/atoms/TypingLabel";
 
 interface Props {
   chat: Chat;
@@ -93,6 +95,10 @@ function ChatItem({ chat, pinned }: Props) {
         : s.customTheme.sideBarBg
   );
   const online = isOnline(chat.participant);
+
+  const typing = Object.entries((chat as any).typing ?? {}).some(
+    ([uid, v]) => v && uid !== auth.currentUser?.uid
+  );
 
   const accent = "#A78BFA";
   const hoverBg = mode === "light" ? "#efeafd" : "rgba(255,255,255,0.04)";
@@ -207,7 +213,12 @@ function ChatItem({ chat, pinned }: Props) {
             className="text-[13px] font-bold truncate leading-tight"
             style={{ color: lastMsgColor }}
           >
-            <LastMessagePreview text={chat.lastMessage} />
+            {/* <LastMessagePreview text={chat.lastMessage} /> */}
+            {typing ? (
+              <TypingLabel text="typing" color={isActive ? "#ffffff" : accent} />
+            ) : (
+              <LastMessagePreview text={chat.lastMessage} />
+            )}
           </p>
           {!!chat.unreadCount && (
             <span
