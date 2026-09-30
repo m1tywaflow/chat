@@ -1,5 +1,4 @@
 <div align="center">
-[![GitHub stars](https://img.shields.io/github/stars/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/stargazers)
 
 <img src="public/logo.png" width="88" alt="Nexo" />
 
@@ -10,6 +9,10 @@
 A modern communication platform for conversations, communities, voice & video calls, and desktop.
 
 **Chat · Connect · Call · Share**
+
+[![GitHub stars](https://img.shields.io/github/stars/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/network/members)
+[![GitHub license](https://img.shields.io/github/license/m1tywaflow/chat?style=flat)](https://github.com/m1tywaflow/chat/blob/main/LICENSE)
 
 <br />
 
