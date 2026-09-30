@@ -48,7 +48,6 @@ Built with **Next.js, TypeScript, Firebase, LiveKit, Cloudinary, and Electron.**
 * Read receipts
 * Voice messages
 * Image & media sharing
-* Unread counters
 
 ---
 
