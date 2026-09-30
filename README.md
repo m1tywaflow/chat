@@ -1,4 +1,5 @@
 <div align="center">
+[![GitHub stars](https://img.shields.io/github/stars/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/stargazers)
 
 <img src="public/logo.png" width="88" alt="Nexo" />
 
