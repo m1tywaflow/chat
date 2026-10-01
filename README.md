@@ -243,11 +243,11 @@ npm run dist
 
 <!-- Add screenshots here -->
 
-<img src="D:\PROG\nexo-screens/interface.png" width="800" alt="Nexo Chat" />
+<img src="public/screenshots/interface.png" width="800" alt="Nexo Chat" />
 
 <br /><br />
 
-<img src="D:\PROG\nexo-screens/customise.png" width="800" alt="Nexo Profile" />
+<img src="public/screenshots/customise.png" width="800" alt="Nexo Profile" />
 
 </div>
 
