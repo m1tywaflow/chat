@@ -46,12 +46,10 @@ interface GiftItem {
 
 const FLOAT_VARIANTS = ["fpFloatA", "fpFloatB", "fpFloatC"];
 
-// Порядок ключей RARITY_COLORS считаем от обычного к редкому.
-// Если у тебя наоборот — поменяй знак в сортировке ниже.
+
 const RARITY_ORDER = Object.keys(RARITY_COLORS);
 const rarityRank = (rarity: string) => RARITY_ORDER.indexOf(rarity);
 
-// Статичный CSS — вынесен из компонента, чтобы не пересоздавать строку на каждый рендер.
 const CSS = `
 @keyframes fpFloatA{0%,100%{transform:translate3d(0,0,0) rotate(0deg)}50%{transform:translate3d(4px,-10px,0) rotate(6deg)}}
 @keyframes fpFloatB{0%,100%{transform:translate3d(0,0,0) rotate(0deg)}50%{transform:translate3d(-6px,-8px,0) rotate(-5deg)}}
@@ -71,9 +69,6 @@ const CSS = `
 }
 `;
 
-/* ------------------------------------------------------------------ */
-/* Раскладка подарков: одно кольцо, а если много — два (внешнее+внутр) */
-/* ------------------------------------------------------------------ */
 function layoutGifts(ids: string[]): GiftItem[] {
   const unique = Array.from(new Set(ids));
 
@@ -85,7 +80,6 @@ function layoutGifts(ids: string[]): GiftItem[] {
       color: RARITY_COLORS[g.gift.rarity] as string,
       rank: rarityRank(g.gift.rarity),
     }))
-    // самые редкие — первыми: окажутся сверху внешнего кольца
     .sort((a, b) => b.rank - a.rank);
 
   const n = sorted.length;
@@ -95,19 +89,18 @@ function layoutGifts(ids: string[]): GiftItem[] {
     n <= 8
       ? [{ count: n, radius: 135, size: 58, offset: 0, depth: 30 }]
       : (() => {
-          const outer = Math.ceil(n * 0.6);
-          return [
-            { count: outer, radius: 152, size: 46, offset: 0, depth: 32 },
-            {
-              count: n - outer,
-              radius: 98,
-              size: 40,
-              // сдвиг на пол-шага, чтобы иконки не стояли строго под внешними
-              offset: Math.PI / outer,
-              depth: 18,
-            },
-          ];
-        })();
+        const outer = Math.ceil(n * 0.6);
+        return [
+          { count: outer, radius: 152, size: 46, offset: 0, depth: 32 },
+          {
+            count: n - outer,
+            radius: 98,
+            size: 40,
+            offset: Math.PI / outer,
+            depth: 18,
+          },
+        ];
+      })();
 
   const out: GiftItem[] = [];
   let cursor = 0;
@@ -141,9 +134,6 @@ function layoutGifts(ids: string[]): GiftItem[] {
   return out;
 }
 
-/* ------------------------------------------------------------------ */
-/* Кнопка подарка (memo — не ререндерится при открытии модалки)        */
-/* ------------------------------------------------------------------ */
 const GiftButton = memo(function GiftButton({
   item,
   onSelect,
@@ -168,9 +158,8 @@ const GiftButton = memo(function GiftButton({
           height: size,
           left: `calc(50% + ${item.x}px - ${size / 2}px)`,
           top: `calc(50% + ${item.y}px - ${size / 2}px)`,
-          animation: `${item.variant} ${item.duration}s ease-in-out infinite ${
-            item.reverse ? "alternate-reverse" : "alternate"
-          }`,
+          animation: `${item.variant} ${item.duration}s ease-in-out infinite ${item.reverse ? "alternate-reverse" : "alternate"
+            }`,
           animationDelay: `${item.delay}s`,
         }}
       >
@@ -201,9 +190,6 @@ const GiftButton = memo(function GiftButton({
   );
 });
 
-/* ------------------------------------------------------------------ */
-/* Модалка подарка                                                     */
-/* ------------------------------------------------------------------ */
 const GiftModal = memo(function GiftModal({
   gift,
   color,
@@ -273,9 +259,6 @@ const GiftModal = memo(function GiftModal({
   );
 });
 
-/* ------------------------------------------------------------------ */
-/* Основной компонент                                                  */
-/* ------------------------------------------------------------------ */
 export default function FullProfileView({
   onClose,
   username,
@@ -292,10 +275,8 @@ export default function FullProfileView({
 
   const items = useMemo(() => layoutGifts(gifts), [gifts]);
 
-  // Самый редкий подарок красит ауру за аватаром
   const auraColor = items[0]?.color ?? null;
 
-  // Сводка по редкости: "2 legendary · 5 rare"
   const summary = useMemo(() => {
     const map = new Map<string, { color: string; count: number; rank: number }>();
     items.forEach(({ gift, color, rank }) => {
@@ -313,7 +294,6 @@ export default function FullProfileView({
   const handleSelect = useCallback((id: string) => setGiftModal(id), []);
   const closeGift = useCallback(() => setGiftModal(null), []);
 
-  // Escape: сначала закрывает подарок, потом профиль
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -324,7 +304,6 @@ export default function FullProfileView({
     return () => window.removeEventListener("keydown", onKey);
   }, [giftModal, onClose]);
 
-  // Лочим скролл страницы и возвращаем фокус после закрытия
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     const prevFocus = document.activeElement as HTMLElement | null;
@@ -340,10 +319,10 @@ export default function FullProfileView({
     () =>
       bannerIsImage
         ? {
-            backgroundImage: `url(${bannerGradient})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }
+          backgroundImage: `url(${bannerGradient})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
         : { background: bannerGradient },
     [bannerIsImage, bannerGradient],
   );
@@ -379,7 +358,6 @@ export default function FullProfileView({
           className="relative z-[1] max-w-full"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* width: 400 на узких экранах ломается — ужимаем */}
           <TiltCard style={{ width: "min(400px, 92vw)" }}>
             <div
               className="absolute inset-0 pointer-events-none"
@@ -406,7 +384,6 @@ export default function FullProfileView({
                   transformStyle: "preserve-3d",
                 }}
               >
-                {/* Аура цвета самой редкой вещи — единственный «живой» фон */}
                 {auraColor && (
                   <TiltLayer
                     depth={4}

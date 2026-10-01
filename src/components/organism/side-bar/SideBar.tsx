@@ -82,7 +82,6 @@ interface DeleteConfirm {
   isOwner?: boolean;
 }
 
-// exact tones lifted from the reference screenshot
 const SEARCH_BG = "#1E1830";
 const SEARCH_BTN_BG = "#13101f";
 
@@ -364,10 +363,7 @@ export default function SideBar() {
           : pinnedGroups[item.id];
 
     return {
-      // Pinned items keep their manually-set order (drag-and-drop), falling
-      // back to recency only for pinned items that haven't been reordered yet.
       pinnedList: sortConversationItems(allItems.filter(isPinned), order),
-      // Regular items are always sorted by latest activity.
       mergedList: sortByRecency(allItems.filter((item) => !isPinned(item))),
     };
   }, [chats, groups, myChannels, order, pinnedChannels, pinnedChats, pinnedGroups]);
