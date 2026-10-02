@@ -1,0 +1,241 @@
+.chat-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: rgba(124, 92, 255, 0.25);
+  border-radius: 999px;
+}
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 92, 255, 0.5);
+}
+
+.highlight-flash {
+  animation: flash 1.5s ease-out;
+}
+@keyframes flash {
+  0%,
+  30% {
+    background-color: rgba(124, 92, 255, 0.15);
+    border-radius: 12px;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.reply-btn,
+.react-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.msg-row:hover .reply-btn,
+.msg-row:hover .react-btn {
+  opacity: 1;
+}
+.msg-dots {
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  transform: scale(0.85);
+}
+.msg-row:hover .msg-dots {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* новое входящее / только что отправленное сообщение */
+.msg-enter {
+  animation: msgIn 0.18s ease-out;
+}
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.lightbox-img {
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.chat-img {
+  cursor: zoom-in;
+  transition: opacity 0.15s;
+}
+.chat-img:hover {
+  opacity: 0.85;
+}
+
+.reaction-picker {
+  animation: pickerIn 0.12s ease-out;
+  transform-origin: bottom center;
+}
+@keyframes pickerIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.msg-ctx-menu {
+  animation: menuIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top right;
+}
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.confirm-dialog {
+  animation: dialogIn 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.reaction-pill {
+  transition: transform 0.1s, background 0.1s;
+}
+.reaction-pill:hover {
+  transform: scale(1.06);
+}
+.reaction-emoji-btn {
+  transition: transform 0.1s;
+}
+.reaction-emoji-btn:hover {
+  transform: scale(1.25);
+}
+
+.chat-video {
+  border-radius: 12px;
+  max-width: 260px;
+  width: 100%;
+  display: block;
+  background: #000;
+}
+.video-thumb {
+  position: relative;
+  cursor: pointer;
+}
+.video-thumb:hover .play-overlay {
+  opacity: 1;
+}
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ctx-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  transition: background 0.1s;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+.ctx-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.ctx-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 2px 0;
+}
+
+.msg-bubble-pending {
+  opacity: 0.75;
+  transition: opacity 0.2s ease-out;
+}
+.composer-tint {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+  animation: typing-dot-bounce 1.3s infinite ease-in-out;
+}
+.typing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes typing-dot-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+  .msg-enter,
+  .reaction-picker,
+  .msg-ctx-menu,
+  .confirm-dialog {
+    animation: none;
+  }
+}
