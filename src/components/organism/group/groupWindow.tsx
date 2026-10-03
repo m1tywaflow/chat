@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useGroupStore } from "@/store/group-store";
 import {
   subscribeToGroupMessages,
@@ -20,7 +27,6 @@ import { forwardMessageToChannel } from "@/lib/firestore/channels";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
-
 import {
   X,
   CornerUpLeft,
@@ -28,258 +34,37 @@ import {
   MoreVertical,
   Trash2,
   ImageIcon,
+  ImagePlus,
+  ImageOff,
   Download,
-  Check,
-  CheckCheck,
-  Clock,
   Pencil,
   Pin,
   PinOff,
-  Play,
   Copy,
   ChevronDown,
   Users,
   LogOut,
 } from "lucide-react";
-import {
-  CUSTOM_EMOJIS,
-  getCustomEmoji,
-  isCustomEmojiUrl,
-} from "@/lib/customEmoji";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import GroupModal from "./groupModal";
-import VoiceBubble from "@/components/atoms/VoiceBubble";
 import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
-import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 import SmoothImage from "@/components/UI/SmoothImage";
 import GroupComposer, { GroupComposerHandle } from "./GroupComposer";
+import GroupMessageRow from "./GroupMessageRow";
+import {
+  ConfirmDialog,
+  dayKey,
+  formatDayLabel,
+  isVideo,
+  toDate,
+  uploadImage,
+} from "./GroupShared";
 import { disintegrate } from "@/lib/disintegrate";
-
-
-const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
-const REACTION_OPTIONS = [
-  ...REACTION_EMOJIS,
-  ...CUSTOM_EMOJIS.map((e) => e.id),
-];
-
-const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
-const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
-const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
-
-function isStickerOnlyText(text: string): boolean {
-  if (!text) return false;
-  const trimmed = text.trim();
-  return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
-}
+import "./GroupWindow.css";
 
 const NEAR_BOTTOM_THRESHOLD = 120;
-
-function isVideo(url: string) {
-  return (
-    /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url) ||
-    url.includes("/video/upload/")
-  );
-}
-
-function formatTime(ts: any): string {
-  if (!ts) return "";
-  const date = ts.toDate ? ts.toDate() : new Date(ts);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function cloudinaryUrl(url: string, transform: string) {
-  if (!url?.includes("/upload/")) return url;
-  return url.replace("/upload/", `/upload/${transform}/`);
-}
-
-const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto");
-const fullSrc = (url: string, w = 520) => cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
-
-function ChatImage({
-  url,
-  width,
-  height,
-  onClick,
-  onLoad,
-  priority = false,
-}: {
-  url: string;
-  width?: number;
-  height?: number;
-  onClick?: () => void;
-  onLoad?: () => void;
-  priority?: boolean;
-}) {
-  const [loaded, setLoaded] = useState(false);
-
-  return (
-    <div
-      className="relative w-[260px] max-w-full max-h-[300px] overflow-hidden rounded-xl bg-white/[0.03]"
-      style={{
-        aspectRatio:
-          width && height && width > 0 && height > 0
-            ? `${width} / ${height}`
-            : "4 / 3",
-      }}
-    >
-      <img
-        src={tinySrc(url)}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-        className="absolute inset-0 w-full h-full object-cover scale-105"
-        style={{ filter: "blur(10px)" }}
-      />
-      <img
-        src={fullSrc(url)}
-        alt="image"
-        decoding="async"
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
-        draggable={false}
-        onLoad={() => {
-          setLoaded(true);
-          onLoad?.();
-        }}
-        onClick={onClick}
-        className="absolute inset-0 w-full h-full object-cover cursor-zoom-in transition-opacity duration-150"
-        style={{ opacity: loaded ? 1 : 0 }}
-      />
-    </div>
-  );
-}
-
-function ReactionGlyph({ token, size = 24 }: { token: string; size?: number }) {
-  const custom = getCustomEmoji(token);
-  if (custom) {
-    return (
-      <img
-        src={custom.url}
-        alt={custom.id}
-        style={{ width: size, height: size, objectFit: "contain" }}
-        className="inline-block align-middle"
-      />
-    );
-  }
-  return (
-    <span style={{ fontSize: size }} className="leading-none">
-      {token}
-    </span>
-  );
-}
-
-function RichText({
-  text,
-  variant = "inline",
-}: {
-  text: string;
-  variant?: "inline" | "large";
-}) {
-  const parts = text.split(STICKER_TOKEN_SPLIT_RE);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const match = part.match(STICKER_TOKEN_MATCH_RE);
-        if (match) {
-          const custom = getCustomEmoji(match[1]);
-          if (custom) {
-            return variant === "large" ? (
-              <img
-                key={i}
-                src={custom.url}
-                alt={custom.id}
-                className="inline-block w-28 h-28 object-contain"
-              />
-            ) : (
-              <img
-                key={i}
-                src={custom.url}
-                alt={custom.id}
-                className="inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
-              />
-            );
-          }
-        }
-        if (variant === "large" && !part.trim()) return null;
-        return part ? <span key={i}>{part}</span> : null;
-      })}
-    </>
-  );
-}
-
-function StatusTick({
-  pending,
-  isRead,
-  size = 14,
-}: {
-  pending?: boolean;
-  isRead: boolean;
-  size?: number;
-}) {
-  if (pending)
-    return (
-      <Clock
-        size={size - 2}
-        className="opacity-70 shrink-0"
-        strokeWidth={2.25}
-      />
-    );
-  return isRead ? (
-    <CheckCheck size={size} className="shrink-0" strokeWidth={2.25} />
-  ) : (
-    <Check size={size} className="shrink-0" strokeWidth={2.25} />
-  );
-}
-
-function MessageMeta({
-  time,
-  pending,
-  isMine,
-  isRead,
-  variant = "inline",
-}: {
-  time: string;
-  pending?: boolean;
-  isMine: boolean;
-  isRead: boolean;
-  variant?: "inline" | "pill";
-}) {
-  const content = (
-    <span
-      className={`inline-flex items-center gap-1 leading-none tabular-nums select-none whitespace-nowrap ${variant === "pill" ? "text-[11px] text-white/90" : "text-[11px]"
-        } ${variant === "inline" && isMine ? "text-white/65" : ""}`}
-      style={
-        variant === "inline" && !isMine
-          ? { color: "var(--color-text)", opacity: 0.55 }
-          : undefined
-      }
-    >
-      <span>{pending ? "" : time}</span>
-      {isMine && (
-        <span
-          className={
-            variant === "pill"
-              ? "text-white/90"
-              : isRead
-                ? "text-[#d7c3ff]"
-                : "text-white/60"
-          }
-        >
-          <StatusTick pending={pending} isRead={isRead} />
-        </span>
-      )}
-    </span>
-  );
-
-  if (variant === "pill") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-black/45 backdrop-blur-sm px-1.5 py-[3px]">
-        {content}
-      </span>
-    );
-  }
-  return content;
-}
+const GROUP_GAP_MS = 5 * 60 * 1000;
+const EMPTY_MESSAGES: any[] = [];
 
 interface MsgMenuState {
   id: string;
@@ -289,64 +74,18 @@ interface MsgMenuState {
   isMine: boolean;
 }
 
-function ConfirmDialog({
-  icon,
-  title,
-  description,
-  onCancel,
-  onConfirm,
-  confirmLabel = "Delete",
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  confirmLabel?: string;
-}) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onCancel]);
+type Row =
+  | { type: "date"; key: string; label: string }
+  | {
+    type: "msg";
+    m: any;
+    isFirstInGroup: boolean;
+    isLastInGroup: boolean;
+    priority: boolean;
+  };
 
-  return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="w-80 rounded-2xl bg-[#0d0b17] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-6 pt-6 pb-4">
-          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-            {icon}
-          </div>
-          <h3 className="text-[15px] font-semibold text-white mb-1">{title}</h3>
-          <p className="text-[13px] text-zinc-400 leading-relaxed">
-            {description}
-          </p>
-        </div>
-        <div className="flex border-t border-white/[0.06]">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3.5 text-sm text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors font-medium border-r border-white/[0.06] cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors font-semibold cursor-pointer"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function sameList(a: string[], b: string[]) {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
 export default function GroupWindow() {
@@ -354,20 +93,21 @@ export default function GroupWindow() {
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
   const groups = useGroupStore((s) => s.groups);
   const group = groups.find((g) => g.id === groupId) || null;
+  const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [messagesGroupId, setMessagesGroupId] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
   const [myUid, setMyUid] = useState<string | null>(null);
-  const [myUsername, setMyUsername] = useState<string>("");
+  const [myUsername, setMyUsername] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [typingNames, setTypingNames] = useState<Record<string, string>>({});
   const [replyMessage, setReplyMessage] = useState<any | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null);
+  const [pickerExpanded, setPickerExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
   const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
   const [pinnedMessage, setPinnedMessage] = useState<{
     id: string;
@@ -376,42 +116,50 @@ export default function GroupWindow() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
-  const [pickerExpanded, setPickerExpanded] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
-  const [scrollAreaReady, setScrollAreaReady] = useState(false);
   const [wallpaper, setWallpaper] = useState<any>(null);
   const [forwardData, setForwardData] = useState<any | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [freshIds, setFreshIds] = useState<Set<string>>(() => new Set());
 
   const composerRef = useRef<GroupComposerHandle | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const editInputRef = useRef<HTMLInputElement | null>(null);
-  const msgMenuRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const isNearBottom = useRef(true);
   const activeGroupIdRef = useRef<string | null>(groupId);
+  const myUidRef = useRef<string | null>(null);
   const confirmedMessageIdsRef = useRef<Set<string>>(new Set());
   const receivedSnapshotRef = useRef(false);
   const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(null);
   const dragCounter = useRef(0);
-  const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const isLoadingOlderRef = useRef(false);
   const olderMessageIdsRef = useRef<Set<string>>(new Set());
   const readReceiptIdsRef = useRef<Set<string>>(new Set());
   const preserveScrollRef = useRef<{ height: number; top: number } | null>(null);
-
-  const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
-
-  useEffect(() => {
-    return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
-  }, []);
+  const visibleRef = useRef(isWindowVisible);
+  const unreadRef = useRef(0);
+  const loadOlderRef = useRef<() => void>(() => { });
 
   useLayoutEffect(() => {
     activeGroupIdRef.current = groupId;
   }, [groupId]);
+
+  useLayoutEffect(() => {
+    myUidRef.current = myUid;
+  }, [myUid]);
+
+  useLayoutEffect(() => {
+    visibleRef.current = isWindowVisible;
+  }, [isWindowVisible]);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
+  }, []);
 
   useEffect(() => {
     if (!myUid) return;
@@ -424,7 +172,10 @@ export default function GroupWindow() {
   useLayoutEffect(() => {
     setPendingMessages((previous) => {
       previous.forEach((message) => {
-        if (typeof message.imageUrl === "string" && message.imageUrl.startsWith("blob:")) {
+        if (
+          typeof message.imageUrl === "string" &&
+          message.imageUrl.startsWith("blob:")
+        ) {
           URL.revokeObjectURL(message.imageUrl);
         }
       });
@@ -432,6 +183,11 @@ export default function GroupWindow() {
     });
     setShowScrollButton(false);
     setTypingUsers([]);
+    setReplyMessage(null);
+    setEditingId(null);
+    setPickerOpenId(null);
+    setMsgMenu(null);
+    setFreshIds(new Set());
     isNearBottom.current = true;
     confirmedMessageIdsRef.current = new Set();
     receivedSnapshotRef.current = false;
@@ -440,6 +196,7 @@ export default function GroupWindow() {
     readReceiptIdsRef.current = new Set();
     preserveScrollRef.current = null;
     isLoadingOlderRef.current = false;
+    unreadRef.current = 0;
     setHasMoreMessages(false);
     setIsLoadingOlder(false);
   }, [groupId]);
@@ -448,19 +205,28 @@ export default function GroupWindow() {
     if (!groupId) return;
     const unsub = subscribeToGroupMessages(groupId, (msgs, hasMore) => {
       if (activeGroupIdRef.current !== groupId) return;
-      const nextIds = new Set(msgs.map((m) => m.id));
-      const hasNewConfirmedMessage = [...nextIds].some(
-        (id) => !confirmedMessageIdsRef.current.has(id)
-      );
+
+      const prevIds = confirmedMessageIdsRef.current;
+      const nextIds = new Set<string>(msgs.map((m) => m.id));
+      const hasNewConfirmedMessage = [...nextIds].some((id) => !prevIds.has(id));
       const isInitialSnapshot = !receivedSnapshotRef.current;
       confirmedMessageIdsRef.current = nextIds;
       receivedSnapshotRef.current = true;
 
       if (isInitialSnapshot) {
         scrollIntentRef.current = "initial";
-      } else if (hasNewConfirmedMessage && isNearBottom.current) {
-        scrollIntentRef.current = "follow";
+      } else {
+        if (hasNewConfirmedMessage && isNearBottom.current) {
+          scrollIntentRef.current = "follow";
+        }
+        const added = msgs
+          .filter((m) => !prevIds.has(m.id) && m.senderId !== myUidRef.current)
+          .map((m) => m.id);
+        if (added.length) {
+          setFreshIds((prev) => new Set([...prev, ...added]));
+        }
       }
+
       setHasMoreMessages(hasMore);
       setMessages((previous) => [
         ...previous.filter(
@@ -472,67 +238,92 @@ export default function GroupWindow() {
       setMessagesGroupId(groupId);
 
       setPendingMessages((previous) => {
+        if (!previous.length) return previous;
         const consumed = new Set<number>();
-        return previous.filter((pending) => {
+        const next = previous.filter((pending) => {
+          const isBlob =
+            typeof pending.imageUrl === "string" &&
+            pending.imageUrl.startsWith("blob:");
           const matchIndex = msgs.findIndex(
             (message, index) =>
               !consumed.has(index) &&
               message.senderId === pending.senderId &&
               (message.text || "") === (pending.text || "") &&
-              (typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")
+              (isBlob
                 ? Boolean(message.imageUrl)
                 : (message.imageUrl || null) === (pending.imageUrl || null))
           );
           if (matchIndex === -1) return true;
           consumed.add(matchIndex);
-          if (typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")) {
-            URL.revokeObjectURL(pending.imageUrl);
-          }
+          if (isBlob) URL.revokeObjectURL(pending.imageUrl);
           return false;
         });
+        return next.length === previous.length ? previous : next;
       });
+    });
+    return () => unsub();
+  }, [groupId]);
 
-      if (myUid && isWindowVisible) {
-        msgs.forEach((m) => {
-          if (
-            m.senderId !== myUid &&
-            !(m.readBy || []).includes(myUid) &&
-            !readReceiptIdsRef.current.has(m.id)
-          ) {
-            readReceiptIdsRef.current.add(m.id);
-            markGroupMessageRead(groupId, m.id, myUid).catch(() => {
-              readReceiptIdsRef.current.delete(m.id);
-            });
-          }
+  useEffect(() => {
+    if (!groupId || !myUid || !isWindowVisible || messagesGroupId !== groupId)
+      return;
+    messages.forEach((m) => {
+      if (
+        m.senderId !== myUid &&
+        !(m.readBy || []).includes(myUid) &&
+        !readReceiptIdsRef.current.has(m.id)
+      ) {
+        readReceiptIdsRef.current.add(m.id);
+        markGroupMessageRead(groupId, m.id, myUid).catch(() => {
+          readReceiptIdsRef.current.delete(m.id);
         });
       }
     });
-    return () => unsub();
-  }, [groupId, myUid, isWindowVisible]);
+  }, [messages, messagesGroupId, groupId, myUid, isWindowVisible]);
 
   useEffect(() => {
     if (!groupId || !myUid) return;
     const unsub = onSnapshot(doc(db, "groups", groupId), (snap) => {
+      if (activeGroupIdRef.current !== groupId) return;
       const data = snap.data();
-      setPinnedMessage(data?.pinnedMessage || null);
-      setWallpaper(data?.wallpaper || null);
 
-      if (data?.typing) {
-        const typingList = Object.entries(data.typing)
+      const pin = data?.pinnedMessage || null;
+      setPinnedMessage((prev) =>
+        prev?.id === pin?.id && prev?.text === pin?.text ? prev : pin
+      );
+
+      const wp = data?.wallpaper || null;
+      setWallpaper((prev: any) =>
+        (prev?.url ?? null) === (wp?.url ?? null) ? prev : wp
+      );
+
+      const typingList = data?.typing
+        ? Object.entries(data.typing)
           .filter(([uid, val]) => val && uid !== myUid)
-          .map(([uid]) => uid);
-        setTypingUsers(typingList);
-      } else {
-        setTypingUsers([]);
-      }
+          .map(([uid]) => uid)
+        : [];
+      setTypingUsers((prev) => (sameList(prev, typingList) ? prev : typingList));
 
       const unread = data?.unreadCounts?.[myUid] || 0;
-      if (unread > 0 && isWindowVisible) {
+      unreadRef.current = unread;
+      if (unread > 0 && visibleRef.current) {
+        unreadRef.current = 0;
         markGroupAsRead(groupId, myUid).catch(() => { });
       }
     });
     return () => unsub();
-  }, [groupId, myUid, isWindowVisible]);
+  }, [groupId, myUid]);
+
+  useEffect(() => {
+    if (!isWindowVisible || !groupId || !myUid || unreadRef.current <= 0) return;
+    unreadRef.current = 0;
+    markGroupAsRead(groupId, myUid).catch(() => { });
+  }, [isWindowVisible, groupId, myUid]);
+
+  useEffect(() => {
+    if (!groupId || !myUid) return;
+    markGroupAsRead(groupId, myUid).catch(() => { });
+  }, [groupId, myUid]);
 
   useEffect(() => {
     if (typingUsers.length === 0) return;
@@ -543,7 +334,10 @@ export default function GroupWindow() {
       missing.map(async (uid) => {
         try {
           const snap = await getDoc(doc(db, "users", uid));
-          return [uid, snap.exists() ? snap.data()?.username || "User" : "User"] as const;
+          return [
+            uid,
+            snap.exists() ? snap.data()?.username || "User" : "User",
+          ] as const;
         } catch {
           return [uid, "User"] as const;
         }
@@ -562,10 +356,6 @@ export default function GroupWindow() {
       cancelled = true;
     };
   }, [typingUsers, typingNames]);
-  useEffect(() => {
-    if (!groupId || !myUid) return;
-    markGroupAsRead(groupId, myUid).catch(() => { });
-  }, [groupId, myUid]);
 
   function handleScroll() {
     const el = chatScrollRef.current;
@@ -573,8 +363,7 @@ export default function GroupWindow() {
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
     isNearBottom.current = nearBottom;
-    setShowScrollButton(!nearBottom);
-    if (el.scrollTop < 200) loadOlder();
+    setShowScrollButton((prev) => (prev === !nearBottom ? prev : !nearBottom));
   }
 
   async function loadOlder() {
@@ -590,7 +379,10 @@ export default function GroupWindow() {
       : null;
 
     try {
-      const { messages: older, hasMore } = await loadOlderGroupMessages(groupId, oldest);
+      const { messages: older, hasMore } = await loadOlderGroupMessages(
+        groupId,
+        oldest
+      );
       if (activeGroupIdRef.current !== groupId) return;
       setHasMoreMessages(hasMore);
       if (older.length) {
@@ -600,12 +392,32 @@ export default function GroupWindow() {
           deduped.forEach((message) => olderMessageIdsRef.current.add(message.id));
           return [...deduped, ...previous];
         });
+      } else {
+        preserveScrollRef.current = null;
       }
     } finally {
       isLoadingOlderRef.current = false;
       setIsLoadingOlder(false);
     }
   }
+
+  useLayoutEffect(() => {
+    loadOlderRef.current = loadOlder;
+  });
+
+  useEffect(() => {
+    const root = chatScrollRef.current;
+    const target = topSentinelRef.current;
+    if (!root || !target || !hasMoreMessages) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadOlderRef.current();
+      },
+      { root, rootMargin: "200px 0px 0px 0px" }
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [groupId, hasMoreMessages, messages.length]);
 
   useLayoutEffect(() => {
     const el = chatScrollRef.current;
@@ -615,15 +427,19 @@ export default function GroupWindow() {
     preserveScrollRef.current = null;
   }, [messages]);
 
-  function scrollToBottom(smooth = false) {
+  const scrollToBottom = useCallback((smooth = false) => {
     const el = chatScrollRef.current;
     if (!el) return;
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     else el.scrollTop = el.scrollHeight;
-  }
+  }, []);
+
+  const handleMediaLoad = useCallback(() => {
+    if (isNearBottom.current) scrollToBottom();
+  }, [scrollToBottom]);
 
   useLayoutEffect(() => {
-    if (!groupId || !scrollAreaReady) return;
+    if (!groupId) return;
     const intent = scrollIntentRef.current;
     if (!intent) return;
     if (intent === "initial" || intent === "force" || isNearBottom.current) {
@@ -632,11 +448,7 @@ export default function GroupWindow() {
       setShowScrollButton(false);
     }
     scrollIntentRef.current = null;
-  }, [groupId, messages, pendingMessages, scrollAreaReady]);
-
-  function handleMediaLoad() {
-    if (isNearBottom.current) scrollToBottom();
-  }
+  }, [groupId, messages, pendingMessages, scrollToBottom]);
 
   useEffect(() => {
     if (!lightboxUrl) return;
@@ -657,10 +469,6 @@ export default function GroupWindow() {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, [pickerOpenId, msgMenu]);
-
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus();
-  }, [editingId]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -692,98 +500,91 @@ export default function GroupWindow() {
     dragCounter.current = 0;
     setIsDraggingFile(false);
     const file = e.dataTransfer.files?.[0];
-    if (
-      file &&
-      (file.type.startsWith("image/") || file.type.startsWith("video/"))
-    ) {
+    if (file && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
       composerRef.current?.acceptFile(file);
     }
   }
 
-  function handleReply(m: any) {
+  const handleReply = useCallback((m: any) => {
     setReplyMessage(m);
     composerRef.current?.focus();
-  }
+  }, []);
 
-  function resolveForwardSenderName(message: any): string {
-    return message.senderName || (message.senderId === myUid ? "You" : "user");
-  }
+  const handleReact = useCallback(
+    async (messageId: string, token: string) => {
+      if (!groupId || !myUid) return;
+      setPickerOpenId(null);
+      try {
+        await toggleGroupReaction(groupId, messageId, token, myUid);
+      } catch (err) {
+        console.error("Reaction failed:", err);
+      }
+    },
+    [groupId, myUid]
+  );
 
-  function forwardPayload(message: any) {
-    return {
-      text: message.text || "",
-      imageUrl: message.imageUrl || null,
-      imageWidth: message.imageWidth ?? null,
-      imageHeight: message.imageHeight ?? null,
-      voiceUrl: message.voiceUrl || null,
-      duration: message.duration,
-      waveform: message.waveform,
-      senderId: message.senderId,
-      senderName: resolveForwardSenderName(message),
-      groupId: groupId!,
-      sourceName: group?.name || "Group",
-      messageId: message.id,
-      forwardedFrom: message.forwardedFrom || null,
-    };
-  }
+  const openPicker = useCallback((e: React.MouseEvent, msgId: string) => {
+    e.stopPropagation();
+    setPickerOpenId((prev) => (prev === msgId ? null : msgId));
+    setPickerExpanded(false);
+    setMsgMenu(null);
+  }, []);
 
-  function scrollToMessage(id: string) {
+  const expandPicker = useCallback(() => setPickerExpanded(true), []);
+
+  const openMsgMenu = useCallback(
+    (e: React.MouseEvent, msgId: string, isMine: boolean) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? {
+        bottom: e.clientY,
+        top: e.clientY,
+      };
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < 180;
+      setMsgMenu((prev) =>
+        prev?.id === msgId
+          ? null
+          : {
+            id: msgId,
+            x: e.clientX,
+            y: openUpward ? rect.top : rect.bottom,
+            openUpward,
+            isMine,
+          }
+      );
+      setPickerOpenId(null);
+    },
+    []
+  );
+
+  const scrollToMessage = useCallback((id: string) => {
     const el = document.getElementById(`gmsg-${id}`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("highlight-flash");
     setTimeout(() => el.classList.remove("highlight-flash"), 1500);
-  }
+  }, []);
 
-  async function handleReact(messageId: string, token: string) {
-    if (!groupId || !myUid) return;
-    setPickerOpenId(null);
-    await toggleGroupReaction(groupId, messageId, token, myUid);
-  }
+  const openLightbox = useCallback((url: string) => setLightboxUrl(url), []);
+  const cancelEdit = useCallback(() => setEditingId(null), []);
 
-  function openPicker(e: React.MouseEvent, msgId: string) {
-    e.stopPropagation();
-    setPickerOpenId((prev) => (prev === msgId ? null : msgId));
-    setPickerExpanded(false);
-    setMsgMenu(null);
-  }
-
-  function openMsgMenu(e: React.MouseEvent, msgId: string, isMine: boolean) {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? {
-      bottom: e.clientY,
-      top: e.clientY,
-    };
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openUpward = spaceBelow < 180;
-    setMsgMenu((prev) =>
-      prev?.id === msgId
-        ? null
-        : {
-          id: msgId,
-          x: e.clientX,
-          y: openUpward ? rect.top : rect.bottom,
-          openUpward,
-          isMine,
-        }
-    );
-    setPickerOpenId(null);
-  }
+  const submitEdit = useCallback(
+    async (id: string, text: string) => {
+      if (!groupId) return;
+      try {
+        await editGroupMessage(groupId, id, text);
+        setEditingId(null);
+      } catch (err) {
+        console.error("Edit failed:", err);
+      }
+    },
+    [groupId]
+  );
 
   function startEdit(m: any) {
     setEditingId(m.id);
-    setEditText(m.text || "");
     setMsgMenu(null);
-  }
-
-  async function submitEdit() {
-    if (!groupId || !editingId) return;
-    const trimmed = editText.trim();
-    if (!trimmed) return;
-    await editGroupMessage(groupId, editingId, trimmed);
-    setEditingId(null);
-    setEditText("");
   }
 
   function handleDelete(msgId: string) {
@@ -809,16 +610,27 @@ export default function GroupWindow() {
     if (!groupId) return;
     setMsgMenu(null);
     const isAlreadyPinned = pinnedMessage?.id === m.id;
-    await pinGroupMessage(
-      groupId,
-      isAlreadyPinned ? null : m.id,
-      isAlreadyPinned ? null : m.text || "📷 Photo"
-    );
+    try {
+      await pinGroupMessage(
+        groupId,
+        isAlreadyPinned ? null : m.id,
+        isAlreadyPinned
+          ? null
+          : m.text || (m.voiceUrl ? "🎤 Voice message" : "📷 Photo")
+      );
+    } catch (err) {
+      console.error("Pin failed:", err);
+    }
   }
 
   async function handleCopy(m: any) {
     if (!m.text) return;
-    await navigator.clipboard.writeText(m.text);
+    try {
+      await navigator.clipboard.writeText(m.text);
+    } catch (err) {
+      console.error("Copy failed:", err);
+      return;
+    }
     setCopiedId(m.id);
     setMsgMenu(null);
     setTimeout(() => setCopiedId(null), 1800);
@@ -826,67 +638,105 @@ export default function GroupWindow() {
 
   async function confirmLeaveOrDelete() {
     if (!groupId || !myUid || !group) return;
-    if (group.ownerId === myUid) {
-      await deleteGroup(groupId);
-    } else {
-      await leaveGroup(groupId, myUid);
+    try {
+      if (group.ownerId === myUid) await deleteGroup(groupId);
+      else await leaveGroup(groupId, myUid);
+      setActiveGroup(null);
+    } catch (err) {
+      console.error("Leave or delete group failed:", err);
     }
-    setActiveGroup(null);
     setLeaveConfirm(false);
-  }
-
-  async function uploadWallpaper(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", "jhravxtb");
-    formData.append("folder", "chat_wallpapers");
-
-    const res = await fetch(
-      "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-    const data = await res.json();
-    return data.secure_url;
-  }
-
-  async function setGroupWallpaper(groupId: string, url: string) {
-    await updateDoc(doc(db, "groups", groupId), {
-      wallpaper: {
-        url,
-        type: "image",
-      },
-    });
-  }
-
-  async function removeWallpaper() {
-    if (!groupId) return;
-    await updateDoc(doc(db, "groups", groupId), {
-      wallpaper: null,
-    });
   }
 
   async function handleWallpaperChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !groupId) return;
     e.target.value = "";
-    const url = await uploadWallpaper(file);
-    await setGroupWallpaper(groupId, url);
+    if (!file || !groupId) return;
+    try {
+      const url = await uploadImage(file, "chat_wallpapers");
+      await updateDoc(doc(db, "groups", groupId), {
+        wallpaper: { url, type: "image" },
+      });
+    } catch (err) {
+      console.error("Wallpaper change failed:", err);
+    }
   }
 
-  function getReactionSummary(reactions: Record<string, string[]> | undefined) {
-    if (!reactions) return [];
-    return Object.entries(reactions)
-      .filter(([, uids]) => uids.length > 0)
-      .map(([token, uids]) => ({
-        token,
-        count: uids.length,
-        mine: myUid ? uids.includes(myUid) : false,
-      }));
+  async function removeWallpaper() {
+    if (!groupId) return;
+    try {
+      await updateDoc(doc(db, "groups", groupId), { wallpaper: null });
+    } catch (err) {
+      console.error("Wallpaper remove failed:", err);
+    }
   }
+
+  function forwardPayload(message: any) {
+    return {
+      text: message.text || "",
+      imageUrl: message.imageUrl || null,
+      imageWidth: message.imageWidth ?? null,
+      imageHeight: message.imageHeight ?? null,
+      voiceUrl: message.voiceUrl || null,
+      duration: message.duration,
+      waveform: message.waveform,
+      senderId: message.senderId,
+      senderName:
+        message.senderName || (message.senderId === myUid ? "You" : "user"),
+      groupId: groupId!,
+      sourceName: group?.name || "Group",
+      messageId: message.id,
+      forwardedFrom: message.forwardedFrom || null,
+    };
+  }
+
+  const rows = useMemo<Row[]>(() => {
+    const confirmed = messagesGroupId === groupId ? messages : EMPTY_MESSAGES;
+    const consumed = new Set<number>();
+    const visiblePending = pendingMessages.filter((p) => {
+      const idx = confirmed.findIndex(
+        (m, i) =>
+          !consumed.has(i) &&
+          m.senderId === p.senderId &&
+          (m.text || "") === (p.text || "") &&
+          (m.imageUrl || null) === (p.imageUrl || null)
+      );
+      if (idx === -1) return true;
+      consumed.add(idx);
+      return false;
+    });
+    const all = [...confirmed, ...visiblePending].filter((m) => !m.deleted);
+
+    const joins = (a: any, b: any) => {
+      if (!a || !b) return false;
+      if (a.senderId !== b.senderId) return false;
+      const da = toDate(a.createdAt);
+      const db_ = toDate(b.createdAt);
+      return (
+        dayKey(da) === dayKey(db_) &&
+        Math.abs(db_.getTime() - da.getTime()) < GROUP_GAP_MS
+      );
+    };
+
+    const out: Row[] = [];
+    let prevDay = "";
+    all.forEach((m, i) => {
+      const d = toDate(m.createdAt);
+      const dk = dayKey(d);
+      if (dk !== prevDay) {
+        out.push({ type: "date", key: `date-${dk}`, label: formatDayLabel(d) });
+        prevDay = dk;
+      }
+      out.push({
+        type: "msg",
+        m,
+        isFirstInGroup: !joins(all[i - 1], m),
+        isLastInGroup: !joins(m, all[i + 1]),
+        priority: i >= all.length - 8,
+      });
+    });
+    return out;
+  }, [messages, messagesGroupId, groupId, pendingMessages]);
 
   if (!groupId || !group) {
     return (
@@ -899,92 +749,23 @@ export default function GroupWindow() {
     );
   }
 
-  // const displayMessages = [
-  //   ...(messagesGroupId === groupId ? messages : []),
-  //   ...pendingMessages,
-  // ];
-  const displayMessages = [
-    ...(messagesGroupId === groupId ? messages : []),
-    ...pendingMessages,
-  ].filter((m) => !m.deleted);
   const currentMsgMenu = msgMenu
-    ? displayMessages.find((m) => m.id === msgMenu.id)
+    ? messages.find((m) => m.id === msgMenu.id)
     : null;
   const isOwner = group.ownerId === myUid;
 
+  const typingLabel =
+    typingUsers.length === 1
+      ? `${typingNames[typingUsers[0]] || "Someone"} is typing`
+      : typingUsers.length === 2
+        ? `${typingUsers.map((uid) => typingNames[uid] || "Someone").join(", ")} are typing`
+        : `${typingUsers.length} people are typing`;
+
   return (
     <>
-      <svg width="0" height="0" style={{ position: "absolute" }}>
-        <defs>
-          <filter
-            id="glass-distortion-composer"
-            x="0%"
-            y="0%"
-            width="100%"
-            height="100%"
-          >
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency="0.012 0.012"
-              numOctaves="2"
-              seed="17"
-              result="noise"
-            />
-            <feGaussianBlur in="noise" stdDeviation="2" result="blurred" />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="blurred"
-              scale="26"
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      <style>{`
-        .chat-scroll::-webkit-scrollbar { width: 4px; }
-        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
-        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(124,92,255,0.25); border-radius: 999px; }
-        .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(124,92,255,0.5); }
-        .highlight-flash { animation: flash 1.5s ease-out; }
-        @keyframes flash { 0%,30% { background-color: rgba(124,92,255,0.15); border-radius: 12px; } 100% { background-color: transparent; } }
-        .reply-btn,.react-btn { opacity: 0; transition: opacity 0.15s; }
-        .msg-row:hover .reply-btn,.msg-row:hover .react-btn { opacity: 1; }
-        .msg-dots { opacity: 0; transition: opacity 0.15s, transform 0.15s; transform: scale(0.85); }
-        .msg-row:hover .msg-dots { opacity: 1; transform: scale(1); }
-        .lightbox-img { animation: fadeIn 0.15s ease-out; }
-        @keyframes fadeIn { from { opacity:0; transform:scale(0.97); } to { opacity:1; transform:scale(1); } }
-        .reaction-picker { animation: pickerIn 0.12s ease-out; transform-origin: bottom center; }
-        @keyframes pickerIn { from { opacity:0; transform:scale(0.85) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        .msg-ctx-menu { animation: menuIn 0.15s cubic-bezier(0.34,1.56,0.64,1); transform-origin: top right; }
-        @keyframes menuIn { from { opacity:0; transform:scale(0.88) translateY(-6px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        .reaction-pill { transition: transform 0.1s, background 0.1s; }
-        .reaction-pill:hover { transform:scale(1.06); }
-        .reaction-emoji-btn { transition: transform 0.1s; }
-        .reaction-emoji-btn:hover { transform:scale(1.25); }
-        .deleted-msg { opacity: 0.45; font-style: italic; }
-        .chat-video { border-radius: 12px; max-width: 260px; width: 100%; display: block; background: #000; }
-        .video-thumb { position: relative; cursor: pointer; }
-        .video-thumb:hover .play-overlay { opacity: 1; }
-        .play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); border-radius: 12px; opacity: 0; transition: opacity 0.15s; }
-        .ctx-item { width:100%; display:flex; align-items:center; gap:10px; padding:9px 14px; font-size:13px; transition:background 0.1s; cursor:pointer; border:none; background:transparent; text-align:left; }
-        .ctx-item:hover { background: rgba(255,255,255,0.05); }
-        .ctx-divider { height:1px; background:rgba(255,255,255,0.06); margin:2px 0; }
-        .msg-bubble-pending { opacity: 0.75; transition: opacity 0.2s ease-out; }
-        .composer-tint { transition: box-shadow 0.15s ease, border-color 0.15s ease; }
-        .typing-dots { display: inline-flex; align-items: center; gap: 3px; }
-        .typing-dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: currentColor; opacity: 0.35; animation: typing-dot-bounce 1.3s infinite ease-in-out; }
-        .typing-dot:nth-child(1) { animation-delay: 0s; }
-        .typing-dot:nth-child(2) { animation-delay: 0.18s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.36s; }
-        @keyframes typing-dot-bounce { 0%,60%,100% { opacity: 0.35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
-      `}</style>
-
       {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
         <div
-          ref={msgMenuRef}
-          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0b17]/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0b17]/95 border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
           style={
             msgMenu.openUpward
               ? {
@@ -995,17 +776,15 @@ export default function GroupWindow() {
           }
           onClick={(e) => e.stopPropagation()}
         >
-          {msgMenu.isMine &&
-            currentMsgMenu.text &&
-            !currentMsgMenu.imageUrl && (
-              <button
-                className="ctx-item text-zinc-300"
-                onClick={() => startEdit(currentMsgMenu)}
-              >
-                <Pencil size={14} className="text-zinc-500" />
-                Edit message
-              </button>
-            )}
+          {msgMenu.isMine && currentMsgMenu.text && !currentMsgMenu.imageUrl && (
+            <button
+              className="ctx-item text-zinc-300"
+              onClick={() => startEdit(currentMsgMenu)}
+            >
+              <Pencil size={14} className="text-zinc-500" />
+              Edit message
+            </button>
+          )}
           <button
             className="ctx-item text-zinc-300"
             onClick={() => {
@@ -1063,7 +842,7 @@ export default function GroupWindow() {
 
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
           onClick={() => setLightboxUrl(null)}
         >
           <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -1072,6 +851,7 @@ export default function GroupWindow() {
               download
               target="_blank"
               rel="noreferrer"
+              aria-label="Download"
               onClick={(e) => e.stopPropagation()}
               className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
             >
@@ -1079,6 +859,7 @@ export default function GroupWindow() {
             </a>
             <button
               onClick={() => setLightboxUrl(null)}
+              aria-label="Close"
               className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
             >
               <X size={16} />
@@ -1110,7 +891,6 @@ export default function GroupWindow() {
           description="This action cannot be undone. The message will be permanently removed for everyone."
           onCancel={() => setDeleteConfirmId(null)}
           onConfirm={confirmDelete}
-          confirmLabel="Delete"
         />
       )}
 
@@ -1148,11 +928,9 @@ export default function GroupWindow() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {wallpaper?.url && (
+        {wallpaper?.url ? (
           <div className="absolute inset-0 z-0 pointer-events-none bg-black/40" />
-        )}
-
-        {!wallpaper?.url && (
+        ) : (
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
             <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
@@ -1160,7 +938,7 @@ export default function GroupWindow() {
         )}
 
         {isDraggingFile && (
-          <div className="absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#7c5cff] bg-[#0d0b17]/85 backdrop-blur-sm pointer-events-none">
+          <div className="absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#7c5cff] bg-[#0d0b17]/85 pointer-events-none">
             <div className="flex flex-col items-center gap-2 text-[#a893ff]">
               <ImageIcon size={32} />
               <span className="text-sm font-semibold">
@@ -1169,97 +947,102 @@ export default function GroupWindow() {
             </div>
           </div>
         )}
-        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-xl relative z-20">
+
+        <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 relative z-20">
           <div className="h-14 flex items-center justify-between px-5">
             <div
               className="flex items-center gap-2.5 cursor-pointer"
               onClick={() => setShowGroupInfo(true)}
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
-                  {group.avatarUrl ? (
-                    <SmoothImage
-                      src={group.avatarUrl}
-                      alt={group.name || "group"}
-                      width={32}
-                      height={32}
-                      className="w-full h-full object-cover"
-                    />
+              <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
+                {group.avatarUrl ? (
+                  <SmoothImage
+                    src={group.avatarUrl}
+                    alt={group.name || "group"}
+                    width={32}
+                    height={32}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Users size={14} className="text-[#a893ff]" />
+                )}
+              </div>
+              <div className="flex flex-col items-start leading-tight">
+                <span className="text-sm font-semibold text-white/80">
+                  {group.name}
+                </span>
+                <span className="text-[11px] leading-tight">
+                  {typingUsers.length > 0 ? (
+                    <span className="flex items-center gap-1 text-[#a893ff]">
+                      {typingLabel}
+                      <span className="typing-dots">
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                      </span>
+                    </span>
                   ) : (
-                    <Users size={14} className="text-[#a893ff]" />
+                    <span className="text-zinc-500">
+                      {group.memberCount} member
+                      {group.memberCount === 1 ? "" : "s"}
+                    </span>
                   )}
-                </div>
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-sm font-semibold text-white/80">
-                    {group.name}
-                  </span>
-                  <span className="text-[11px] leading-tight">
-                    {typingUsers.length > 0 ? (
-                      <span className="flex items-center gap-1 text-[#a893ff]">
-                        {typingUsers.length === 1
-                          ? `${typingNames[typingUsers[0]] || "Someone"} is typing`
-                          : typingUsers.length === 2
-                            ? `${typingUsers
-                              .map((uid) => typingNames[uid] || "Someone")
-                              .join(", ")} are typing`
-                            : `${typingUsers.length} people are typing`}
-                        <span className="typing-dots">
-                          <span className="typing-dot" />
-                          <span className="typing-dot" />
-                          <span className="typing-dot" />
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-zinc-500">
-                        {group.memberCount} member
-                        {group.memberCount === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </span>
-                </div>
+                </span>
               </div>
             </div>
-            <div className="relative items-center" ref={menuRef}>
+
+            <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Group menu"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
               >
                 <MoreVertical size={16} />
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-10 w-44 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
                   <button
+                    className="ctx-item text-zinc-300"
                     onClick={() => {
                       wallpaperInputRef.current?.click();
                       setMenuOpen(false);
                     }}
-                    className="w-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
                   >
+                    <ImagePlus size={14} className="text-zinc-500" />
                     Change wallpaper
                   </button>
+                  {wallpaper?.url && (
+                    <button
+                      className="ctx-item text-zinc-300"
+                      onClick={() => {
+                        removeWallpaper();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <ImageOff size={14} className="text-zinc-500" />
+                      Remove wallpaper
+                    </button>
+                  )}
+                  <div className="ctx-divider" />
                   <button
-                    onClick={() => {
-                      removeWallpaper();
-                      setMenuOpen(false);
-                    }}
-                    className="w-full px-4 py-2 text-sm text-red-400 hover:bg-white/5"
-                  >
-                    Remove wallpaper
-                  </button>{" "}
-                  <button
+                    className="ctx-item text-red-400"
                     onClick={() => {
                       setLeaveConfirm(true);
                       setMenuOpen(false);
                     }}
-                    className="w-full flex cursor-pointer items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.05] transition-colors"
                   >
-                    {isOwner ? <Trash2 size={14} /> : <LogOut size={14} />}
+                    {isOwner ? (
+                      <Trash2 size={14} className="text-red-400/60" />
+                    ) : (
+                      <LogOut size={14} className="text-red-400/60" />
+                    )}
                     {isOwner ? "Delete group" : "Leave group"}
                   </button>
                 </div>
               )}
             </div>
           </div>
+
           {pinnedMessage && (
             <div
               onClick={() => scrollToMessage(pinnedMessage.id)}
@@ -1267,7 +1050,7 @@ export default function GroupWindow() {
             >
               <Pin size={12} className="text-[#a893ff] shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-[#a893ff] uppercase tracking-wide leading-none mb-0.5">
+                <div className="text-[11px] font-medium text-[#a893ff] leading-none mb-0.5">
                   Pinned message
                 </div>
                 <div className="text-xs text-zinc-400 truncate">
@@ -1277,8 +1060,9 @@ export default function GroupWindow() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  pinGroupMessage(groupId!, null, null);
+                  pinGroupMessage(groupId, null, null);
                 }}
+                aria-label="Unpin message"
                 className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
               >
                 <X size={12} />
@@ -1288,371 +1072,58 @@ export default function GroupWindow() {
         </div>
 
         <div
-          ref={(node) => {
-            chatScrollRef.current = node;
-            setScrollAreaReady(!!node);
-          }}
+          ref={chatScrollRef}
           onScroll={handleScroll}
           className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 min-h-0"
         >
-          <div className="space-y-1">
-            {isLoadingOlder && (
-              <div className="py-2 text-center text-xs text-zinc-500">
-                Loading older messages…
-              </div>
-            )}
-            {displayMessages.map((m, msgIndex) => {
-              const isMine = m.senderId === myUid;
-              const reactionSummary = getReactionSummary(m.reactions);
-              const hasReactions = reactionSummary.length > 0;
-              const isPickerOpen = pickerOpenId === m.id;
-              const isPinned = pinnedMessage?.id === m.id;
-              const isEditing = editingId === m.id;
-              const msgIsVideo =
-                m.imageUrl && (m.isLocalVideo || isVideo(m.imageUrl));
-              const isImageStickerMsg =
-                !m.text && m.imageUrl && isCustomEmojiUrl(m.imageUrl);
-              const isTextStickerMsg =
-                !m.imageUrl && isStickerOnlyText(m.text);
-              const isStickerMsg = isImageStickerMsg || isTextStickerMsg;
-              const time = formatTime(m.createdAt);
-              const readByOthers = (m.readBy || []).filter(
-                (uid: string) => uid !== m.senderId
-              ).length;
-              const isMsgRead = readByOthers > 0;
-              const isVoiceMsg = !!m.voiceUrl;
-              const isImagePriority = msgIndex >= displayMessages.length - 8;
+          <div ref={topSentinelRef} className="h-px" aria-hidden />
+          {isLoadingOlder && (
+            <div className="py-2 text-center text-xs text-zinc-500">
+              Loading older messages…
+            </div>
+          )}
 
+          {rows.map((row) => {
+            if (row.type === "date") {
               return (
-                <div key={m.id}>
-                  <div
-                    id={`gmsg-${m.id}`}
-                    className={`msg-row flex ${isMine ? "justify-end" : "justify-start"
-                      } ${hasReactions ? "mb-2" : ""}`}
-                    onContextMenu={(e) => {
-                      if (!m.deleted && !m.pending)
-                        openMsgMenu(e, m.id, isMine);
-                    }}
-                  >
-                    {/* <div className="relative group max-w-[72%] min-w-0"> */}
-                    <div data-msg-anim={m.id} className="relative group max-w-[72%] min-w-0">
-                      {isPickerOpen && (
-                        <div
-                          className={`reaction-picker absolute z-30 top-full mb-2 ${isMine ? "right-0" : "left-0"
-                            } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
-                            }`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {!pickerExpanded ? (
-                            <div className="flex items-center gap-1">
-                              {REACTION_EMOJIS.map((token) => (
-                                <button
-                                  key={token}
-                                  onClick={() => handleReact(m.id, token)}
-                                  className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                                >
-                                  <ReactionGlyph token={token} size={26} />
-                                </button>
-                              ))}
-                              <button
-                                onClick={() => setPickerExpanded(true)}
-                                title="More reactions"
-                                className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
-                              >
-                                <ChevronDown size={22} />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-6 gap-1">
-                              {REACTION_OPTIONS.map((token) => (
-                                <button
-                                  key={token}
-                                  onClick={() => handleReact(m.id, token)}
-                                  className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                                >
-                                  <ReactionGlyph token={token} size={26} />
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {!m.deleted && !m.pending && (
-                        <>
-                          <button
-                            onClick={() => handleReply(m)}
-                            title="Reply"
-                            className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-16" : "-right-16"
-                              } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors border border-white/[0.08]`}
-                          >
-                            <CornerUpLeft size={13} />
-                          </button>
-                          <button
-                            onClick={(e) => openPicker(e, m.id)}
-                            title="React"
-                            className={`react-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-8" : "-right-8"
-                              } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 backdrop-blur-sm transition-colors text-base leading-none border border-white/[0.08]`}
-                          >
-                            <span>😊</span>
-                          </button>
-                          <button
-                            title="More options"
-                            onClick={(e) => openMsgMenu(e, m.id, isMine)}
-                            className="msg-dots absolute -top-2.5 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#0d0b17] border border-white/[0.12] text-zinc-400 hover:text-white hover:border-[#7c5cff]/40 hover:bg-[#1b1633] transition-all shadow-sm"
-                          >
-                            <MoreVertical size={12} />
-                          </button>
-                        </>
-                      )}
-
-                      {!isMine && (
-                        <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
-                          {m.senderName}
-                        </div>
-                      )}
-
-                      {m.forwardedFrom && <ForwardedFrom source={m.forwardedFrom} />}
-
-                      {m.replyTo && (
-                        <div
-                          onClick={() => scrollToMessage(m.replyTo.id)}
-                          className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#7c5cff] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
-                        >
-                          <div className="text-[10px] font-semibold text-[#a893ff] uppercase tracking-wide mb-0.5">
-                            Reply
-                          </div>
-                          {m.replyTo.imageUrl && !m.replyTo.text ? (
-                            <div className="flex items-center gap-1 text-xs text-zinc-400">
-                              <ImageIcon size={11} />
-                              <span>Photo</span>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-zinc-400 truncate">
-                              {m.replyTo.text}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div
-                        className={
-                          isStickerMsg
-                            ? `leading-none ${m.pending ? "msg-bubble-pending" : ""
-                            }`
-                            : `text-sm leading-relaxed overflow-hidden ${isMine
-                              ? "bg-gradient-to-r from-[#6b46f0] via-[#5b3df0] to-[#4028b0] text-white rounded-[18px] rounded-br-[8px] shadow-md shadow-[#5b3df0]/20"
-                              : "border border-white/[0.08] rounded-2xl rounded-bl-md"
-                            } ${!m.text && m.imageUrl && !m.deleted
-                              ? "p-1"
-                              : "px-4 py-2"
-                            } ${isPinned ? "ring-1 ring-[#7c5cff]/40" : ""} ${m.pending ? "msg-bubble-pending" : ""
-                            }`
-                        }
-                        style={
-                          !isMine && !isStickerMsg
-                            ? {
-                              background: "var(--color-msg-bg)",
-                              color: "var(--color-text)",
-                            }
-                            : undefined
-                        }
-                      >
-                        {m.deleted ? (
-                          <span className="deleted-msg text-white text-xs">
-                            Message deleted
-                          </span>
-                        ) : isVoiceMsg ? (
-                          <div className="relative">
-                            <VoiceBubble
-                              id={m.id}
-                              audioUrl={m.voiceUrl}
-                              duration={m.duration}
-                              waveform={m.waveform}
-                              isMine={isMine}
-                            />
-
-                            {isMine && (
-                              <div className="flex justify-end px-1 pb-0.5">
-                                <MessageMeta
-                                  time={time}
-                                  pending={m.pending}
-                                  isMine={isMine}
-                                  isRead={isMsgRead}
-                                  variant="inline"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ) : isImageStickerMsg ? (
-                          <div className="relative inline-block">
-                            <img
-                              src={m.imageUrl}
-                              alt="sticker"
-                              className="w-32 h-32 object-contain"
-                              onLoad={handleMediaLoad}
-                            />
-                            {isMine && (
-                              <span className="absolute bottom-1.5 right-1.5">
-                                <MessageMeta
-                                  time={time}
-                                  pending={m.pending}
-                                  isMine={isMine}
-                                  isRead={isMsgRead}
-                                  variant="pill"
-                                />
-                              </span>
-                            )}
-                          </div>
-                        ) : isTextStickerMsg ? (
-                          <div className="relative inline-flex flex-wrap items-end gap-1">
-                            <RichText text={m.text} variant="large" />
-                            {isMine && (
-                              <span className="absolute -bottom-1 -right-1">
-                                <MessageMeta
-                                  time={time}
-                                  pending={m.pending}
-                                  isMine={isMine}
-                                  isRead={isMsgRead}
-                                  variant="pill"
-                                />
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <>
-                            {m.imageUrl &&
-                              (msgIsVideo ? (
-                                <div
-                                  className="video-thumb"
-                                  onClick={() =>
-                                    !m.pending && setLightboxUrl(m.imageUrl)
-                                  }
-                                >
-                                  <video
-                                    src={m.imageUrl}
-                                    className="chat-video"
-                                    preload="metadata"
-                                    onLoadedMetadata={handleMediaLoad}
-                                  />
-                                  <div className="play-overlay">
-                                    <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                                      <Play
-                                        size={18}
-                                        className="text-white ml-0.5"
-                                        fill="white"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <ChatImage
-                                  url={m.imageUrl}
-                                  width={m.imageWidth}
-                                  height={m.imageHeight}
-                                  priority={isImagePriority}
-                                  onLoad={handleMediaLoad}
-                                  onClick={() =>
-                                    !m.pending && setLightboxUrl(m.imageUrl)
-                                  }
-                                />
-                              ))}
-                            {isEditing ? (
-                              <div className="flex items-center gap-2 py-0.5">
-                                <input
-                                  ref={editInputRef}
-                                  value={editText}
-                                  onChange={(e) => setEditText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") submitEdit();
-                                    if (e.key === "Escape") {
-                                      setEditingId(null);
-                                      setEditText("");
-                                    }
-                                  }}
-                                  className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-                                />
-                                <button
-                                  onClick={submitEdit}
-                                  className="shrink-0 text-white/60 hover:text-white transition-colors"
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditText("");
-                                  }}
-                                  className="shrink-0 text-white/40 hover:text-white transition-colors"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              m.text && (
-                                <div
-                                  className={`flex items-end gap-2.5 flex-wrap justify-between ${m.imageUrl ? "px-3 pb-1 pt-2" : ""
-                                    }`}
-                                >
-                                  <span className="whitespace-pre-wrap break-words">
-                                    <RichText text={m.text} />
-                                    {m.edited && (
-                                      <span className="text-[10px] ml-1 opacity-50">
-                                        (edited)
-                                      </span>
-                                    )}
-                                  </span>
-                                  <MessageMeta
-                                    time={time}
-                                    pending={m.pending}
-                                    isMine={isMine}
-                                    isRead={isMsgRead}
-                                    variant="inline"
-                                  />
-                                </div>
-                              )
-                            )}
-                            {!m.text && m.imageUrl && isMine && (
-                              <div className="flex justify-end px-1.5 pb-1 pt-1">
-                                <MessageMeta
-                                  time={time}
-                                  pending={m.pending}
-                                  isMine={isMine}
-                                  isRead={isMsgRead}
-                                  variant="pill"
-                                />
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      {hasReactions && !m.deleted && (
-                        <div
-                          className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"
-                            }`}
-                        >
-                          {reactionSummary.map(({ token, count, mine }) => (
-                            <button
-                              key={token}
-                              onClick={() => handleReact(m.id, token)}
-                              className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${mine
-                                ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff] backdrop-blur-sm"
-                                : "bg-black/40 border-white/20 text-zinc-300 hover:border-white/30 backdrop-blur-sm"
-                                }`}
-                            >
-                              <ReactionGlyph token={token} size={15} />
-                              <span className="font-medium">{count}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <div key={row.key} className="flex justify-center pt-3 pb-1">
+                  <span className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide text-[#b9a8ff] bg-[#12111f]/80 border border-[#7c5cff]/20 shadow-sm shadow-black/30">
+                    {row.label}
+                  </span>
                 </div>
               );
-            })}
-          </div>
+            }
+            const { m } = row;
+            const isMine = m.senderId === myUid;
+            const isPickerOpen = pickerOpenId === m.id;
+            return (
+              <GroupMessageRow
+                key={m.id}
+                m={m}
+                myUid={myUid}
+                isMine={isMine}
+                isRead={(m.readBy || []).some((uid: string) => uid !== m.senderId)}
+                isFirstInGroup={row.isFirstInGroup}
+                isLastInGroup={row.isLastInGroup}
+                isPickerOpen={isPickerOpen}
+                pickerExpanded={isPickerOpen && pickerExpanded}
+                isPinned={pinnedMessage?.id === m.id}
+                isEditing={editingId === m.id}
+                animate={!!m.pending || freshIds.has(m.id)}
+                priority={row.priority}
+                onReply={handleReply}
+                onOpenPicker={openPicker}
+                onExpandPicker={expandPicker}
+                onOpenMenu={openMsgMenu}
+                onReact={handleReact}
+                onScrollToMessage={scrollToMessage}
+                onOpenLightbox={openLightbox}
+                onMediaLoad={handleMediaLoad}
+                onSubmitEdit={submitEdit}
+                onCancelEdit={cancelEdit}
+              />
+            );
+          })}
 
           {showScrollButton && (
             <button
@@ -1662,12 +1133,14 @@ export default function GroupWindow() {
                 setShowScrollButton(false);
               }}
               title="Scroll to bottom"
-              className="absolute z-20 bottom-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-[#12111f] border border-white/[0.10] shadow-lg shadow-black/40 text-[#a893ff] hover:bg-[#1b1633] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              aria-label="Scroll to bottom"
+              className="sticky float-right z-20 bottom-2 w-10 h-10 flex items-center justify-center rounded-full bg-[#12111f] border border-white/[0.10] shadow-lg shadow-black/40 text-[#a893ff] hover:bg-[#1b1633] hover:scale-105 active:scale-95 transition-all cursor-pointer"
             >
               <ChevronDown size={18} />
             </button>
           )}
         </div>
+
         {showGroupInfo && (
           <GroupModal
             groupId={groupId}
@@ -1699,20 +1172,32 @@ export default function GroupWindow() {
         />
       </div>
 
-      {forwardData && myUid && groupId && (
+      {forwardData && myUid && (
         <ForwardPicker
           myUid={myUid}
           onClose={() => setForwardData(null)}
           onSelectChat={async (targetChatId) => {
-            await forwardMessageToChat(targetChatId, myUid, forwardPayload(forwardData));
+            await forwardMessageToChat(
+              targetChatId,
+              myUid,
+              forwardPayload(forwardData)
+            );
             setForwardData(null);
           }}
           onSelectGroup={async (targetGroupId) => {
-            await forwardMessageToGroup(targetGroupId, myUid, forwardPayload(forwardData));
+            await forwardMessageToGroup(
+              targetGroupId,
+              myUid,
+              forwardPayload(forwardData)
+            );
             setForwardData(null);
           }}
           onSelectChannel={async (channelId) => {
-            await forwardMessageToChannel(channelId, myUid, forwardPayload(forwardData));
+            await forwardMessageToChannel(
+              channelId,
+              myUid,
+              forwardPayload(forwardData)
+            );
             setForwardData(null);
           }}
         />

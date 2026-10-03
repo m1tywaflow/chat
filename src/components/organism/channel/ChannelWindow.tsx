@@ -514,8 +514,8 @@ export default function ChannelWindow({
             <button
               onClick={toggleSub}
               className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${isSubscribed
-                  ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
-                  : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
+                ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
+                : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
                 }`}
             >
               {isSubscribed ? "Unsubscribe" : "Subscribe"}
@@ -587,7 +587,7 @@ export default function ChannelWindow({
             if (row.type === "date") {
               return (
                 <div key={row.key} className="self-center pt-1">
-                  <span className="px-3 py-1 rounded-full text-[11px] font-medium text-zinc-300 bg-black/40 border border-white/[0.06]">
+                  <span className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide text-[#b9a8ff] bg-[#12111f]/80 border border-[#7c5cff]/20 shadow-sm shadow-black/30">
                     {row.label}
                   </span>
                 </div>
