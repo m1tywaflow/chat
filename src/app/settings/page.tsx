@@ -114,13 +114,10 @@ export default function SettingsPage() {
           }}
         />
         <div className="absolute inset-x-0 top-0 h-[180px] bg-gradient-to-b from-white/[0.035] to-transparent" />
-        {/* Bottom fade — smooths any glow/shadow spill into the page background */}
         <div className="absolute inset-x-0 bottom-0 h-[220px] bg-gradient-to-t from-[#07060d] via-[#07060d]/80 to-transparent" />
       </div>
 
-      {/* Main — centered, capped height so it never needs to scroll */}
       <div className="relative mx-auto flex w-full max-w-[500px] flex-1 flex-col justify-center gap-2 overflow-hidden py-1">
-        {/* Back */}
         <button
           onClick={() => router.back()}
           className="group flex w-fit shrink-0 cursor-pointer items-center gap-2 text-[12px] text-white/40 transition-colors hover:text-white/80"
@@ -131,12 +128,9 @@ export default function SettingsPage() {
           <span>Back</span>
         </button>
 
-        {/* Main glass card */}
         <div className="relative flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03] shadow-[0_25px_60px_-30px_rgba(0,0,0,0.7)] backdrop-blur-3xl">
-          {/* Top shine */}
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
-          {/* Header */}
           <div className="relative shrink-0 border-b border-white/[0.07] px-5 py-3.5 sm:px-6">
             <div className="flex items-center gap-4">
               {/* Avatar */}

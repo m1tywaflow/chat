@@ -1,6 +1,5 @@
 import type { ForwardableContent, ForwardedFrom } from "@/types/forward";
 
-/** Keeps the original origin when a forwarded message is forwarded again. */
 export function buildForwardedFrom(
   original: ForwardableContent
 ): ForwardedFrom {

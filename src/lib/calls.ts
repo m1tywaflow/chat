@@ -121,24 +121,6 @@ export function subscribeToCall(
   });
 }
 
-// export async function fetchLiveKitToken(
-//   roomName: string,
-//   userId: string,
-//   userName: string
-// ): Promise<string> {
-//   const res = await fetch("/api/livekit/token", {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify({ roomName, userId, userName }),
-//   });
-
-//   if (!res.ok) {
-//     throw new Error("Failed to fetch LiveKit token");
-//   }
-
-//   const data = await res.json();
-//   return data.token;
-// }
 
 export async function fetchLiveKitToken(
   callId: string,

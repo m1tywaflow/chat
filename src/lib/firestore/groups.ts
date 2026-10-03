@@ -912,13 +912,6 @@ export async function editGroupMessage(
   await updateDoc(msgRef, { text, edited: true });
 }
 
-// export async function deleteGroupMessage(
-//   groupId: string,
-//   messageId: string
-// ): Promise<void> {
-//   const msgRef = doc(db, "groups", groupId, "messages", messageId);
-//   await updateDoc(msgRef, { deleted: true, text: "", imageUrl: null });
-// }
 
 export async function deleteGroupMessage(
   groupId: string,

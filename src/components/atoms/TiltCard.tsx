@@ -62,7 +62,6 @@ export function TiltCard({
       >
         {children}
 
-        {/* блик по стеклу */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -79,7 +78,6 @@ export function TiltCard({
   );
 }
 
-/** Слой на своей глубине: чем больше depth, тем сильнее параллакс и "ближе" к камере */
 export function TiltLayer({
   depth = 20,
   children,

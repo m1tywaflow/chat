@@ -32,25 +32,12 @@ import {
   ChannelCommentReplyTo,
 } from "@/types/channel";
 
-// Builds the sidebar preview string from a post's raw fields — same rule
-// everywhere a post can affect the channel's lastPostPreview (create,
-// forward, delete, edit), so the sidebar never drifts out of sync with
-// what's actually the latest post.
-// NOTE: sticker tokens (::sticker_id::) are intentionally kept as raw text
-// here — ChannelItem's LastMessageBody already knows how to turn a
-// sticker-only string into a "thumbnail + Sticker" row, exactly like it
-// does for groups and 1:1 chats.
 function computePostPreview(text?: string | null, imageUrl?: string | null) {
   if (text && text.trim()) return text.slice(0, 80);
   if (imageUrl) return "📷 Photo";
   return "";
 }
 
-// Re-derives lastPostId / lastPostAt / lastPostPreview from whatever post
-// is actually the newest one still in the subcollection. Called after any
-// delete so the sidebar can never keep showing a post that no longer
-// exists — cheap (one extra read) and correct regardless of whether the
-// deleted post happened to be the one currently reflected in the preview.
 async function refreshLastPostPreview(channelId: string) {
   const latestSnap = await getDocs(
     query(
@@ -75,8 +62,6 @@ async function refreshLastPostPreview(channelId: string) {
 
   await updateDoc(channelRef, {
     lastPostId: latest.id,
-    // use the remaining post's own timestamp rather than "now", so the
-    // sidebar's time label reflects when that post was actually made
     lastPostAt: data.createdAt ?? serverTimestamp(),
     lastPostPreview: computePostPreview(data.text, data.imageUrl),
   });
@@ -339,12 +324,6 @@ export async function createChannelPost(
   await updateDoc(doc(db, "channels", channelId), channelUpdate);
 }
 
-// Bumps unreadCounts.{uid} by 1 for every current subscriber except the
-// post's own author, mirroring the unreadCounts pattern already used for
-// groups — one badge-friendly counter per subscriber living right on the
-// channel doc, so ChannelItem can render it without extra reads.
-// Mutates `channelUpdate` in place rather than issuing a separate write,
-// so the increment lands in the same updateDoc call as lastPost*.
 async function bumpUnreadForSubscribers(
   channelId: string,
   authorId: string,
@@ -359,8 +338,6 @@ async function bumpUnreadForSubscribers(
   });
 }
 
-// Resets a single subscriber's unread post counter to 0 — call when they
-// open the channel (mirrors markGroupAsRead for groups).
 export async function markChannelAsRead(channelId: string, uid: string) {
   await updateDoc(doc(db, "channels", channelId), {
     [`unreadCounts.${uid}`]: 0,
@@ -410,17 +387,7 @@ export async function toggleCommentReaction(
   });
 }
 
-/**
- * Registers a view for a post, Telegram-style: counted once per user,
- * ever — never decrements, never double-counts even if the same person
- * scrolls past it a hundred times. Guarded by a per-user "viewers" doc
- * inside a transaction so concurrent calls can't race past the check.
- *
- * A subcollection (rather than an array field on the post) is used
- * deliberately: posts in a big channel can accumulate far more viewers
- * than comfortably fit in a single 1MB document, and subcollection
- * writes don't require reading/rewriting the whole viewer list.
- */
+
 export async function markPostViewed(
   channelId: string,
   postId: string,
@@ -447,9 +414,6 @@ export async function markPostViewed(
 export async function deleteChannelPost(channelId: string, postId: string) {
   await deleteDoc(doc(db, "channels", channelId, "posts", postId));
 
-  // the deleted post may or may not have been the one currently reflected
-  // in the sidebar preview — always re-derive from what's actually left
-  // so the sidebar can never keep showing text for a post that's gone
   await refreshLastPostPreview(channelId);
 }
 
@@ -550,9 +514,6 @@ export async function updateChannelPostText(
   newText: string
 ) {
   const postRef = doc(db, "channels", channelId, "posts", postId);
-
-  // read first so we still know the post's imageUrl (needed to rebuild the
-  // preview correctly) without a second round trip after the write
   const postSnap = await getDoc(postRef);
   const imageUrl = postSnap.exists() ? postSnap.data().imageUrl : null;
 
@@ -564,8 +525,6 @@ export async function updateChannelPostText(
   const channelRef = doc(db, "channels", channelId);
   const channelSnap = await getDoc(channelRef);
 
-  // only the sidebar's currently-displayed post needs its preview patched;
-  // editing an older post shouldn't touch what the sidebar shows
   if (channelSnap.exists() && channelSnap.data().lastPostId === postId) {
     await updateDoc(channelRef, {
       lastPostPreview: computePostPreview(newText, imageUrl),
