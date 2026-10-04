@@ -10,6 +10,10 @@ import {
   addMembersToGroup,
   searchUsersByUsername,
   updateGroupInfo,
+  leaveGroup,
+  deleteGroup,
+  getGroupRecentMedia,
+  type GroupMediaItem,
 } from "@/lib/firestore/groups";
 import MediaGallery from "../media-gallery/MediaGallery";
 import { isOnline, formatLastSeen } from "@/lib/formatLastSeen";
@@ -28,6 +32,8 @@ import {
   Image as ImageIcon,
   Settings,
   Camera,
+  LogOut,
+  Play,
 } from "lucide-react";
 
 interface Props {
@@ -75,6 +81,18 @@ async function uploadGroupAvatar(file: File): Promise<string> {
   return json.secure_url as string;
 }
 
+function mediaThumb(item: GroupMediaItem): string {
+  if (!item.url.includes("/upload/")) return item.url;
+
+  if (item.type === "video") {
+    return item.url
+      .replace("/upload/", "/upload/so_0,w_200,h_200,c_fill,q_auto/")
+      .replace(/\.\w+$/, ".jpg");
+  }
+
+  return item.url.replace("/upload/", "/upload/w_200,h_200,c_fill,q_auto,f_auto/");
+}
+
 const GLASS_PANEL =
   "bg-[rgba(13,11,23,0.55)] [backdrop-filter:blur(24px)_saturate(160%)] [-webkit-backdrop-filter:blur(24px)_saturate(160%)] border border-[rgba(168,147,255,0.16)] shadow-[0_10px_40px_0_rgba(8,4,24,0.55),inset_0_0_1px_1px_rgba(255,255,255,0.05)]";
 
@@ -85,12 +103,14 @@ function ConfirmMini({
   title,
   description,
   confirmLabel,
+  icon,
   onCancel,
   onConfirm,
 }: {
   title: string;
   description: string;
   confirmLabel: string;
+  icon?: React.ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -105,7 +125,7 @@ function ConfirmMini({
       >
         <div className="px-6 pt-6 pb-4">
           <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
-            <UserMinus size={18} className="text-red-400" />
+            {icon ?? <UserMinus size={18} className="text-red-400" />}
           </div>
 
           <h3 className="text-[15px] font-semibold text-white mb-1">{title}</h3>
@@ -151,6 +171,10 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
 
   const [showMedia, setShowMedia] = useState(false);
+  const [recentMedia, setRecentMedia] = useState<GroupMediaItem[]>([]);
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const [inviteMode, setInviteMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -190,11 +214,31 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   }, [memberIdsKey]);
 
   useEffect(() => {
+    if (showMedia) return;
+
+    let cancelled = false;
+
+    getGroupRecentMedia(groupId, 5)
+      .then((items) => {
+        if (!cancelled) setRecentMedia(items);
+      })
+      .catch(() => {
+        if (!cancelled) setRecentMedia([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, showMedia]);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (showMedia) return;
 
-      if (kickTarget) {
+      if (leaveOpen) {
+        setLeaveOpen(false);
+      } else if (kickTarget) {
         setKickTarget(null);
       } else if (zoomUrl) {
         setZoomUrl(null);
@@ -212,7 +256,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, [showMedia, kickTarget, zoomUrl, inviteMode, settingsMode, onClose]);
+  }, [showMedia, leaveOpen, kickTarget, zoomUrl, inviteMode, settingsMode, onClose]);
 
   function closeMenu() {
     setMenuUid(null);
@@ -271,6 +315,7 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
   const isOwner = myUid === group.ownerId;
   const isAdmin = !!myUid && group.admins.includes(myUid);
   const canManage = isOwner || isAdmin;
+  const isMember = !!myUid && group.members.includes(myUid);
 
   const rows: MemberRow[] = group.members.map((uid) => {
     const p = profiles[uid] || {};
@@ -306,7 +351,31 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     return a.username.localeCompare(b.username);
   });
 
+  const onlineCount = rows.filter((r) => r.online).length;
+
+  const sections = [
+    { key: "owner", label: "Owner", rows: rows.filter((r) => r.role === "owner") },
+    { key: "admin", label: "Admins", rows: rows.filter((r) => r.role === "admin") },
+    { key: "member", label: "Members", rows: rows.filter((r) => r.role === "member") },
+  ].filter((s) => s.rows.length > 0);
+
   const menuRow = menuUid ? rows.find((r) => r.uid === menuUid) ?? null : null;
+
+  const isSoleMember = group.members.length <= 1;
+  const nextOwner =
+    isOwner && !isSoleMember
+      ? rows.find((r) => r.uid !== myUid && r.role === "admin") ??
+      rows.find((r) => r.uid !== myUid) ??
+      null
+      : null;
+
+  const leaveTitle = isSoleMember ? "Delete group?" : "Leave group?";
+  const leaveLabel = isSoleMember ? "Delete" : "Leave";
+  const leaveDescription = isSoleMember
+    ? "You're the only member. Leaving will delete this group."
+    : nextOwner
+      ? `${nextOwner.username} will become the owner. You'll lose access to this group.`
+      : "You'll lose access to this group and won't see new messages. You can be re-invited later.";
 
   function canKick(target: MemberRow) {
     if (!canManage) return false;
@@ -359,6 +428,26 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     } finally {
       setBusyUid(null);
       setKickTarget(null);
+    }
+  }
+
+  async function handleLeaveConfirmed() {
+    if (!myUid || leaving) return;
+
+    setLeaving(true);
+
+    try {
+      if (isSoleMember) {
+        await deleteGroup(groupId);
+      } else {
+        await leaveGroup(groupId, myUid, nextOwner?.uid ?? null);
+      }
+
+      setLeaveOpen(false);
+      onClose();
+    } catch {
+      setLeaving(false);
+      setLeaveOpen(false);
     }
   }
 
@@ -475,6 +564,81 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     (nameChanged || !!avatarFile) &&
     nameDraft.trim().length > 0 &&
     !savingSettings;
+
+  function renderRow(row: MemberRow) {
+    return (
+      <div
+        key={row.uid}
+        className="gm-row group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.05] relative"
+      >
+        <div
+          className="shrink-0 relative gm-avatar"
+          onClick={() => row.avatar && setZoomUrl(row.avatar)}
+        >
+          {row.avatar ? (
+            <img
+              src={row.avatar}
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
+              {row.username?.[0]?.toUpperCase()}
+            </div>
+          )}
+
+          <span
+            className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
+            style={{
+              background: row.online ? "#34D399" : "#3f3f46",
+            }}
+          />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13.5px] font-medium text-white truncate">
+              {row.username}
+            </span>
+
+            {row.role === "owner" && (
+              <Crown size={12} className="text-yellow-400 shrink-0" />
+            )}
+
+            {row.role === "admin" && (
+              <ShieldCheck size={12} className="text-[#a893ff] shrink-0" />
+            )}
+          </div>
+
+          <span
+            className={`text-[11.5px] truncate block ${row.online ? "text-emerald-400/80" : "text-zinc-500"
+              }`}
+          >
+            {row.online ? "online" : formatLastSeen(row.lastSeen)}
+          </span>
+        </div>
+
+        {busyUid === row.uid ? (
+          <Loader2
+            size={15}
+            className="animate-spin text-zinc-500 shrink-0"
+          />
+        ) : (
+          (isOwner || canKick(row)) &&
+          row.role !== "owner" && (
+            <button
+              onClick={(e) => openMenu(e, row.uid)}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${menuUid === row.uid
+                ? "opacity-100 bg-white/[0.08] text-white"
+                : "opacity-0 group-hover:opacity-100"
+                }`}
+            >
+              <UserMinus size={14} />
+            </button>
+          )
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -594,6 +758,18 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
             opacity: 1;
             transform: translateY(0) scale(1);
           }
+        }
+
+        .gm-thumb {
+          transition: opacity 0.15s, transform 0.12s;
+        }
+
+        .gm-thumb:hover {
+          opacity: 0.85;
+        }
+
+        .gm-thumb:active {
+          transform: scale(0.97);
         }
       `}</style>
 
@@ -818,9 +994,19 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                 </h2>
 
                 <p className="flex items-center gap-1.5 text-[12.5px] text-zinc-500 mt-1.5">
-                  <span className="w-1 h-1 rounded-full bg-zinc-600" />
-                  {group.memberCount} member
-                  {group.memberCount === 1 ? "" : "s"}
+                  <span>
+                    {group.memberCount} member
+                    {group.memberCount === 1 ? "" : "s"}
+                  </span>
+
+                  {onlineCount > 0 && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-zinc-600" />
+                      <span className="text-emerald-400/90">
+                        {onlineCount} online
+                      </span>
+                    </>
+                  )}
                 </p>
 
                 <div className={`gm-actionbar flex items-stretch mt-5 rounded-2xl ${GLASS_SURFACE} overflow-hidden shadow-[0_6px_20px_rgba(0,0,0,0.25)]`}>
@@ -858,8 +1044,33 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                 </div>
               </div>
 
+              {recentMedia.length > 0 && (
+                <div className="relative z-10 flex gap-1.5 px-4 py-3 border-b border-white/[0.08]">
+                  {recentMedia.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setShowMedia(true)}
+                      className="gm-thumb relative flex-1 aspect-square min-w-0 rounded-lg overflow-hidden bg-[#1e2a3a] border border-white/[0.08] cursor-pointer"
+                    >
+                      <img
+                        src={mediaThumb(item)}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+
+                      {item.type === "video" && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                          <Play size={14} className="text-white" fill="white" />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div
-                className="gm-scroll relative z-10 flex-1 overflow-y-auto px-2 py-2"
+                className="gm-scroll relative z-10 flex-1 min-h-0 overflow-y-auto px-2 py-1"
                 onScroll={closeMenu}
               >
                 {loadingProfiles && rows.every((r) => r.username === "…") ? (
@@ -868,89 +1079,35 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
                     <span className="text-xs">Loading members…</span>
                   </div>
                 ) : (
-                  rows.map((row) => (
-                    <div
-                      key={row.uid}
-                      className="gm-row group flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/[0.05] relative"
-                    >
-                      <div
-                        className="shrink-0 relative gm-avatar"
-                        onClick={() => row.avatar && setZoomUrl(row.avatar)}
-                      >
-                        {row.avatar ? (
-                          <img
-                            src={row.avatar}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold bg-[#1e2a3a] text-[#a893ff]">
-                            {row.username?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-
-                        <span
-                          className="absolute bottom-0 right-0 w-[9px] h-[9px] rounded-full border-2 border-[#0d0b17]"
-                          style={{
-                            background: row.online ? "#34D399" : "#3f3f46",
-                          }}
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[13.5px] font-medium text-white truncate">
-                            {row.username}
+                  sections.map((section) => (
+                    <div key={section.key}>
+                      <div className="px-3 pt-3 pb-1 text-[11.5px] font-medium text-zinc-500">
+                        {section.label}
+                        {section.key !== "owner" && (
+                          <span className="ml-1.5 text-zinc-600">
+                            {section.rows.length}
                           </span>
-
-                          {row.role === "owner" && (
-                            <Crown
-                              size={12}
-                              className="text-yellow-400 shrink-0"
-                            />
-                          )}
-
-                          {row.role === "admin" && (
-                            <ShieldCheck
-                              size={12}
-                              className="text-[#a893ff] shrink-0"
-                            />
-                          )}
-                        </div>
-
-                        <span className="text-[11.5px] text-zinc-500 truncate block">
-                          {row.role === "owner"
-                            ? "owner"
-                            : row.role === "admin"
-                              ? "admin"
-                              : row.online
-                                ? "online"
-                                : formatLastSeen(row.lastSeen)}
-                        </span>
+                        )}
                       </div>
 
-                      {busyUid === row.uid ? (
-                        <Loader2
-                          size={15}
-                          className="animate-spin text-zinc-500 shrink-0"
-                        />
-                      ) : (
-                        (isOwner || canKick(row)) &&
-                        row.role !== "owner" && (
-                          <button
-                            onClick={(e) => openMenu(e, row.uid)}
-                            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer ${menuUid === row.uid
-                              ? "opacity-100 bg-white/[0.08] text-white"
-                              : "opacity-0 group-hover:opacity-100"
-                              }`}
-                          >
-                            <UserMinus size={14} />
-                          </button>
-                        )
-                      )}
+                      {section.rows.map(renderRow)}
                     </div>
                   ))
                 )}
               </div>
+
+              {isMember && (
+                <div className="relative z-10 p-2 border-t border-white/[0.08]">
+                  <button
+                    onClick={() => setLeaveOpen(true)}
+                    disabled={leaving}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-medium text-red-400/80 hover:text-red-300 hover:bg-red-500/[0.08] disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    <LogOut size={14} />
+                    {isSoleMember ? "Delete group" : "Leave group"}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1042,6 +1199,17 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
           confirmLabel="Remove"
           onCancel={() => setKickTarget(null)}
           onConfirm={handleKickConfirmed}
+        />
+      )}
+
+      {leaveOpen && (
+        <ConfirmMini
+          title={leaveTitle}
+          description={leaveDescription}
+          confirmLabel={leaveLabel}
+          icon={<LogOut size={18} className="text-red-400" />}
+          onCancel={() => setLeaveOpen(false)}
+          onConfirm={handleLeaveConfirmed}
         />
       )}
     </>
