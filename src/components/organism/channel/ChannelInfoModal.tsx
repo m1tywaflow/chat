@@ -343,8 +343,8 @@ export default function ChannelInfoModal({
                   <button
                     onClick={onToggleSub}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-[13px] font-semibold transition-colors cursor-pointer ${isSub
-                        ? "bg-red-500/10 hover:bg-red-500/[0.16] border-red-500/20 text-red-400"
-                        : "bg-[#7c5cff]/10 hover:bg-[#7c5cff]/[0.18] border-[#7c5cff]/20 text-[#a893ff]"
+                      ? "bg-red-500/10 hover:bg-red-500/[0.16] border-red-500/20 text-red-400"
+                      : "bg-[#7c5cff]/10 hover:bg-[#7c5cff]/[0.18] border-[#7c5cff]/20 text-[#a893ff]"
                       }`}
                   >
                     {isSub ? <LogOut size={15} /> : <Megaphone size={15} />}
