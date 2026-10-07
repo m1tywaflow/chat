@@ -31,6 +31,7 @@ export interface ChannelPost {
   reactions?: Record<string, string[]>;
   commentCount?: number;
   forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
+  recentCommenters?: string[];
 }
 
 export interface ChannelCommentReplyTo {
