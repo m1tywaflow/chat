@@ -387,7 +387,6 @@ export async function toggleCommentReaction(
   });
 }
 
-
 export async function markPostViewed(
   channelId: string,
   postId: string,
@@ -582,17 +581,22 @@ export async function forwardMessageToChannel(
   await updateDoc(doc(db, "channels", channelId), channelUpdate);
 }
 
-
 export async function updateChannelInfo(
   channelId: string,
-  data: { name?: string; avatarUrl?: string }
+  data: { name?: string; description?: string; avatarUrl?: string }
 ): Promise<void> {
   const payload: Record<string, any> = {};
+
   if (data.name !== undefined) {
     const trimmed = data.name.trim();
     payload.name = trimmed;
     payload.nameLower = trimmed.toLowerCase();
   }
+
+  if (data.description !== undefined) {
+    payload.description = data.description.trim();
+  }
+
   if (data.avatarUrl !== undefined) payload.avatarUrl = data.avatarUrl;
 
   if (Object.keys(payload).length === 0) return;

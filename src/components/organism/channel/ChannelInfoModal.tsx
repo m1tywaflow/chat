@@ -13,7 +13,6 @@ import {
   X,
   Users,
   Info,
-  Heart,
   LogOut,
   Trash2,
   ChevronLeft,
@@ -54,6 +53,37 @@ const GLASS_PANEL =
 const GLASS_SURFACE =
   "bg-[rgba(124,92,255,0.06)] [backdrop-filter:blur(12px)_saturate(140%)] [-webkit-backdrop-filter:blur(12px)_saturate(140%)] border border-white/[0.08]";
 
+const LINK_RE =
+  /((?:https?:\/\/|www\.)[^\s]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\/[^\s]*|@[a-zA-Z0-9_]{3,})/gi;
+
+function renderDescription(text: string) {
+  return text.split(LINK_RE).map((part, i) => {
+    if (i % 2 === 0) return part;
+
+    if (part.startsWith("@")) {
+      return (
+        <span key={i} className="text-[#a893ff]">
+          {part}
+        </span>
+      );
+    }
+
+    const href = /^https?:\/\//i.test(part) ? part : `https://${part}`;
+
+    return (
+      <a
+        key={i}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[#a893ff] hover:underline break-all"
+      >
+        {part}
+      </a>
+    );
+  });
+}
+
 export default function ChannelInfoModal({
   channel,
   isOwner,
@@ -77,6 +107,7 @@ export default function ChannelInfoModal({
   const [showMedia, setShowMedia] = useState(false);
 
   const [nameDraft, setNameDraft] = useState("");
+  const [descDraft, setDescDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -123,6 +154,7 @@ export default function ChannelInfoModal({
 
   function openSettings() {
     setNameDraft(channel.name);
+    setDescDraft(channel.description ?? "");
     setAvatarDraft(null);
     setAvatarFile(null);
     setView("settings");
@@ -131,6 +163,7 @@ export default function ChannelInfoModal({
   function closeSettings() {
     setView("info");
     setNameDraft("");
+    setDescDraft("");
     if (avatarDraft) URL.revokeObjectURL(avatarDraft);
     setAvatarDraft(null);
     setAvatarFile(null);
@@ -144,6 +177,14 @@ export default function ChannelInfoModal({
     setAvatarDraft(URL.createObjectURL(file));
   }
 
+  const nameChanged =
+    nameDraft.trim() !== channel.name && nameDraft.trim().length > 0;
+  const descChanged = descDraft.trim() !== (channel.description ?? "").trim();
+  const canSaveSettings =
+    (nameChanged || descChanged || !!avatarFile) &&
+    nameDraft.trim().length > 0 &&
+    !savingSettings;
+
   async function handleSaveSettings() {
     const trimmed = nameDraft.trim();
     if (!trimmed) return;
@@ -155,7 +196,8 @@ export default function ChannelInfoModal({
         avatarUrl = await uploadChannelAvatar(avatarFile);
       }
       await updateChannelInfo(channel.id, {
-        name: trimmed !== channel.name ? trimmed : undefined,
+        name: nameChanged ? trimmed : undefined,
+        description: descChanged ? descDraft.trim() : undefined,
         avatarUrl,
       });
       closeSettings();
@@ -163,13 +205,6 @@ export default function ChannelInfoModal({
       setSavingSettings(false);
     }
   }
-
-  const nameChanged =
-    nameDraft.trim() !== channel.name && nameDraft.trim().length > 0;
-  const canSaveSettings =
-    (nameChanged || !!avatarFile) &&
-    nameDraft.trim().length > 0 &&
-    !savingSettings;
 
   return (
     <>
@@ -253,16 +288,18 @@ export default function ChannelInfoModal({
               {/* body */}
               <div className="cim-scroll relative z-10 flex-1 overflow-y-auto">
                 {channel.description && (
-                  <div className="w-full flex items-center gap-3 px-6 py-3.5 border-b border-white/[0.08]">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}>
+                  <div className="w-full flex items-start gap-3 px-6 py-3.5 border-b border-white/[0.08]">
+                    <div
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}
+                    >
                       <Info size={16} className="text-blue-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13.5px] font-medium text-white">
-                        Description
+                      <div className="text-[13.5px] text-white whitespace-pre-wrap break-words leading-relaxed">
+                        {renderDescription(channel.description)}
                       </div>
-                      <div className="text-[12px] text-zinc-500 truncate">
-                        {channel.description}
+                      <div className="text-[12px] text-zinc-600 mt-1">
+                        Description
                       </div>
                     </div>
                   </div>
@@ -272,7 +309,9 @@ export default function ChannelInfoModal({
                   onClick={() => setView("subscribers")}
                   className="cim-row w-full flex items-center gap-3 px-6 py-3.5 hover:bg-white/[0.05] cursor-pointer text-left border-b border-white/[0.08]"
                 >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}>
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}
+                  >
                     <Users size={16} className="text-[#a893ff]" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -292,7 +331,9 @@ export default function ChannelInfoModal({
                   className={`cim-row w-full flex items-center gap-3 px-6 py-3.5 hover:bg-white/[0.05] cursor-pointer text-left ${isOwner ? "border-b border-white/[0.08]" : ""
                     }`}
                 >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}>
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}
+                  >
                     <ImageIcon size={16} className="text-pink-400" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -305,12 +346,15 @@ export default function ChannelInfoModal({
                   </div>
                   <ChevronRight size={16} className="text-zinc-600 shrink-0" />
                 </button>
+
                 {isOwner && (
                   <button
                     onClick={openSettings}
                     className="cim-row w-full flex items-center gap-3 px-6 py-3.5 hover:bg-white/[0.05] cursor-pointer text-left"
                   >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}>
+                    <div
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${GLASS_SURFACE}`}
+                    >
                       <Settings size={16} className="text-zinc-300" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -318,7 +362,7 @@ export default function ChannelInfoModal({
                         Settings
                       </div>
                       <div className="text-[12px] text-zinc-500">
-                        Change name and photo
+                        Change name, photo and description
                       </div>
                     </div>
                     <ChevronRight
@@ -395,11 +439,26 @@ export default function ChannelInfoModal({
                   className="w-full max-w-[240px] text-center bg-transparent border-b border-white/10 focus:border-[#7c5cff]/50 outline-none text-[15px] font-semibold text-white py-1 transition-colors"
                 />
                 <p className="text-[11.5px] text-zinc-500 mt-3 text-center leading-relaxed px-2">
-                  Only the owner can change channel name and photo
+                  Only the owner can change channel name, photo and description
                 </p>
               </div>
 
-              <div className="relative z-10 flex-1" />
+              <div className="cim-scroll relative z-10 flex-1 overflow-y-auto px-4 pt-4 pb-2">
+                <label className="text-[11.5px] font-medium text-zinc-500 px-1">
+                  Description
+                </label>
+                <textarea
+                  value={descDraft}
+                  onChange={(e) => setDescDraft(e.target.value)}
+                  placeholder="Description (links, @username...)"
+                  maxLength={500}
+                  rows={5}
+                  className={`mt-1.5 w-full resize-none rounded-xl px-3 py-2.5 ${GLASS_SURFACE} text-[13px] text-white placeholder:text-zinc-600 outline-none focus:border-[#7c5cff]/50 transition-colors leading-relaxed`}
+                />
+                <div className="text-right text-[11px] text-zinc-600 mt-1 px-1">
+                  {descDraft.length}/500
+                </div>
+              </div>
 
               <div className="relative z-10 p-3 border-t border-white/[0.08]">
                 <button

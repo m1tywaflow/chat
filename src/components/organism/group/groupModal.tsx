@@ -1045,12 +1045,12 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
               </div>
 
               {recentMedia.length > 0 && (
-                <div className="relative z-10 flex gap-1.5 px-4 py-3 border-b border-white/[0.08]">
+                <div className="relative z-10 grid grid-cols-5 gap-1.5 px-4 py-3 border-b border-white/[0.08]">
                   {recentMedia.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => setShowMedia(true)}
-                      className="gm-thumb relative flex-1 aspect-square min-w-0 rounded-lg overflow-hidden bg-[#1e2a3a] border border-white/[0.08] cursor-pointer"
+                      className="gm-thumb relative aspect-square min-w-0 rounded-lg overflow-hidden bg-[#1e2a3a] border border-white/[0.08] cursor-pointer"
                     >
                       <img
                         src={mediaThumb(item)}

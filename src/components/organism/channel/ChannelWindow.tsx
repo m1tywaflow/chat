@@ -598,6 +598,7 @@ export default function ChannelWindow({
               <ChannelPostCard
                 key={p.id}
                 post={p}
+                channelName={channel.name}
                 myUid={myUid}
                 isOwner={isOwner}
                 isPinned={channel.pinnedPostId === p.id}
