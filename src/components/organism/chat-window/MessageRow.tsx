@@ -39,6 +39,7 @@ export interface MessageRowProps {
     isPinned: boolean;
     isEditing: boolean;
     animate: boolean;
+    priority?: boolean;
     onReply: (m: any) => void;
     onOpenPicker: (e: React.MouseEvent, id: string) => void;
     onExpandPicker: () => void;
@@ -72,7 +73,6 @@ function sameMsg(a: any, b: any) {
     );
 }
 
-// Firestore отдаёт новые объекты на каждый снапшот — сравниваем по содержимому
 function areEqual(prev: MessageRowProps, next: MessageRowProps) {
     for (const key of Object.keys(next) as (keyof MessageRowProps)[]) {
         if (key === "m") {
@@ -95,6 +95,7 @@ const MessageRow = memo(function MessageRow({
     isPinned,
     isEditing,
     animate,
+    priority,
     onReply,
     onOpenPicker,
     onExpandPicker,
@@ -438,8 +439,8 @@ const MessageRow = memo(function MessageRow({
                                     key={token}
                                     onClick={() => onReact(m.id, token)}
                                     className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${mine
-                                            ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff]"
-                                            : "bg-black/50 border-white/20 text-zinc-300 hover:border-white/30"
+                                        ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff]"
+                                        : "bg-black/50 border-white/20 text-zinc-300 hover:border-white/30"
                                         }`}
                                 >
                                     <ReactionGlyph token={token} size={15} />
