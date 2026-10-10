@@ -58,5 +58,6 @@ export const AVATAR_DECORATIONS: {
     id: "katana",
     label: "Katana",
     url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1791660135/discord_avatar_decoration_animated_1791659964458-ezgif.com-remove-background_wue2dz.gif",
+    blendMode: "screen",
   },
 ];
