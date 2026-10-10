@@ -1,3 +1,1025 @@
+// "use client";
+
+// import { useEffect, useMemo, useState, useRef } from "react";
+// import { useChatStore } from "@/store/chat-store";
+// import { useChannelStore } from "@/store/channel-store";
+// import { useGroupStore } from "@/store/group-store";
+// import { useCurrentUser } from "@/hooks/useCurrentUser";
+// import {
+//   subscribeToUserChats,
+//   searchUsers,
+//   createOrGetChat,
+//   togglePinChat,
+// } from "@/lib/firestore/chats";
+// import {
+//   subscribeToMyChannels,
+//   togglePinChannel,
+//   unsubscribeFromChannel,
+//   deleteChannel,
+// } from "@/lib/firestore/channels";
+// import {
+//   togglePinGroup,
+//   leaveGroup,
+//   deleteGroup,
+// } from "@/lib/firestore/groups";
+// import { setConversationOrder } from "@/lib/firestore/order";
+// import {
+//   buildConversationItems,
+//   sortConversationItems,
+//   sortByRecency,
+//   ConversationItem,
+// } from "@/lib/mergeConversations";
+// import { Channel } from "@/types/channel";
+// import { Group } from "@/types/group";
+// import ChatItem from "./ChatItem";
+// import ChannelItem from "../channel/ChannelItem";
+// import GroupItem from "../group/groupItem";
+// import CreateChannelModal from "../channel/CreateChannelModal";
+// import ChannelSearchModal from "../channel/ChannelSearchModal";
+// import ProfileModal from "../profile-modal/ProfileModal";
+// import CreateGroupModal from "../group/createGroupModal";
+
+// import {
+//   Settings,
+//   Search,
+//   UserCircle,
+//   Pin,
+//   Trash2,
+//   CheckCheck,
+//   Megaphone,
+//   Plus,
+//   ChevronsRight,
+//   LogOut,
+//   Users,
+//   MessagesSquare,
+//   X,
+// } from "lucide-react";
+// import Link from "next/link";
+// import { db } from "@/lib/firebase";
+// import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+// import {
+//   useThemeStore,
+//   DEFAULT_DARK,
+//   DEFAULT_LIGHT,
+// } from "@/store/theme-store";
+// import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+// import { openConversation } from "@/lib/mergeConversations";
+// import SmoothImage from "@/components/UI/SmoothImage";
+// import { avatarThumb } from "@/lib/avatarThumb";
+// import SidebarSkeleton from "./SidebarSkeleton";
+
+// interface CtxMenu {
+//   type: "chat" | "channel" | "group";
+//   id: string;
+//   x: number;
+//   y: number;
+//   pinned: boolean;
+//   isOwner?: boolean;
+// }
+
+// interface DeleteConfirm {
+//   type: "chat" | "channel" | "group";
+//   id: string;
+//   isOwner?: boolean;
+// }
+
+// const SEARCH_BG = "#1E1830";
+// const SEARCH_BTN_BG = "#13101f";
+
+// export default function SideBar() {
+//   const chats = useChatStore((s) => s.chats);
+//   const setChats = useChatStore((s) => s.setChats);
+//   const setActiveChat = useChatStore((s) => s.setActiveChat);
+//   const activeChannelId = useChannelStore((s) => s.activeChannelId);
+//   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
+//   const activeGroupId = useGroupStore((s) => s.activeGroupId);
+//   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
+//   const groups = useGroupStore((s) => s.groups);
+//   const groupsLoaded = useGroupStore((s) => s.groupsLoaded);
+//   const initGroups = useGroupStore((s) => s.initGroups);
+//   const disposeGroups = useGroupStore((s) => s.disposeGroups);
+//   const { firebaseUser } = useCurrentUser();
+//   const { mode, customTheme } = useThemeStore();
+
+//   const theme =
+//     mode === "dark"
+//       ? DEFAULT_DARK
+//       : mode === "light"
+//         ? DEFAULT_LIGHT
+//         : customTheme;
+
+//   const [query, setQuery] = useState("");
+//   const [users, setUsers] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(false);
+//   const [showProfile, setShowProfile] = useState(false);
+//   const [pinnedChats, setPinnedChats] = useState<Record<string, boolean>>({});
+//   const [pinnedChannels, setPinnedChannels] = useState<Record<string, boolean>>(
+//     {}
+//   );
+//   const [pinnedGroups, setPinnedGroups] = useState<Record<string, boolean>>({});
+//   const [order, setOrder] = useState<Record<string, number>>({});
+//   const [myUsername, setMyUsername] = useState("");
+//   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
+//   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(
+//     null
+//   );
+//   const [myChannels, setMyChannels] = useState<Channel[]>([]);
+//   const [chatsLoadedFor, setChatsLoadedFor] = useState<string | null>(null);
+//   const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(null);
+//   const [userDocLoadedFor, setUserDocLoadedFor] = useState<string | null>(null);
+//   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
+//   const [createChannelOpen, setCreateChannelOpen] = useState(false);
+//   const [searchChannelOpen, setSearchChannelOpen] = useState(false);
+
+//   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+
+//   const [draggedId, setDraggedId] = useState<string | null>(null);
+//   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+//   const ctxRef = useRef<HTMLDivElement | null>(null);
+//   const channelMenuRef = useRef<HTMLDivElement | null>(null);
+
+//   useEffect(() => {
+//     if (typeof window.electronAPI?.onWindowVisibilityChange === "function") {
+//       window.electronAPI.onWindowVisibilityChange((visible) => {
+//         useWindowVisibilityStore.getState().setVisible(visible);
+//       });
+//     } else {
+//       console.warn("electronAPI.onWindowVisibilityChange missing", {
+//         hasElectronAPI: !!window.electronAPI,
+//         keys: window.electronAPI ? Object.keys(window.electronAPI) : null,
+//       });
+//     }
+//   }, []);
+
+//   useEffect(() => {
+//     if (!firebaseUser) return;
+//     const unsub = subscribeToUserChats(
+//       firebaseUser.uid,
+//       (nextChats) => {
+//         setChats(nextChats);
+//         setChatsLoadedFor(firebaseUser.uid);
+//       },
+//       (payload) => {
+//         const { activeChatId } = useChatStore.getState();
+
+//         const isThisChatOpen = activeChatId === payload.chatId;
+
+//         const isWindowVisible = useWindowVisibilityStore.getState().isVisible;
+
+//         if (isThisChatOpen && isWindowVisible) {
+//           return;
+//         }
+
+//         window.electronAPI?.notifyNewMessage({
+//           title: payload.senderName,
+//           body: payload.text,
+//           chatId: payload.chatId,
+//         });
+//       }
+//     );
+//     return unsub;
+//   }, [firebaseUser, setChats]);
+
+//   useEffect(() => {
+//     if (!firebaseUser) return;
+//     const unsub = subscribeToMyChannels(
+//       firebaseUser.uid,
+//       setMyChannels,
+//       () => setChannelsLoadedFor(firebaseUser.uid)
+//     );
+//     return unsub;
+//   }, [firebaseUser]);
+
+//   useEffect(() => {
+//     if (!firebaseUser) return;
+//     initGroups(firebaseUser.uid);
+//     return () => disposeGroups();
+//   }, [firebaseUser, initGroups, disposeGroups]);
+
+//   useEffect(() => {
+//     if (!firebaseUser) return;
+//     const unsub = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
+//       const data = snap.data();
+//       setPinnedChats(data?.pinnedChats || {});
+//       setPinnedChannels(data?.pinnedChannels || {});
+//       setPinnedGroups(data?.pinnedGroups || {});
+//       setOrder(data?.order || {});
+//       setMyUsername(data?.username || "");
+//       setUserDocLoadedFor(firebaseUser.uid);
+//     });
+//     return () => unsub();
+//   }, [firebaseUser]);
+
+//   useEffect(() => {
+//     if (!query.trim()) {
+//       setUsers([]);
+//       return;
+//     }
+//     const timeout = setTimeout(async () => {
+//       setLoading(true);
+//       try {
+//         const res = await searchUsers(query.trim());
+//         setUsers(res.filter((u) => u.id !== firebaseUser?.uid));
+//       } finally {
+//         setLoading(false);
+//       }
+//     }, 300);
+//     return () => clearTimeout(timeout);
+//   }, [query, firebaseUser]);
+
+//   useEffect(() => {
+//     if (!ctxMenu) return;
+//     function handleClick() {
+//       setCtxMenu(null);
+//     }
+//     window.addEventListener("click", handleClick);
+//     return () => window.removeEventListener("click", handleClick);
+//   }, [ctxMenu]);
+
+//   useEffect(() => {
+//     if (!deleteConfirm) return;
+//     const handler = (e: KeyboardEvent) => {
+//       if (e.key === "Escape") setDeleteConfirm(null);
+//     };
+//     window.addEventListener("keydown", handler);
+//     return () => window.removeEventListener("keydown", handler);
+//   }, [deleteConfirm]);
+
+//   useEffect(() => {
+//     if (!channelMenuOpen) return;
+//     function handleClick(e: MouseEvent) {
+//       if (
+//         channelMenuRef.current &&
+//         !channelMenuRef.current.contains(e.target as Node)
+//       )
+//         setChannelMenuOpen(false);
+//     }
+//     window.addEventListener("click", handleClick);
+//     return () => window.removeEventListener("click", handleClick);
+//   }, [channelMenuOpen]);
+
+//   useEffect(() => {
+//     window.electronAPI?.onOpenChat((chatId: string) => {
+//       setActiveChat(chatId);
+//     });
+//   }, [setActiveChat]);
+
+//   async function openChat(otherUid: string) {
+//     if (!firebaseUser) return;
+//     const chatId = await createOrGetChat(firebaseUser.uid, otherUid);
+//     openConversation("chat", chatId);
+//     setQuery("");
+//     setUsers([]);
+//   }
+
+//   function handleCtxMenu(
+//     e: React.MouseEvent,
+//     type: "chat" | "channel" | "group",
+//     id: string,
+//     pinned: boolean,
+//     isOwner?: boolean
+//   ) {
+//     e.preventDefault();
+//     setCtxMenu({ type, id, x: e.clientX, y: e.clientY, pinned, isOwner });
+//   }
+
+//   async function handlePin() {
+//     if (!ctxMenu || !firebaseUser) return;
+//     if (ctxMenu.type === "chat") {
+//       await togglePinChat(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
+//     } else if (ctxMenu.type === "channel") {
+//       await togglePinChannel(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
+//     } else {
+//       await togglePinGroup(firebaseUser.uid, ctxMenu.id, !ctxMenu.pinned);
+//     }
+//     setCtxMenu(null);
+//   }
+
+//   async function handleMarkRead(chatId: string) {
+//     if (!firebaseUser) return;
+//     await updateDoc(doc(db, "chats", chatId), {
+//       [`unreadCount.${firebaseUser.uid}`]: 0,
+//     });
+//     setCtxMenu(null);
+//   }
+
+//   async function confirmDelete() {
+//     if (!deleteConfirm || !firebaseUser) return;
+
+//     if (deleteConfirm.type === "chat") {
+//       await updateDoc(doc(db, "chats", deleteConfirm.id), {
+//         [`deleted.${firebaseUser.uid}`]: true,
+//       });
+//       useChatStore.getState().setActiveChat(null);
+//     } else if (deleteConfirm.type === "channel") {
+//       if (deleteConfirm.isOwner) {
+//         await deleteChannel(deleteConfirm.id);
+//       } else {
+//         await unsubscribeFromChannel(deleteConfirm.id, firebaseUser.uid);
+//       }
+//       if (activeChannelId === deleteConfirm.id) setActiveChannel(null);
+//     } else {
+//       if (deleteConfirm.isOwner) {
+//         await deleteGroup(deleteConfirm.id);
+//       } else {
+//         await leaveGroup(deleteConfirm.id, firebaseUser.uid);
+//       }
+//       if (activeGroupId === deleteConfirm.id) setActiveGroup(null);
+//     }
+
+//     setDeleteConfirm(null);
+//   }
+
+//   async function handleDrop(bucketIds: string[]) {
+//     if (
+//       !draggedId ||
+//       !dragOverId ||
+//       !firebaseUser ||
+//       draggedId === dragOverId
+//     ) {
+//       setDraggedId(null);
+//       setDragOverId(null);
+//       return;
+//     }
+//     const ids = [...bucketIds];
+//     const from = ids.indexOf(draggedId);
+//     const to = ids.indexOf(dragOverId);
+//     setDraggedId(null);
+//     setDragOverId(null);
+//     if (from === -1 || to === -1) return;
+//     ids.splice(from, 1);
+//     ids.splice(to, 0, draggedId);
+//     await setConversationOrder(firebaseUser.uid, ids);
+//   }
+
+//   const { pinnedList, mergedList } = useMemo(() => {
+//     const visibleChats = chats.filter((chat) => !chat.deleted);
+//     const allItems = buildConversationItems(visibleChats, myChannels, groups);
+//     const isPinned = (item: ConversationItem) =>
+//       item.type === "chat"
+//         ? pinnedChats[item.id]
+//         : item.type === "channel"
+//           ? pinnedChannels[item.id]
+//           : pinnedGroups[item.id];
+
+//     return {
+//       pinnedList: sortConversationItems(allItems.filter(isPinned), order),
+//       mergedList: sortByRecency(allItems.filter((item) => !isPinned(item))),
+//     };
+//   }, [chats, groups, myChannels, order, pinnedChannels, pinnedChats, pinnedGroups]);
+
+//   const chatsLoaded = chatsLoadedFor === firebaseUser?.uid;
+//   const channelsLoaded = channelsLoadedFor === firebaseUser?.uid;
+//   const userDocLoaded = userDocLoadedFor === firebaseUser?.uid;
+//   const ready = chatsLoaded && channelsLoaded && groupsLoaded && userDocLoaded;
+
+//   const accent = "#522fb7";
+//   const border = mode === "light" ? "#d1d5db" : "#1F2A37";
+//   const hoverBg = mode === "light" ? "#e5e7eb" : "rgba(255,255,255,0.04)";
+//   const subText = mode === "light" ? "#6b7280" : "#a1a1aa";
+//   const menuText = mode === "light" ? "#374151" : "#d4d4d8";
+//   const menuDivider = mode === "light" ? "#e5e7eb" : "rgba(255,255,255,0.06)";
+
+//   function renderItem(
+//     item: ConversationItem,
+//     pinned: boolean,
+//     bucket: ConversationItem[]
+//   ) {
+//     const isChannelOwner =
+//       item.type === "channel" &&
+//       (item.data as Channel).ownerId === firebaseUser?.uid;
+
+//     const isGroupOwner =
+//       item.type === "group" &&
+//       (item.data as Group).ownerId === firebaseUser?.uid;
+
+//     return (
+//       <div
+//         key={item.id}
+//         draggable={pinned}
+//         onDragStart={() => pinned && setDraggedId(item.id)}
+//         onDragOver={(e) => {
+//           if (!pinned) return;
+//           e.preventDefault();
+//           if (dragOverId !== item.id) setDragOverId(item.id);
+//         }}
+//         onDrop={() => pinned && handleDrop(bucket.map((i) => i.id))}
+//         onDragEnd={() => {
+//           setDraggedId(null);
+//           setDragOverId(null);
+//         }}
+//         onContextMenu={(e) =>
+//           item.type === "chat"
+//             ? handleCtxMenu(e, "chat", item.id, pinned)
+//             : item.type === "channel"
+//               ? handleCtxMenu(e, "channel", item.id, pinned, isChannelOwner)
+//               : handleCtxMenu(e, "group", item.id, pinned, isGroupOwner)
+//         }
+//         className="relative"
+//         style={{
+//           opacity: draggedId === item.id ? 0.4 : 1,
+//           boxShadow:
+//             dragOverId === item.id && draggedId !== item.id
+//               ? "inset 0 2px 0 0 #A78BFA"
+//               : undefined,
+//         }}
+//       >
+//         {item.type === "chat" ? (
+//           <ChatItem chat={item.data} pinned={pinned} />
+//         ) : item.type === "channel" ? (
+//           <ChannelItem channel={item.data as Channel} pinned={pinned} />
+//         ) : (
+//           <GroupItem group={item.data as Group} pinned={pinned} />
+//         )}
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <>
+//       <style>{`
+//         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+//         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+//         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
+//         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
+//         .sidebar-search-box {
+//           border: 1px solid rgba(167,139,250,0.12);
+//           box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+//           transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+//         }
+//         .sidebar-search-box:hover {
+//           border-color: rgba(167,139,250,0.22);
+//         }
+//         .sidebar-search-box:focus-within {
+//           border-color: rgba(167,139,250,0.55);
+//           box-shadow: inset 0 1px 2px rgba(0,0,0,0.25), 0 0 0 3px rgba(82,47,183,0.18);
+//           background: #221a3a;
+//         }
+//       `}</style>
+
+//       <section
+//         className="sidebar-entrance w-full h-full flex flex-col overflow-x-hidden border-r transition-colors duration-200 relative"
+//         style={{
+//           background: theme.sideBarBg,
+//           borderColor: border,
+//           color: theme.text,
+//         }}
+//       >
+//         {/* search & actions */}
+//         <div
+//           className="px-4 pt-4 pb-3 border-b"
+//           style={{ borderColor: "rgba(36,29,87,0.6)" }}
+//         >
+//           <div className="relative">
+//             <div className="sidebar-search-box relative flex items-center w-full h-11 rounded-[15px]">
+//               <Search
+//                 size={17}
+//                 className="absolute left-3.5 pointer-events-none"
+//                 style={{ color: "#8B85A0" }}
+//               />
+
+//               <input
+//                 value={query}
+//                 onChange={(e) => setQuery(e.target.value)}
+//                 placeholder="Search users..."
+//                 className="w-full h-full pl-10 pr-10 rounded-[15px] outline-none bg-transparent text-[13.5px]"
+//                 style={{ color: "#F3F1FA" }}
+//               />
+
+//               {query ? (
+//                 <button
+//                   onClick={() => setQuery("")}
+//                   className="absolute right-3 flex h-5 w-5 items-center justify-center rounded-full text-[#8B85A0] hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+//                 >
+//                   <X size={13} />
+//                 </button>
+//               ) : (
+//                 <div
+//                   className="absolute right-3 pointer-events-none flex items-center justify-center"
+//                   style={{ color: "#77718D" }}
+//                 >
+//                   <UserCircle size={16} strokeWidth={1.7} />
+//                 </div>
+//               )}
+//             </div>
+
+//             {/* New menu */}
+//             <div className="relative mt-2.5" ref={channelMenuRef}>
+//               <button
+//                 onClick={() => setChannelMenuOpen((v) => !v)}
+//                 className="group w-full h-10 flex items-center justify-between rounded-[13px] px-3.5 border transition-all duration-200 cursor-pointer"
+//                 style={{
+//                   background: channelMenuOpen
+//                     ? "rgba(82,47,183,0.14)"
+//                     : "rgba(255,255,255,0.025)",
+//                   borderColor: channelMenuOpen
+//                     ? "rgba(139,108,255,0.28)"
+//                     : "rgba(255,255,255,0.06)",
+//                 }}
+//               >
+//                 <span className="flex items-center gap-2.5">
+//                   <span
+//                     className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors"
+//                     style={{
+//                       background: "rgba(139,108,255,0.12)",
+//                       color: "#9B83FF",
+//                     }}
+//                   >
+//                     <Plus size={14} />
+//                   </span>
+
+//                   <span
+//                     className="text-[13px] font-medium"
+//                     style={{ color: "#D9D5E7" }}
+//                   >
+//                     New
+//                   </span>
+//                 </span>
+
+//                 <ChevronsRight
+//                   size={14}
+//                   className={`transition-transform duration-200 ${channelMenuOpen ? "rotate-90" : ""
+//                     }`}
+//                   style={{ color: "#716B83" }}
+//                 />
+//               </button>
+
+//               {channelMenuOpen && (
+//                 <div
+//                   className="absolute left-0 right-0 top-[45px] rounded-[14px] border overflow-hidden z-50 p-1.5"
+//                   style={{
+//                     background: mode === "light" ? "#ffffff" : "#11101a",
+//                     borderColor:
+//                       mode === "light"
+//                         ? "#e5e7eb"
+//                         : "rgba(255,255,255,0.08)",
+//                     boxShadow:
+//                       "0 18px 45px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25)",
+//                   }}
+//                 >
+//                   <button
+//                     onClick={() => {
+//                       setCreateChannelOpen(true);
+//                       setChannelMenuOpen(false);
+//                     }}
+//                     className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
+//                     style={{ color: menuText }}
+//                     onMouseEnter={(e) =>
+//                       (e.currentTarget.style.background = hoverBg)
+//                     }
+//                     onMouseLeave={(e) =>
+//                       (e.currentTarget.style.background = "transparent")
+//                     }
+//                   >
+//                     <span
+//                       className="flex h-8 w-8 items-center justify-center rounded-lg"
+//                       style={{
+//                         background: "rgba(139,108,255,0.11)",
+//                         color: "#9B83FF",
+//                       }}
+//                     >
+//                       <Megaphone size={15} />
+//                     </span>
+
+//                     <span className="flex flex-col">
+//                       <span className="text-[13px] font-medium">
+//                         New channel
+//                       </span>
+//                       <span className="text-[11px] text-zinc-500">
+//                         Broadcast to subscribers
+//                       </span>
+//                     </span>
+//                   </button>
+
+//                   <button
+//                     onClick={() => {
+//                       setCreateGroupOpen(true);
+//                       setChannelMenuOpen(false);
+//                     }}
+//                     className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
+//                     style={{ color: menuText }}
+//                     onMouseEnter={(e) =>
+//                       (e.currentTarget.style.background = hoverBg)
+//                     }
+//                     onMouseLeave={(e) =>
+//                       (e.currentTarget.style.background = "transparent")
+//                     }
+//                   >
+//                     <span
+//                       className="flex h-8 w-8 items-center justify-center rounded-lg"
+//                       style={{
+//                         background: "rgba(139,108,255,0.11)",
+//                         color: "#9B83FF",
+//                       }}
+//                     >
+//                       <Users size={15} />
+//                     </span>
+
+//                     <span className="flex flex-col">
+//                       <span className="text-[13px] font-medium">
+//                         New group
+//                       </span>
+//                       <span className="text-[11px] text-zinc-500">
+//                         Chat with multiple people
+//                       </span>
+//                     </span>
+//                   </button>
+
+//                   <div
+//                     className="my-1.5 h-px"
+//                     style={{
+//                       background:
+//                         mode === "light"
+//                           ? "#e5e7eb"
+//                           : "rgba(255,255,255,0.06)",
+//                     }}
+//                   />
+
+//                   <button
+//                     onClick={() => {
+//                       setSearchChannelOpen(true);
+//                       setChannelMenuOpen(false);
+//                     }}
+//                     className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
+//                     style={{ color: menuText }}
+//                     onMouseEnter={(e) =>
+//                       (e.currentTarget.style.background = hoverBg)
+//                     }
+//                     onMouseLeave={(e) =>
+//                       (e.currentTarget.style.background = "transparent")
+//                     }
+//                   >
+//                     <span
+//                       className="flex h-8 w-8 items-center justify-center rounded-lg"
+//                       style={{
+//                         background: "rgba(255,255,255,0.04)",
+//                         color: "#8B85A0",
+//                       }}
+//                     >
+//                       <Search size={15} />
+//                     </span>
+
+//                     <span className="flex flex-col">
+//                       <span className="text-[13px] font-medium">
+//                         Find a channel
+//                       </span>
+//                       <span className="text-[11px] text-zinc-500">
+//                         Discover public channels
+//                       </span>
+//                     </span>
+//                   </button>
+//                 </div>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+
+//         {query && (
+//           <div
+//             className="border-b transition-colors duration-200"
+//             style={{ borderColor: border }}
+//           >
+//             {loading && (
+//               <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
+//                 Searching...
+//               </p>
+//             )}
+//             {!loading &&
+//               users.map((u) => (
+//                 <button
+//                   key={u.id}
+//                   onClick={() => openChat(u.id)}
+//                   className="w-full flex items-center gap-3 p-3 transition-colors text-left"
+//                   style={{ color: theme.text }}
+//                   onMouseEnter={(e) =>
+//                     (e.currentTarget.style.background = hoverBg)
+//                   }
+//                   onMouseLeave={(e) =>
+//                     (e.currentTarget.style.background = "transparent")
+//                   }
+//                 >
+//                   {u.avatar ? (
+//                     <SmoothImage
+//                       src={avatarThumb(u.avatar, 72)}
+//                       alt={u.username}
+//                       width={36}
+//                       height={36}
+//                       className="w-9 h-9 rounded-full object-cover"
+//                     />
+//                   ) : (
+//                     <div
+//                       className="w-9 h-9 rounded-full flex items-center justify-center text-black font-semibold"
+//                       style={{ background: accent }}
+//                     >
+//                       {u.username?.[0]?.toUpperCase()}
+//                     </div>
+//                   )}
+//                   <span className="text-sm">{u.username}</span>
+//                 </button>
+//               ))}
+//             {!loading && users.length === 0 && (
+//               <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
+//                 No users found
+//               </p>
+//             )}
+//           </div>
+//         )}
+
+//         {/* contacts list — same background as the rest of the sidebar */}
+//         <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
+//           {!ready ? (
+//             <SidebarSkeleton />
+//           ) : pinnedList.length === 0 && mergedList.length === 0 ? (
+//             <div className="flex flex-col items-center justify-center gap-2.5 h-full text-center px-6 pb-10">
+//               <div
+//                 className="w-11 h-11 rounded-2xl flex items-center justify-center"
+//                 style={{ background: `${accent}18` }}
+//               >
+//                 <MessagesSquare size={18} style={{ color: accent }} />
+//               </div>
+//               <p className="text-sm" style={{ color: subText }}>
+//                 No chats yet. Search users above to start one.
+//               </p>
+//             </div>
+//           ) : (
+//             <div>
+//               {pinnedList.map((item) => renderItem(item, true, pinnedList))}
+//               {mergedList.map((item) => renderItem(item, false, mergedList))}
+//             </div>
+//           )}
+//         </div>
+
+//         {/* footer */}
+//         <div
+//           className="pt-3 pb-2 px-0 space-y-2 border-t"
+//           style={{ borderColor: "rgba(36,29,87,0.5)" }}
+//         >
+//           <Link
+//             href="/settings"
+//             className="group flex h-12 items-center gap-3 rounded-2xl border border-white/[0.05]
+//                bg-white/[0.015] px-4 transition-all duration-200"
+//             style={{ color: theme.text }}
+//             onMouseEnter={(e) => {
+//               e.currentTarget.style.background = hoverBg;
+//               e.currentTarget.style.borderColor = accent + "40";
+//             }}
+//             onMouseLeave={(e) => {
+//               e.currentTarget.style.background = "rgba(255,255,255,0.015)";
+//               e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+//             }}
+//           >
+//             <div
+//               className="flex h-8 w-8 items-center justify-center rounded-xl"
+//               style={{
+//                 background: `${accent}18`,
+//               }}
+//             >
+//               <Settings size={17} style={{ color: accent }} />
+//             </div>
+
+//             <span className="text-[14px] font-medium">Settings</span>
+//           </Link>
+
+//           <button
+//             onClick={() => setShowProfile(true)}
+//             className="group flex h-12 w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.015] px-4 text-left transition-all duration-200"
+//             style={{ color: theme.text }}
+//             onMouseEnter={(e) => {
+//               e.currentTarget.style.background = hoverBg;
+//               e.currentTarget.style.borderColor = accent + "40";
+//             }}
+//             onMouseLeave={(e) => {
+//               e.currentTarget.style.background = "rgba(255,255,255,0.015)";
+//               e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+//             }}
+//           >
+//             <div
+//               className="flex h-8 w-8 items-center justify-center rounded-xl"
+//               style={{
+//                 background: `${accent}18`,
+//               }}
+//             >
+//               <UserCircle size={17} style={{ color: accent }} />
+//             </div>
+
+//             <span className="text-[14px] font-medium">Your profile</span>
+//           </button>
+//         </div>
+//       </section>
+
+//       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+
+//       {createChannelOpen && firebaseUser && (
+//         <CreateChannelModal
+//           uid={firebaseUser.uid}
+//           username={myUsername}
+//           onClose={() => setCreateChannelOpen(false)}
+//           onCreated={(channelId) => setActiveChannel(channelId)}
+//         />
+//       )}
+
+//       {createGroupOpen && firebaseUser && (
+//         <CreateGroupModal
+//           uid={firebaseUser.uid}
+//           username={myUsername}
+//           contacts={chats.map((c) => ({
+//             uid: c.participant.id,
+//             username: c.participant.username,
+//             avatarUrl: c.participant.avatar,
+//           }))}
+//           onClose={() => setCreateGroupOpen(false)}
+//           onCreated={(groupId) => {
+//             setActiveGroup(groupId);
+//             setCreateGroupOpen(false);
+//           }}
+//         />
+//       )}
+
+//       {searchChannelOpen && firebaseUser && (
+//         <ChannelSearchModal
+//           uid={firebaseUser.uid}
+//           myChannelIds={new Set(myChannels.map((c) => c.id))}
+//           onClose={() => setSearchChannelOpen(false)}
+//           onOpenChannel={(channelId) => {
+//             setActiveChannel(channelId);
+//             setSearchChannelOpen(false);
+//           }}
+//         />
+//       )}
+
+//       {/* context menu */}
+//       {ctxMenu && (
+//         <div
+//           ref={ctxRef}
+//           style={{
+//             position: "fixed",
+//             top: ctxMenu.y,
+//             left: ctxMenu.x,
+//             zIndex: 999,
+//             background: mode === "light" ? "#ffffff" : "#151D28",
+//           }}
+//           className="min-w-[168px] rounded-xl border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden"
+//           onClick={(e) => e.stopPropagation()}
+//         >
+//           <button
+//             onClick={handlePin}
+//             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+//             style={{ color: menuText }}
+//             onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+//             onMouseLeave={(e) =>
+//               (e.currentTarget.style.background = "transparent")
+//             }
+//           >
+//             <Pin
+//               size={13}
+//               style={{ color: ctxMenu.pinned ? accent : "inherit" }}
+//             />
+//             {ctxMenu.pinned
+//               ? ctxMenu.type === "chat"
+//                 ? "Unpin chat"
+//                 : ctxMenu.type === "channel"
+//                   ? "Unpin channel"
+//                   : "Unpin group"
+//               : ctxMenu.type === "chat"
+//                 ? "Pin chat"
+//                 : ctxMenu.type === "channel"
+//                   ? "Pin channel"
+//                   : "Pin group"}
+//           </button>
+
+//           {ctxMenu.type === "chat" && (
+//             <button
+//               onClick={() => handleMarkRead(ctxMenu.id)}
+//               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+//               style={{ color: menuText }}
+//               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+//               onMouseLeave={(e) =>
+//                 (e.currentTarget.style.background = "transparent")
+//               }
+//             >
+//               <CheckCheck size={13} />
+//               Mark as read
+//             </button>
+//           )}
+
+//           <div
+//             style={{ height: 1, background: menuDivider, margin: "2px 0" }}
+//           />
+
+//           <button
+//             onClick={() => {
+//               setDeleteConfirm({
+//                 type: ctxMenu.type,
+//                 id: ctxMenu.id,
+//                 isOwner: ctxMenu.isOwner,
+//               });
+//               setCtxMenu(null);
+//             }}
+//             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer text-red-400"
+//             onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+//             onMouseLeave={(e) =>
+//               (e.currentTarget.style.background = "transparent")
+//             }
+//           >
+//             {ctxMenu.type === "chat" ? (
+//               <>
+//                 <Trash2 size={13} className="text-red-400/70" />
+//                 Delete chat
+//               </>
+//             ) : ctxMenu.type === "channel" ? (
+//               ctxMenu.isOwner ? (
+//                 <>
+//                   <Trash2 size={13} className="text-red-400/70" />
+//                   Delete channel
+//                 </>
+//               ) : (
+//                 <>
+//                   <LogOut size={13} className="text-red-400/70" />
+//                   Leave channel
+//                 </>
+//               )
+//             ) : ctxMenu.isOwner ? (
+//               <>
+//                 <Trash2 size={13} className="text-red-400/70" />
+//                 Delete group
+//               </>
+//             ) : (
+//               <>
+//                 <LogOut size={13} className="text-red-400/70" />
+//                 Leave group
+//               </>
+//             )}
+//           </button>
+//         </div>
+//       )}
+//       {deleteConfirm && (
+//         <div
+//           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+//           onClick={() => setDeleteConfirm(null)}
+//         >
+//           <div
+//             className="w-80 rounded-2xl bg-gray-900 border border-white/10 shadow-2xl shadow-black/60 overflow-hidden"
+//             onClick={(e) => e.stopPropagation()}
+//           >
+//             <div className="px-6 pt-6 pb-4">
+//               <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+//                 {(deleteConfirm.type === "channel" ||
+//                   deleteConfirm.type === "group") &&
+//                   !deleteConfirm.isOwner ? (
+//                   <LogOut size={18} className="text-red-400" />
+//                 ) : (
+//                   <Trash2 size={18} className="text-red-400" />
+//                 )}
+//               </div>
+//               <h3 className="text-[15px] font-semibold text-white mb-1">
+//                 {deleteConfirm.type === "chat"
+//                   ? "Delete chat?"
+//                   : deleteConfirm.type === "channel"
+//                     ? deleteConfirm.isOwner
+//                       ? "Delete channel?"
+//                       : "Leave channel?"
+//                     : deleteConfirm.isOwner
+//                       ? "Delete group?"
+//                       : "Leave group?"}
+//               </h3>
+//               <p className="text-[13px] text-zinc-400 leading-relaxed">
+//                 {deleteConfirm.type === "chat"
+//                   ? "This will permanently delete the entire conversation. This action cannot be undone."
+//                   : deleteConfirm.type === "channel"
+//                     ? deleteConfirm.isOwner
+//                       ? "This will permanently delete the channel for all subscribers. This action cannot be undone."
+//                       : "You will stop receiving posts from this channel. You can subscribe again anytime."
+//                     : deleteConfirm.isOwner
+//                       ? "This will permanently delete the group for all members. This action cannot be undone."
+//                       : "You will stop receiving messages from this group. You'll need a new invite to rejoin."}
+//               </p>
+//             </div>
+//             <div className="flex border-t border-white/[0.06]">
+//               <button
+//                 onClick={() => setDeleteConfirm(null)}
+//                 className="flex-1 py-3.5 text-sm text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors font-medium border-r border-white/[0.06] cursor-pointer"
+//               >
+//                 Cancel
+//               </button>
+//               <button
+//                 onClick={confirmDelete}
+//                 className="flex-1 py-3.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors font-semibold cursor-pointer"
+//               >
+//                 {(deleteConfirm.type === "channel" ||
+//                   deleteConfirm.type === "group") &&
+//                   !deleteConfirm.isOwner
+//                   ? "Leave"
+//                   : "Delete"}
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+//     </>
+//   );
+// }
+
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
@@ -38,6 +1060,7 @@ import CreateChannelModal from "../channel/CreateChannelModal";
 import ChannelSearchModal from "../channel/ChannelSearchModal";
 import ProfileModal from "../profile-modal/ProfileModal";
 import CreateGroupModal from "../group/createGroupModal";
+import UserProfileModal from "../profile-modal/UserProfileModal";
 import {
   Settings,
   Search,
@@ -55,7 +1078,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import {
   useThemeStore,
   DEFAULT_DARK,
@@ -81,9 +1104,6 @@ interface DeleteConfirm {
   id: string;
   isOwner?: boolean;
 }
-
-const SEARCH_BG = "#1E1830";
-const SEARCH_BTN_BG = "#13101f";
 
 export default function SideBar() {
   const chats = useChatStore((s) => s.chats);
@@ -124,16 +1144,19 @@ export default function SideBar() {
   );
   const [myChannels, setMyChannels] = useState<Channel[]>([]);
   const [chatsLoadedFor, setChatsLoadedFor] = useState<string | null>(null);
-  const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(null);
+  const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(
+    null
+  );
   const [userDocLoadedFor, setUserDocLoadedFor] = useState<string | null>(null);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [searchChannelOpen, setSearchChannelOpen] = useState(false);
-
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const [profileUser, setProfileUser] = useState<any | null>(null);
 
   const ctxRef = useRef<HTMLDivElement | null>(null);
   const channelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -161,9 +1184,7 @@ export default function SideBar() {
       },
       (payload) => {
         const { activeChatId } = useChatStore.getState();
-
         const isThisChatOpen = activeChatId === payload.chatId;
-
         const isWindowVisible = useWindowVisibilityStore.getState().isVisible;
 
         if (isThisChatOpen && isWindowVisible) {
@@ -270,6 +1291,17 @@ export default function SideBar() {
     openConversation("chat", chatId);
     setQuery("");
     setUsers([]);
+    setProfileUser(null);
+  }
+
+  async function openUserProfile(u: any) {
+    setProfileUser(u);
+    try {
+      const snap = await getDoc(doc(db, "users", u.id));
+      if (snap.exists()) setProfileUser({ id: u.id, ...snap.data() });
+    } catch {
+      // оставляем то, что вернул searchUsers
+    }
   }
 
   function handleCtxMenu(
@@ -366,7 +1398,15 @@ export default function SideBar() {
       pinnedList: sortConversationItems(allItems.filter(isPinned), order),
       mergedList: sortByRecency(allItems.filter((item) => !isPinned(item))),
     };
-  }, [chats, groups, myChannels, order, pinnedChannels, pinnedChats, pinnedGroups]);
+  }, [
+    chats,
+    groups,
+    myChannels,
+    order,
+    pinnedChannels,
+    pinnedChats,
+    pinnedGroups,
+  ]);
 
   const chatsLoaded = chatsLoadedFor === firebaseUser?.uid;
   const channelsLoaded = channelsLoadedFor === firebaseUser?.uid;
@@ -688,7 +1728,7 @@ export default function SideBar() {
               users.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => openChat(u.id)}
+                  onClick={() => openUserProfile(u)}
                   className="w-full flex items-center gap-3 p-3 transition-colors text-left"
                   style={{ color: theme.text }}
                   onMouseEnter={(e) =>
@@ -725,7 +1765,7 @@ export default function SideBar() {
           </div>
         )}
 
-        {/* contacts list — same background as the rest of the sidebar */}
+        {/* contacts list */}
         <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
           {!ready ? (
             <SidebarSkeleton />
@@ -770,9 +1810,7 @@ export default function SideBar() {
           >
             <div
               className="flex h-8 w-8 items-center justify-center rounded-xl"
-              style={{
-                background: `${accent}18`,
-              }}
+              style={{ background: `${accent}18` }}
             >
               <Settings size={17} style={{ color: accent }} />
             </div>
@@ -795,9 +1833,7 @@ export default function SideBar() {
           >
             <div
               className="flex h-8 w-8 items-center justify-center rounded-xl"
-              style={{
-                background: `${accent}18`,
-              }}
+              style={{ background: `${accent}18` }}
             >
               <UserCircle size={17} style={{ color: accent }} />
             </div>
@@ -844,6 +1880,14 @@ export default function SideBar() {
             setActiveChannel(channelId);
             setSearchChannelOpen(false);
           }}
+        />
+      )}
+
+      {profileUser && (
+        <UserProfileModal
+          user={profileUser}
+          onClose={() => setProfileUser(null)}
+          onWrite={() => openChat(profileUser.id)}
         />
       )}
 
@@ -952,6 +1996,7 @@ export default function SideBar() {
           </button>
         </div>
       )}
+
       {deleteConfirm && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
