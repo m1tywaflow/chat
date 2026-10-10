@@ -49,4 +49,14 @@ export const AVATAR_DECORATIONS: {
     url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1782685475/bad1897627cd2df7030108a815a8f295-removebg-preview_2_heuhsw.png",
     // blendMode: "multiply",
   },
+  {
+    id: "white-skulls",
+    label: "Skulls",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1791659704/discord_avatar_decoration_animated_1791659558278-ezgif.com-remove-background_offleg.gif",
+  },
+  {
+    id: "katana",
+    label: "Katana",
+    url: "https://res.cloudinary.com/dgylh67ms/image/upload/v1791660135/discord_avatar_decoration_animated_1791659964458-ezgif.com-remove-background_wue2dz.gif",
+  },
 ];
