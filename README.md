@@ -241,7 +241,7 @@ npm run dist
 
 <div align="center">
 
-<!-- Add screenshots here -->
+
 
 <img src="public/screenshots/interface.png" width="800" alt="Nexo Chat" />
 
