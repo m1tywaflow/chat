@@ -68,6 +68,7 @@ import "./GroupWindow.css";
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 const GROUP_GAP_MS = 5 * 60 * 1000;
+const PENDING_LOOKBACK = 50;
 const EMPTY_MESSAGES: any[] = [];
 
 interface MsgMenuState {
@@ -92,20 +93,50 @@ function sameList(a: string[], b: string[]) {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
+function sameValue(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+  if (typeof a.isEqual === "function") {
+    try {
+      return Boolean(a.isEqual(b));
+    } catch {
+      return false;
+    }
+  }
+  if (typeof a.toMillis === "function" && typeof b.toMillis === "function") {
+    return a.toMillis() === b.toMillis();
+  }
+  if (Array.isArray(a)) {
+    return (
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((v, i) => sameValue(v, b[i]))
+    );
+  }
+  if (Array.isArray(b)) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => sameValue(a[k], b[k]));
+}
+
 export default function GroupWindow() {
   const groupId = useGroupStore((s) => s.activeGroupId);
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
-  const groups = useGroupStore((s) => s.groups);
-  const group = groups.find((g) => g.id === groupId) || null;
+  const group = useGroupStore(
+    (s) => s.groups.find((g) => g.id === s.activeGroupId) ?? null
+  );
   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
-  // uid всех текущих участников группы (members может быть массивом строк или объектов)
-  const memberIds = useMemo<string[]>(() => {
+  const memberIdSet = useMemo<Set<string>>(() => {
     const members: any = group?.members;
-    if (!Array.isArray(members)) return [];
-    return members
-      .map((x: any) => (typeof x === "string" ? x : x?.uid ?? x?.id))
-      .filter(Boolean);
+    if (!Array.isArray(members)) return new Set<string>();
+    return new Set<string>(
+      members
+        .map((x: any) => (typeof x === "string" ? x : x?.uid ?? x?.id))
+        .filter(Boolean)
+    );
   }, [group?.members]);
 
   const [messages, setMessages] = useState<any[]>([]);
@@ -244,14 +275,27 @@ export default function GroupWindow() {
       }
 
       setHasMoreMessages(hasMore);
-      setMessages((previous) => [
-        ...previous.filter(
+      setMessages((previous) => {
+        const previousById = new Map<string, any>();
+        previous.forEach((message) => previousById.set(message.id, message));
+        const kept = previous.filter(
           (message) =>
             olderMessageIdsRef.current.has(message.id) &&
             !nextIds.has(message.id)
-        ),
-        ...msgs,
-      ]);
+        );
+        const live = msgs.map((message) => {
+          const old = previousById.get(message.id);
+          return old && sameValue(old, message) ? old : message;
+        });
+        const merged = [...kept, ...live];
+        if (
+          merged.length === previous.length &&
+          merged.every((message, index) => message === previous[index])
+        ) {
+          return previous;
+        }
+        return merged;
+      });
       setMessagesGroupId(groupId);
 
       setPendingMessages((previous) => {
@@ -718,45 +762,56 @@ export default function GroupWindow() {
   const rows = useMemo<Row[]>(() => {
     const confirmed = messagesGroupId === groupId ? messages : EMPTY_MESSAGES;
     const consumed = new Set<number>();
+    const tailStart = Math.max(0, confirmed.length - PENDING_LOOKBACK);
     const visiblePending = pendingMessages.filter((p) => {
-      const idx = confirmed.findIndex(
-        (m, i) =>
-          !consumed.has(i) &&
+      let idx = -1;
+      for (let i = tailStart; i < confirmed.length; i++) {
+        if (consumed.has(i)) continue;
+        const m = confirmed[i];
+        if (
           m.senderId === p.senderId &&
           (m.text || "") === (p.text || "") &&
           (m.imageUrl || null) === (p.imageUrl || null)
-      );
+        ) {
+          idx = i;
+          break;
+        }
+      }
       if (idx === -1) return true;
       consumed.add(idx);
       return false;
     });
     const all = [...confirmed, ...visiblePending].filter((m) => !m.deleted);
+    const dates = all.map((m) => toDate(m.createdAt));
+    const keys = dates.map((d) => dayKey(d));
 
-    const joins = (a: any, b: any) => {
+    const joins = (i: number, j: number) => {
+      const a = all[i];
+      const b = all[j];
       if (!a || !b) return false;
       if (a.senderId !== b.senderId) return false;
-      const da = toDate(a.createdAt);
-      const db_ = toDate(b.createdAt);
       return (
-        dayKey(da) === dayKey(db_) &&
-        Math.abs(db_.getTime() - da.getTime()) < GROUP_GAP_MS
+        keys[i] === keys[j] &&
+        Math.abs(dates[j].getTime() - dates[i].getTime()) < GROUP_GAP_MS
       );
     };
 
     const out: Row[] = [];
     let prevDay = "";
     all.forEach((m, i) => {
-      const d = toDate(m.createdAt);
-      const dk = dayKey(d);
-      if (dk !== prevDay) {
-        out.push({ type: "date", key: `date-${dk}`, label: formatDayLabel(d) });
-        prevDay = dk;
+      if (keys[i] !== prevDay) {
+        out.push({
+          type: "date",
+          key: `date-${keys[i]}`,
+          label: formatDayLabel(dates[i]),
+        });
+        prevDay = keys[i];
       }
       out.push({
         type: "msg",
         m,
-        isFirstInGroup: !joins(all[i - 1], m),
-        isLastInGroup: !joins(m, all[i + 1]),
+        isFirstInGroup: !joins(i - 1, i),
+        isLastInGroup: !joins(i, i + 1),
         priority: i >= all.length - 8,
       });
     });
@@ -1087,7 +1142,9 @@ export default function GroupWindow() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  pinGroupMessage(groupId, null, null);
+                  pinGroupMessage(groupId, null, null).catch((err) =>
+                    console.error("Unpin failed:", err)
+                  );
                 }}
                 aria-label="Unpin message"
                 className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
@@ -1134,7 +1191,7 @@ export default function GroupWindow() {
                   !m.pending &&
                   (m.readBy || []).some(
                     (uid: string) =>
-                      uid !== m.senderId && memberIds.includes(uid)
+                      uid !== m.senderId && memberIdSet.has(uid)
                   )
                 }
                 isFirstInGroup={row.isFirstInGroup}

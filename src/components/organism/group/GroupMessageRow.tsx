@@ -49,6 +49,7 @@ const ChatImage = memo(function ChatImage({
     priority?: boolean;
 }) {
     const [loaded, setLoaded] = useState(false);
+    const [settled, setSettled] = useState(false);
     return (
         <div
             className="relative w-[260px] max-w-full max-h-[300px] overflow-hidden rounded-xl bg-white/[0.03]"
@@ -59,14 +60,15 @@ const ChatImage = memo(function ChatImage({
                         : "4 / 3",
             }}
         >
-            <img
-                src={tinySrc(url)}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-                className="absolute inset-0 w-full h-full object-cover scale-105"
-                style={{ filter: "blur(10px)" }}
-            />
+            {!settled && (
+                <img
+                    src={tinySrc(url)}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
+            )}
             <img
                 src={fullSrc(url)}
                 alt="image"
@@ -78,10 +80,64 @@ const ChatImage = memo(function ChatImage({
                     setLoaded(true);
                     onLoad?.();
                 }}
+                onTransitionEnd={() => {
+                    if (loaded) setSettled(true);
+                }}
                 onClick={onClick}
                 className="absolute inset-0 w-full h-full object-cover cursor-zoom-in transition-opacity duration-150"
                 style={{ opacity: loaded ? 1 : 0 }}
             />
+        </div>
+    );
+});
+
+const EditField = memo(function EditField({
+    initial,
+    onSubmit,
+    onCancel,
+}: {
+    initial: string;
+    onSubmit: (text: string) => void;
+    onCancel: () => void;
+}) {
+    const [value, setValue] = useState(initial);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
+
+    function submit() {
+        const trimmed = value.trim();
+        if (trimmed) onSubmit(trimmed);
+    }
+
+    return (
+        <div className="flex items-center gap-2 py-0.5">
+            <input
+                ref={inputRef}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
+                    if (e.key === "Escape") onCancel();
+                }}
+                className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
+            />
+            <button
+                onClick={submit}
+                aria-label="Save edit"
+                className="shrink-0 text-white/60 hover:text-white transition-colors"
+            >
+                <Check size={14} />
+            </button>
+            <button
+                onClick={onCancel}
+                aria-label="Cancel edit"
+                className="shrink-0 text-white/40 hover:text-white transition-colors"
+            >
+                <X size={14} />
+            </button>
         </div>
     );
 });
@@ -125,6 +181,7 @@ function sameMsg(a: any, b: any) {
         a.imageHeight === b.imageHeight &&
         a.voiceUrl === b.voiceUrl &&
         a.pending === b.pending &&
+        a.isLocalVideo === b.isLocalVideo &&
         a.senderName === b.senderName &&
         ts(a.createdAt) === ts(b.createdAt) &&
         (a.readBy?.length ?? 0) === (b.readBy?.length ?? 0) &&
@@ -168,16 +225,6 @@ const GroupMessageRow = memo(function GroupMessageRow({
     onSubmitEdit,
     onCancelEdit,
 }: GroupMessageRowProps) {
-    const [editText, setEditText] = useState("");
-    const editRef = useRef<HTMLInputElement | null>(null);
-
-    useEffect(() => {
-        if (!isEditing) return;
-        setEditText(m.text || "");
-        requestAnimationFrame(() => editRef.current?.focus());
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isEditing]);
-
     const reactionSummary = Object.entries(
         (m.reactions || {}) as Record<string, string[]>
     )
@@ -195,11 +242,6 @@ const GroupMessageRow = memo(function GroupMessageRow({
     const isStickerMsg = isImageStickerMsg || isTextStickerMsg;
     const isVoiceMsg = !!m.voiceUrl;
     const time = formatTime(m.createdAt);
-
-    function submitEdit() {
-        const trimmed = editText.trim();
-        if (trimmed) onSubmitEdit(m.id, trimmed);
-    }
 
     const bubbleClass = isStickerMsg
         ? `leading-none ${m.pending ? "msg-bubble-pending" : ""}`
@@ -307,18 +349,24 @@ const GroupMessageRow = memo(function GroupMessageRow({
                     {m.replyTo && (
                         <div
                             onClick={() => onScrollToMessage(m.replyTo.id)}
-                            className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border-l-2 border-[#7c5cff] bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
+                            className="mb-1 cursor-pointer px-3 py-1.5 rounded-xl rounded-b-sm border border-white/[0.14] border-l-2 border-l-[#7c5cff] backdrop-blur-md hover:brightness-125 transition-[filter]"
+                            style={{
+                                background:
+                                    "linear-gradient(135deg, rgba(124,92,255,0.24), rgba(18,17,31,0.55))",
+                                boxShadow:
+                                    "inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 14px rgba(0,0,0,0.25)",
+                            }}
                         >
                             <div className="text-[11px] font-medium text-[#a893ff] mb-0.5">
                                 Reply
                             </div>
                             {m.replyTo.imageUrl && !m.replyTo.text ? (
-                                <div className="flex items-center gap-1 text-xs text-zinc-400">
+                                <div className="flex items-center gap-1 text-xs text-zinc-300">
                                     <ImageIcon size={11} />
                                     <span>Photo</span>
                                 </div>
                             ) : (
-                                <div className="text-xs text-zinc-400 truncate">
+                                <div className="text-xs text-zinc-300 truncate">
                                     {m.replyTo.text}
                                 </div>
                             )}
@@ -359,6 +407,7 @@ const GroupMessageRow = memo(function GroupMessageRow({
                                 <img
                                     src={m.imageUrl}
                                     alt="sticker"
+                                    decoding="async"
                                     className="w-32 h-32 object-contain"
                                     onLoad={onMediaLoad}
                                 />
@@ -420,33 +469,11 @@ const GroupMessageRow = memo(function GroupMessageRow({
                                         />
                                     ))}
                                 {isEditing ? (
-                                    <div className="flex items-center gap-2 py-0.5">
-                                        <input
-                                            ref={editRef}
-                                            value={editText}
-                                            onChange={(e) => setEditText(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter" && !e.nativeEvent.isComposing)
-                                                    submitEdit();
-                                                if (e.key === "Escape") onCancelEdit();
-                                            }}
-                                            className="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-                                        />
-                                        <button
-                                            onClick={submitEdit}
-                                            aria-label="Save edit"
-                                            className="shrink-0 text-white/60 hover:text-white transition-colors"
-                                        >
-                                            <Check size={14} />
-                                        </button>
-                                        <button
-                                            onClick={onCancelEdit}
-                                            aria-label="Cancel edit"
-                                            className="shrink-0 text-white/40 hover:text-white transition-colors"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
+                                    <EditField
+                                        initial={m.text || ""}
+                                        onSubmit={(text) => onSubmitEdit(m.id, text)}
+                                        onCancel={onCancelEdit}
+                                    />
                                 ) : (
                                     m.text && (
                                         <div
@@ -496,8 +523,8 @@ const GroupMessageRow = memo(function GroupMessageRow({
                                     key={token}
                                     onClick={() => onReact(m.id, token)}
                                     className={`reaction-pill flex items-center gap-1 px-2 py-0.5 rounded-full text-xs cursor-pointer border ${mine
-                                            ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff]"
-                                            : "bg-black/50 border-white/20 text-zinc-300 hover:border-white/30"
+                                        ? "bg-[#7c5cff]/25 border-[#7c5cff]/50 text-[#a893ff]"
+                                        : "bg-black/50 border-white/20 text-zinc-300 hover:border-white/30"
                                         }`}
                                 >
                                     <ReactionGlyph token={token} size={15} />
