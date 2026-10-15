@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+import type { CSSProperties } from "react";
 import { Channel } from "@/types/channel";
 import { Megaphone, Pin } from "lucide-react";
 import { formatTime } from "@/lib/format-time";
@@ -12,7 +14,6 @@ import {
 import { getCustomEmoji } from "@/lib/customEmoji";
 import { avatarThumb } from "@/lib/avatarThumb";
 import SmoothImage from "@/components/UI/SmoothImage";
-import { memo } from "react";
 import { useChannelStore } from "@/store/channel-store";
 import { openConversation } from "@/lib/mergeConversations";
 
@@ -22,8 +23,9 @@ const ACTIVE_ROW_BG =
 const ACTIVE_ROW_HOVER_BG =
   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
 
-// same ::sticker_id:: token format used in the channel composer/post body
-// and in GroupItem's sidebar preview
+const ACTIVE_DOT_BORDER = "#0a0b16";
+const ACTIVE_BAR = "#a996ff";
+
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
@@ -35,13 +37,6 @@ function isStickerOnlyText(text: string): boolean {
   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
-/**
- * Renders a channel's last-post preview the way Telegram's sidebar does:
- * plain text as-is, ::sticker_id:: tokens swapped for a tiny inline
- * thumbnail, and a sticker-only post collapsed to "thumbnail + Sticker"
- * instead of dumping the raw token text into the row. Mirrors GroupItem's
- * LastMessageBody 1:1 so channels, groups and 1:1 chats look identical.
- */
 function LastMessageBody({ text }: { text?: string }) {
   if (!text) return null;
 
@@ -54,6 +49,8 @@ function LastMessageBody({ text }: { text?: string }) {
           <img
             src={custom.url}
             alt={custom.id}
+            loading="lazy"
+            decoding="async"
             className="w-4 h-4 object-contain shrink-0"
           />
         )}
@@ -75,6 +72,8 @@ function LastMessageBody({ text }: { text?: string }) {
                 key={i}
                 src={custom.url}
                 alt={custom.id}
+                loading="lazy"
+                decoding="async"
                 className="inline-block w-4 h-4 object-contain align-text-bottom mx-0.5"
               />
             );
@@ -99,8 +98,8 @@ function ChannelItem({
     s.mode === "dark"
       ? DEFAULT_DARK.sideBarBg
       : s.mode === "light"
-      ? DEFAULT_LIGHT.sideBarBg
-      : s.customTheme.sideBarBg
+        ? DEFAULT_LIGHT.sideBarBg
+        : s.customTheme.sideBarBg
   );
 
   const accent = "#A78BFA";
@@ -115,33 +114,35 @@ function ChannelItem({
   const avatarFallbackBg = active
     ? "rgba(255,255,255,0.18)"
     : mode === "light"
-    ? "#ddd6fe"
-    : "#1e2a3a";
+      ? "#ddd6fe"
+      : "#1e2a3a";
   const avatarFallbackColor = active ? "#ffffff" : accent;
 
   const myUid = auth.currentUser?.uid;
   const unreadCount = myUid ? channel.unreadCounts?.[myUid] || 0 : 0;
 
+  const rowStyle = {
+    "--row-bg": active ? ACTIVE_ROW_BG : "transparent",
+    "--row-hover-bg": active ? ACTIVE_ROW_HOVER_BG : hoverBg,
+    width: "calc(100% - 9px)",
+  } as CSSProperties;
+
   return (
     <button
+      type="button"
+      aria-current={active ? "true" : undefined}
       onClick={() => openConversation("channel", channel.id)}
-      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
-      style={{
-        background: active ? ACTIVE_ROW_BG : "transparent",
-        width: "calc(100% - 9px)",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = active
-          ? ACTIVE_ROW_HOVER_BG
-          : hoverBg;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = active
-          ? ACTIVE_ROW_BG
-          : "transparent";
-      }}
+      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group [background:var(--row-bg)] hover:[background:var(--row-hover-bg)]"
+      style={rowStyle}
     >
-      <div className="shrink-0 relative">
+      {active && (
+        <span
+          className="absolute left-0 top-0 h-full w-[2px]"
+          style={{ background: ACTIVE_BAR }}
+        />
+      )}
+
+      <div className="shrink-0 relative w-11 h-11">
         {channel.avatarUrl ? (
           <SmoothImage
             src={avatarThumb(channel.avatarUrl, 88)}
@@ -165,7 +166,7 @@ function ChannelItem({
           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full flex items-center justify-center border-[2px]"
           style={{
             background: mode === "light" ? "#d1d5db" : "#3f3f46",
-            borderColor: active ? ACTIVE_ROW_BG : sideBarBg,
+            borderColor: active ? ACTIVE_DOT_BORDER : sideBarBg,
           }}
         >
           <Megaphone size={6} className="text-[#A78BFA]" />

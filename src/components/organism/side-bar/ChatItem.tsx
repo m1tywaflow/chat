@@ -1,5 +1,7 @@
 "use client";
 
+import { memo, useMemo } from "react";
+import type { CSSProperties } from "react";
 import { Chat } from "@/types/chat";
 import { useChatStore } from "@/store/chat-store";
 import { formatTime } from "@/lib/format-time";
@@ -15,7 +17,6 @@ import { openConversation } from "@/lib/mergeConversations";
 import { getCustomEmoji } from "@/lib/customEmoji";
 import SmoothImage from "@/components/UI/SmoothImage";
 import { avatarThumb } from "@/lib/avatarThumb";
-import { memo } from "react";
 import { auth } from "@/lib/firebase";
 import TypingLabel from "@/components/atoms/TypingLabel";
 
@@ -30,6 +31,9 @@ const ACTIVE_ROW_BG =
 const ACTIVE_ROW_HOVER_BG =
   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
 
+const ACTIVE_DOT_BORDER = "#0a0b16";
+const ACTIVE_BAR = "#a996ff";
+
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
@@ -40,6 +44,7 @@ function isStickerOnlyText(text: string): boolean {
   const trimmed = text.trim();
   return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
+
 function LastMessagePreview({ text }: { text?: string }) {
   if (!text) return <>No messages yet</>;
 
@@ -52,6 +57,8 @@ function LastMessagePreview({ text }: { text?: string }) {
           <img
             src={custom.url}
             alt={custom.id}
+            loading="lazy"
+            decoding="async"
             className="w-4 h-4 object-contain shrink-0"
           />
         )}
@@ -73,6 +80,8 @@ function LastMessagePreview({ text }: { text?: string }) {
                 key={i}
                 src={custom.url}
                 alt={custom.id}
+                loading="lazy"
+                decoding="async"
                 className="inline-block w-4 h-4 object-contain align-text-bottom mx-0.5"
               />
             );
@@ -94,11 +103,20 @@ function ChatItem({ chat, pinned }: Props) {
         ? DEFAULT_LIGHT.sideBarBg
         : s.customTheme.sideBarBg
   );
-  const online = isOnline(chat.participant);
 
-  const typing = Object.entries((chat as any).typing ?? {}).some(
-    ([uid, v]) => v && uid !== auth.currentUser?.uid
+  const online = isOnline(chat.participant);
+  const myUid = auth.currentUser?.uid;
+  const typingMap = (chat as any).typing as Record<string, boolean> | undefined;
+
+  const typing = useMemo(
+    () =>
+      Object.entries(typingMap ?? {}).some(([uid, v]) => v && uid !== myUid),
+    [typingMap, myUid]
   );
+
+  const gift = chat.participant.featuredGift
+    ? GIFTS[chat.participant.featuredGift]
+    : null;
 
   const accent = "#A78BFA";
   const hoverBg = mode === "light" ? "#efeafd" : "rgba(255,255,255,0.04)";
@@ -115,26 +133,28 @@ function ChatItem({ chat, pinned }: Props) {
       : "#1e2a3a";
   const avatarFallbackColor = isActive ? "#ffffff" : accent;
 
+  const rowStyle = {
+    "--row-bg": isActive ? ACTIVE_ROW_BG : "transparent",
+    "--row-hover-bg": isActive ? ACTIVE_ROW_HOVER_BG : hoverBg,
+    width: "calc(100% - 9px)",
+  } as CSSProperties;
+
   return (
     <button
+      type="button"
+      aria-current={isActive ? "true" : undefined}
       onClick={() => openConversation("chat", chat.id)}
-      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
-      style={{
-        background: isActive ? ACTIVE_ROW_BG : "transparent",
-        width: "calc(100% - 9px)",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = isActive
-          ? ACTIVE_ROW_HOVER_BG
-          : hoverBg;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = isActive
-          ? ACTIVE_ROW_BG
-          : "transparent";
-      }}
+      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group [background:var(--row-bg)] hover:[background:var(--row-hover-bg)]"
+      style={rowStyle}
     >
-      <div className="shrink-0 relative">
+      {isActive && (
+        <span
+          className="absolute left-0 top-0 h-full w-[2px]"
+          style={{ background: ACTIVE_BAR }}
+        />
+      )}
+
+      <div className="shrink-0 relative w-11 h-11">
         {chat.participant?.avatar ? (
           <SmoothImage
             src={avatarThumb(chat.participant.avatar, 88)}
@@ -162,7 +182,7 @@ function ChatItem({ chat, pinned }: Props) {
               : mode === "light"
                 ? "#d1d5db"
                 : "#3f3f46",
-            borderColor: isActive ? ACTIVE_ROW_BG : sideBarBg,
+            borderColor: isActive ? ACTIVE_DOT_BORDER : sideBarBg,
           }}
         />
       </div>
@@ -180,25 +200,21 @@ function ChatItem({ chat, pinned }: Props) {
             >
               {chat.participant.username}
             </h3>
-            {chat.participant.featuredGift &&
-              (() => {
-                const gift = GIFTS[chat.participant.featuredGift!];
-                if (!gift) return null;
-                return (
-                  <img
-                    src={gift.imageUrl}
-                    alt={gift.name}
-                    title={gift.name}
-                    className="shrink-0 w-4 h-4 object-contain"
-                    style={{
-                      filter: isActive
-                        ? "drop-shadow(0 0 3px rgba(255,255,255,0.6))"
-                        : `drop-shadow(0 0 3px ${RARITY_COLORS[gift.rarity]
-                        }90)`,
-                    }}
-                  />
-                );
-              })()}
+            {gift && (
+              <img
+                src={gift.imageUrl}
+                alt={gift.name}
+                title={gift.name}
+                loading="lazy"
+                decoding="async"
+                className="shrink-0 w-4 h-4 object-contain"
+                style={{
+                  filter: isActive
+                    ? "drop-shadow(0 0 3px rgba(255,255,255,0.6))"
+                    : `drop-shadow(0 0 3px ${RARITY_COLORS[gift.rarity]}90)`,
+                }}
+              />
+            )}
           </div>
           <span
             className="text-[11px] shrink-0 tabular-nums"
@@ -213,7 +229,6 @@ function ChatItem({ chat, pinned }: Props) {
             className="text-[13px] font-bold truncate leading-tight"
             style={{ color: lastMsgColor }}
           >
-            {/* <LastMessagePreview text={chat.lastMessage} /> */}
             {typing ? (
               <TypingLabel text="typing" color={isActive ? "#ffffff" : accent} />
             ) : (

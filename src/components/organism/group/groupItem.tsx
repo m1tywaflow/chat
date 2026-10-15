@@ -1,5 +1,7 @@
 "use client";
 
+import { memo, useMemo } from "react";
+import type { CSSProperties } from "react";
 import { Group } from "@/types/group";
 import { Users, Pin } from "lucide-react";
 import { formatTime } from "@/lib/format-time";
@@ -12,7 +14,6 @@ import {
 import { getCustomEmoji } from "@/lib/customEmoji";
 import { avatarThumb } from "@/lib/avatarThumb";
 import SmoothImage from "@/components/UI/SmoothImage";
-import { memo } from "react";
 import { useGroupStore } from "@/store/group-store";
 import { openConversation } from "@/lib/mergeConversations";
 import TypingLabel from "@/components/atoms/TypingLabel";
@@ -24,6 +25,8 @@ const ACTIVE_ROW_BG =
 const ACTIVE_ROW_HOVER_BG =
   "linear-gradient(135deg, #4a2a94 0%, #0c0d1a 55%, #070912 100%)";
 
+const ACTIVE_DOT_BORDER = "#0a0b16";
+const ACTIVE_BAR = "#a996ff";
 
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
@@ -48,6 +51,8 @@ function LastMessageBody({ text }: { text?: string }) {
           <img
             src={custom.url}
             alt={custom.id}
+            loading="lazy"
+            decoding="async"
             className="w-4 h-4 object-contain shrink-0"
           />
         )}
@@ -69,6 +74,8 @@ function LastMessageBody({ text }: { text?: string }) {
                 key={i}
                 src={custom.url}
                 alt={custom.id}
+                loading="lazy"
+                decoding="async"
                 className="inline-block w-4 h-4 object-contain align-text-bottom mx-0.5"
               />
             );
@@ -78,6 +85,14 @@ function LastMessageBody({ text }: { text?: string }) {
       })}
     </>
   );
+}
+
+function getLastMessageBody(msg: Group["lastMessage"]): string {
+  if (!msg) return "";
+  if (msg.type === "voice") return "Voice message";
+  if (msg.type === "image")
+    return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
+  return msg.text || "";
 }
 
 function GroupItem({
@@ -116,10 +131,14 @@ function GroupItem({
   const myUid = auth.currentUser?.uid;
   const unreadCount = myUid ? group.unreadCounts?.[myUid] || 0 : 0;
 
-
-  const typers = Object.entries((group as any).typing ?? {})
-    .filter(([uid, v]) => v && uid !== myUid)
-    .map(([uid]) => uid);
+  const typingMap = (group as any).typing as Record<string, boolean> | undefined;
+  const typers = useMemo(
+    () =>
+      Object.entries(typingMap ?? {})
+        .filter(([uid, v]) => v && uid !== myUid)
+        .map(([uid]) => uid),
+    [typingMap, myUid]
+  );
   const typerName1 = useUsername(typers[0]);
   const typerName2 = useUsername(typers[1]);
   const typingText =
@@ -131,38 +150,33 @@ function GroupItem({
           ? `${typerName1 || "Someone"}, ${typerName2 || "Someone"} are typing`
           : `${typers.length} people are typing`;
 
-  function getLastMessageBody(msg: Group["lastMessage"]): string {
-    if (!msg) return "";
-    if (msg.type === "voice") return "Voice message";
-    if (msg.type === "image")
-      return msg.text?.trim() ? `📷 ${msg.text}` : "📷 Фото";
-    return msg.text || "";
-  }
+  const lastMessageBody = useMemo(
+    () => getLastMessageBody(group.lastMessage),
+    [group.lastMessage]
+  );
 
-  const lastMessageBody = group.lastMessage
-    ? getLastMessageBody(group.lastMessage)
-    : "";
+  const rowStyle = {
+    "--row-bg": active ? ACTIVE_ROW_BG : "transparent",
+    "--row-hover-bg": active ? ACTIVE_ROW_HOVER_BG : hoverBg,
+    width: "calc(100% - 9px)",
+  } as CSSProperties;
 
   return (
     <button
+      type="button"
+      aria-current={active ? "true" : undefined}
       onClick={() => openConversation("group", group.id)}
-      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group"
-      style={{
-        background: active ? ACTIVE_ROW_BG : "transparent",
-        width: "calc(100% - 9px)",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = active
-          ? ACTIVE_ROW_HOVER_BG
-          : hoverBg;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = active
-          ? ACTIVE_ROW_BG
-          : "transparent";
-      }}
+      className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group [background:var(--row-bg)] hover:[background:var(--row-hover-bg)]"
+      style={rowStyle}
     >
-      <div className="shrink-0 relative">
+      {active && (
+        <span
+          className="absolute left-0 top-0 h-full w-[2px]"
+          style={{ background: ACTIVE_BAR }}
+        />
+      )}
+
+      <div className="shrink-0 relative w-11 h-11">
         {group.avatarUrl ? (
           <SmoothImage
             src={avatarThumb(group.avatarUrl, 88)}
@@ -186,7 +200,7 @@ function GroupItem({
           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full flex items-center justify-center border-[2px]"
           style={{
             background: mode === "light" ? "#d1d5db" : "#3f3f46",
-            borderColor: active ? ACTIVE_ROW_BG : sideBarBg,
+            borderColor: active ? ACTIVE_DOT_BORDER : sideBarBg,
           }}
         >
           <Users size={6} className="text-[#A78BFA]" />
