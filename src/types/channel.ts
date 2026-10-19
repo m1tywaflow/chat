@@ -1,3 +1,5 @@
+import type { Poll, PollVotes } from "@/lib/polls";
+
 export interface Channel {
   id: string;
   name: string;
