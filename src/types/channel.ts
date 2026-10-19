@@ -32,6 +32,9 @@ export interface ChannelPost {
   commentCount?: number;
   forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
   recentCommenters?: string[];
+  type?: "poll";
+  poll?: Poll;
+  pollVotes?: PollVotes;
 }
 
 export interface ChannelCommentReplyTo {
