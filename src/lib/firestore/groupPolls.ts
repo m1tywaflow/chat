@@ -13,6 +13,7 @@ export interface CreateGroupPollInput {
   question: string;
   options: string[];
   multiple: boolean;
+  correctIndex?: number | null;
   senderName: string;
 }
 
@@ -23,7 +24,12 @@ export async function createGroupPoll(
 ): Promise<string> {
   const groupRef = doc(db, "groups", groupId);
   const msgRef = doc(collection(db, "groups", groupId, "messages"));
-  const built = buildPollMessage(input.question, input.options, input.multiple);
+  const built = buildPollMessage(
+    input.question,
+    input.options,
+    input.multiple,
+    input.correctIndex ?? null
+  );
   const previewText = `📊 ${built.poll.question}`;
 
   await runTransaction(db, async (transaction) => {
