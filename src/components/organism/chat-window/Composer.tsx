@@ -9,10 +9,11 @@ import {
     useRef,
     useState,
 } from "react";
-import { Send, Paperclip, Smile, X, ImageIcon } from "lucide-react";
+import { Send, Paperclip, Smile, X } from "lucide-react";
 import { setTyping } from "@/lib/firestore/chats";
 import { CUSTOM_EMOJIS } from "@/lib/customEmoji";
 import VoiceRecordButton from "@/components/atoms/recordButton";
+import { getReplyPreview, ReplyIcon, useReplyAuthor } from "./reply-preview";
 
 const TEXT_EMOJIS = (
     "😀 😁 😂 🤣 😊 😉 😍 🥰 😘 😎 🤔 🤨 😐 🙄 😏 😴 😢 😭 😡 🤯 🥳 🤗 😅 🙃 " +
@@ -47,6 +48,71 @@ interface Props {
 
 const MAX_HEIGHT = 140;
 
+function ReplyBar({
+    message,
+    myUid,
+    onCancel,
+}: {
+    message: any;
+    myUid: string | null;
+    onCancel: () => void;
+}) {
+    const [shown, setShown] = useState(false);
+
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setShown(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    const preview = getReplyPreview(message);
+    const author = useReplyAuthor(message.senderId, myUid);
+    const isMine = !!myUid && message.senderId === myUid;
+    const title = isMine
+        ? "Replying to yourself"
+        : author
+            ? `Replying to ${author}`
+            : "Replying";
+
+    return (
+        <div
+            className={`mx-4 mt-3 flex items-center gap-3 pl-3 pr-2 py-2 rounded-2xl border transition-all duration-200 ease-out ${shown ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"
+                }`}
+            style={{
+                background: "rgba(18,17,31,0.72)",
+                borderColor: "rgba(124,92,255,0.16)",
+            }}
+        >
+            <span className="shrink-0 self-stretch w-[3px] rounded-full bg-gradient-to-b from-[#a996ff] to-[#5b3df0]" />
+
+            {preview.thumbUrl && (
+                <img
+                    src={preview.thumbUrl}
+                    alt=""
+                    className="shrink-0 w-10 h-10 rounded-lg object-cover"
+                />
+            )}
+
+            <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold leading-tight text-[#a996ff] mb-0.5 truncate">
+                    {title}
+                </div>
+                <div className="flex items-center gap-1.5 text-[13px] leading-tight text-zinc-400">
+                    <ReplyIcon icon={preview.icon} />
+                    <span className="truncate">{preview.label}</span>
+                </div>
+            </div>
+
+            <button
+                onClick={onCancel}
+                aria-label="Cancel reply"
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+            >
+                <X size={14} />
+            </button>
+        </div>
+    );
+}
+
 const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     { chatId, myUid, replyMessage, onCancelReply, onSend, onSendVoice },
     ref
@@ -66,7 +132,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isTypingRef = useRef(false);
 
-    /* ── typing: одна запись на старт и одна на остановку ── */
     const stopTyping = useCallback(() => {
         if (typingTimeout.current) clearTimeout(typingTimeout.current);
         typingTimeout.current = null;
@@ -93,7 +158,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         };
     }, [stopTyping]);
 
-    /* ── файл / превью ── */
     const setFileForPreview = useCallback((f: File) => {
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
         const url = URL.createObjectURL(f);
@@ -121,7 +185,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         [setFileForPreview]
     );
 
-    /* ── авто-рост textarea ── */
     useLayoutEffect(() => {
         const el = inputRef.current;
         if (!el) return;
@@ -129,7 +192,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
     }, [text]);
 
-    /* ── закрытие панели эмодзи ── */
     useEffect(() => {
         if (!emojiOpen) return;
         const handleClick = (e: MouseEvent) => {
@@ -143,7 +205,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         return () => window.removeEventListener("click", handleClick);
     }, [emojiOpen]);
 
-    /* ── handlers ── */
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
         const v = e.target.value;
         setText(v);
@@ -199,7 +260,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             previewUrl: preview,
             isVideo: isFileVideo,
         });
-        // владение blob-URL переходит к родителю — здесь его не отзываем
         previewUrlRef.current = null;
         setFile(null);
         setPreview(null);
@@ -223,31 +283,12 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     return (
         <div className="relative z-10 flex-none">
             {replyMessage && (
-                <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-[#7c5cff]/[0.06] border border-[#7c5cff]/20">
-                    <div className="w-0.5 h-7 rounded-full bg-[#7c5cff] shrink-0" />
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-medium text-[#a893ff] mb-0.5">
-                            Replying
-                        </div>
-                        {replyMessage.imageUrl && !replyMessage.text ? (
-                            <div className="flex items-center gap-1 text-xs text-zinc-500">
-                                <ImageIcon size={11} />
-                                <span>Photo</span>
-                            </div>
-                        ) : (
-                            <div className="text-xs text-zinc-500 truncate">
-                                {replyMessage.text}
-                            </div>
-                        )}
-                    </div>
-                    <button
-                        onClick={onCancelReply}
-                        aria-label="Cancel reply"
-                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/[0.05] text-zinc-500 hover:text-white hover:bg-white/[0.1] transition-all"
-                    >
-                        <X size={11} />
-                    </button>
-                </div>
+                <ReplyBar
+                    key={replyMessage.id}
+                    message={replyMessage}
+                    myUid={myUid}
+                    onCancel={onCancelReply}
+                />
             )}
 
             {preview && (

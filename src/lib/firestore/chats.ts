@@ -1,3 +1,415 @@
+// import {
+//   collection,
+//   doc,
+//   setDoc,
+//   addDoc,
+//   query,
+//   where,
+//   onSnapshot,
+//   orderBy,
+//   documentId,
+//   getDocs,
+//   updateDoc,
+//   serverTimestamp,
+//   increment,
+//   arrayUnion,
+//   arrayRemove,
+//   getDoc,
+//   limit,
+//   startAfter,
+// } from "firebase/firestore";
+
+// import { db } from "@/lib/firebase";
+// import type { ForwardableContent } from "@/types/forward";
+// import { buildForwardedFrom } from "@/lib/forwarding";
+
+// export function getChatId(uid1: string, uid2: string) {
+//   return [uid1, uid2].sort().join("_");
+// }
+// export async function setTyping(
+//   chatId: string,
+//   uid: string,
+//   isTyping: boolean
+// ) {
+//   const ref = doc(db, "chats", chatId);
+
+//   await updateDoc(ref, {
+//     [`typing.${uid}`]: isTyping,
+//   });
+// }
+// export async function createOrGetChat(myUid: string, otherUid: string) {
+//   const chatId = [myUid, otherUid].sort().join("_");
+
+//   await setDoc(
+//     doc(db, "chats", chatId),
+//     {
+//       id: chatId,
+//       participantIds: [myUid, otherUid],
+//       lastMessage: "",
+//       lastMessageTime: serverTimestamp(),
+//       updatedAt: serverTimestamp(),
+//       typing: {},
+//     },
+//     { merge: true }
+//   );
+
+//   return chatId;
+// }
+
+// export async function searchUsers(search: string) {
+//   const q = search?.toLowerCase().trim();
+
+//   if (!q) return [];
+
+//   const snap = await getDocs(collection(db, "users"));
+
+//   return snap.docs
+//     .map((d) => ({
+//       id: d.id,
+//       ...d.data(),
+//     }))
+//     .filter((u: any) => (u.username || "").toLowerCase().includes(q));
+// }
+
+// export async function sendMessage(
+//   chatId: string,
+//   myUid: string,
+//   text: string,
+//   replyTo?: any,
+//   imageUrl?: string
+// ) {
+//   if (!chatId || !myUid || (!text.trim() && !imageUrl)) return;
+
+//   const [uid1, uid2] = chatId.split("_");
+//   const otherUid = uid1 === myUid ? uid2 : uid1;
+
+//   const docRef = await addDoc(collection(db, "chats", chatId, "messages"), {
+//     senderId: myUid,
+//     text: text.trim(),
+//     imageUrl: imageUrl || null,
+//     createdAt: serverTimestamp(),
+//     replyTo: replyTo
+//       ? {
+//           id: replyTo.id,
+//           text: replyTo.text,
+//           senderId: replyTo.senderId,
+//           imageUrl: replyTo.imageUrl || null,
+//         }
+//       : null,
+//   });
+
+//   await updateDoc(doc(db, "chats", chatId), {
+//     lastMessage: imageUrl && !text.trim() ? "📷 Photo" : text.trim(),
+//     lastMessageTime: serverTimestamp(),
+//     updatedAt: serverTimestamp(),
+//     [`unreadCount.${otherUid}`]: increment(1),
+//   });
+
+//   return docRef.id;
+// }
+// const MESSAGES_PAGE_SIZE = 50;
+
+// export function subscribeToMessages(
+//   chatId: string,
+//   cb: (m: any[], hasMore: boolean) => void,
+//   pageSize: number = MESSAGES_PAGE_SIZE
+// ) {
+//   if (!chatId) return () => {};
+
+//   const q = query(
+//     collection(db, "chats", chatId, "messages"),
+//     orderBy("createdAt", "desc"),
+//     orderBy(documentId(), "desc"),
+//     limit(pageSize)
+//   );
+
+//   return onSnapshot(q, (snap) => {
+//     const docs = [...snap.docs].reverse();
+//     cb(
+//       docs.map((d) => ({
+//         id: d.id,
+//         ...d.data(),
+//       })),
+//       snap.docs.length === pageSize
+//     );
+//   });
+// }
+// export async function loadOlderMessages(
+//   chatId: string,
+//   beforeMessage: { id: string; createdAt: any },
+//   pageSize: number = MESSAGES_PAGE_SIZE
+// ): Promise<{ messages: any[]; hasMore: boolean }> {
+//   if (!chatId || !beforeMessage) return { messages: [], hasMore: false };
+
+//   const q = query(
+//     collection(db, "chats", chatId, "messages"),
+//     orderBy("createdAt", "desc"),
+//     orderBy(documentId(), "desc"),
+//     startAfter(beforeMessage.createdAt, beforeMessage.id),
+//     limit(pageSize)
+//   );
+
+//   const snap = await getDocs(q);
+//   const docs = [...snap.docs].reverse();
+//   return {
+//     messages: docs.map((d) => ({ id: d.id, ...d.data() })),
+//     hasMore: snap.docs.length === pageSize,
+//   };
+// }
+
+// export function subscribeToUserChats(
+//   myUid: string,
+//   cb: (c: any[]) => void,
+//   onNewMessage?: (payload: {
+//     chatId: string;
+//     senderName: string;
+//     senderAvatar?: string;
+//     text: string;
+//   }) => void
+// ) {
+//   if (!myUid) return () => {};
+
+//   const q = query(
+//     collection(db, "chats"),
+//     where("participantIds", "array-contains", myUid),
+//     orderBy("updatedAt", "desc")
+//   );
+
+//   const userUnsubs = new Map<string, () => void>();
+//   const userCache = new Map<string, any>();
+//   const prevUnread = new Map<string, number>();
+//   const lastKnownTime = new Map<string, any>();
+//   let chatCache: any[] = [];
+//   let isFirstSnapshot = true;
+
+//   function rebuild() {
+//     cb(
+//       chatCache
+//         .map((chat) => ({
+//           ...chat,
+//           participant: userCache.get(chat._otherUid) || chat.participant,
+//         }))
+//         .filter((c) => !c.deleted)
+//     );
+//   }
+
+//   const chatUnsub = onSnapshot(q, (snap) => {
+//     chatCache = snap.docs.map((d) => {
+//       const chat = d.data() as any;
+//       const otherUid =
+//         chat?.participantIds?.find((id: string) => id !== myUid) || "";
+
+//       if (otherUid && !userUnsubs.has(otherUid)) {
+//         const unsub = onSnapshot(doc(db, "users", otherUid), (userSnap) => {
+//           if (userSnap.exists()) {
+//             userCache.set(otherUid, { id: userSnap.id, ...userSnap.data() });
+//             rebuild();
+//           }
+//         });
+//         userUnsubs.set(otherUid, unsub);
+//       }
+
+//       const unreadCount = chat.unreadCount?.[myUid] || 0;
+
+//       if (!isFirstSnapshot && onNewMessage && !chat.deleted?.[myUid]) {
+//         const prev = prevUnread.get(chat.id) ?? 0;
+//         if (unreadCount > prev) {
+//           const participant = userCache.get(otherUid);
+//           onNewMessage({
+//             chatId: chat.id,
+//             senderName: participant?.username || "New message",
+//             senderAvatar: participant?.avatar,
+//             text: chat.lastMessage || "",
+//           });
+//         }
+//       }
+//       prevUnread.set(chat.id, unreadCount);
+
+//       if (chat.lastMessageTime) {
+//         lastKnownTime.set(d.id, chat.lastMessageTime);
+//       }
+
+//       return {
+//         id: chat.id,
+//         _otherUid: otherUid,
+//         participant: userCache.get(otherUid) || {
+//           id: otherUid,
+//           username: "Unknown user",
+//           avatar: "",
+//           online: false,
+//         },
+//         lastMessage: chat.lastMessage || "",
+//         lastMessageTime:
+//           chat.lastMessageTime || lastKnownTime.get(d.id) || null,
+//         unreadCount,
+//         deleted: chat.deleted?.[myUid] || false,
+//       };
+//     });
+
+//     isFirstSnapshot = false;
+//     rebuild();
+//   });
+
+//   return () => {
+//     chatUnsub();
+//     userUnsubs.forEach((unsub) => unsub());
+//   };
+// }
+// export async function markMessageRead(
+//   chatId: string,
+//   messageId: string,
+//   uid: string
+// ) {
+//   const ref = doc(db, "chats", chatId, "messages", messageId);
+//   try {
+//     await updateDoc(ref, { readBy: arrayUnion(uid) });
+//   } catch (err: any) {
+//     if (err?.code !== "not-found") console.warn("markMessageRead failed:", err);
+//   }
+// }
+// export async function toggleReaction(
+//   chatId: string,
+//   messageId: string,
+//   emoji: string,
+//   uid: string
+// ): Promise<void> {
+//   const msgRef = doc(db, "chats", chatId, "messages", messageId);
+//   const snap = await getDoc(msgRef);
+//   if (!snap.exists()) return;
+//   const data = snap.data();
+//   const current: string[] = data?.reactions?.[emoji] ?? [];
+//   const hasReacted = current.includes(uid);
+//   await updateDoc(msgRef, {
+//     [`reactions.${emoji}`]: hasReacted ? arrayRemove(uid) : arrayUnion(uid),
+//   });
+//   if (!hasReacted) {
+//     await updateDoc(doc(db, "chats", chatId), {
+//       lastMessage: `${emoji} Reacted to a message`,
+//       lastMessageTime: serverTimestamp(),
+//       updatedAt: serverTimestamp(),
+//     });
+//   }
+// }
+
+// export async function editMessage(
+//   chatId: string,
+//   messageId: string,
+//   newText: string
+// ) {
+//   await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
+//     text: newText,
+//     edited: true,
+//   });
+// }
+
+// export async function deleteMessage(chatId: string, messageId: string) {
+//   await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
+//     deleted: true,
+//     text: "",
+//     imageUrl: null,
+//     voiceUrl: null,
+//   });
+
+//   const snap = await getDocs(
+//     query(
+//       collection(db, "chats", chatId, "messages"),
+//       orderBy("createdAt", "desc"),
+//       limit(20)
+//     )
+//   );
+//   const last = snap.docs.map((d) => d.data()).find((m) => !m.deleted);
+
+//   await updateDoc(doc(db, "chats", chatId), {
+//     lastMessage: last
+//       ? last.voiceUrl
+//         ? "Voice message"
+//         : last.imageUrl && !last.text
+//         ? "Photo"
+//         : last.text || ""
+//       : "",
+//     ...(last?.createdAt ? { lastMessageTime: last.createdAt } : {}),
+//   });
+// }
+
+// export async function pinMessage(
+//   chatId: string,
+//   messageId: string | null,
+//   messageText: string | null
+// ) {
+//   await updateDoc(doc(db, "chats", chatId), {
+//     pinnedMessage: messageId ? { id: messageId, text: messageText } : null,
+//   });
+// }
+
+// export async function togglePinChat(
+//   userId: string,
+//   chatId: string,
+//   pinned: boolean
+// ) {
+//   await updateDoc(doc(db, "users", userId), {
+//     [`pinnedChats.${chatId}`]: pinned,
+//   });
+// }
+// export async function forwardMessageToChat(
+//   targetChatId: string,
+//   myUid: string,
+//   original: ForwardableContent
+// ) {
+//   const [uid1, uid2] = targetChatId.split("_");
+//   const otherUid = uid1 === myUid ? uid2 : uid1;
+
+//   await addDoc(collection(db, "chats", targetChatId, "messages"), {
+//     senderId: myUid,
+//     text: original.text || "",
+//     imageUrl: original.imageUrl || null,
+//     voiceUrl: original.voiceUrl || null,
+//     duration: original.duration ?? null,
+//     waveform: original.waveform ?? null,
+//     createdAt: serverTimestamp(),
+//     replyTo: null,
+//     forwardedFrom: buildForwardedFrom(original),
+//   });
+
+//   await updateDoc(doc(db, "chats", targetChatId), {
+//     lastMessage:
+//       original.imageUrl && !original.text ? "📷 Photo" : original.text,
+//     lastMessageTime: serverTimestamp(),
+//     updatedAt: serverTimestamp(),
+//     [`unreadCount.${otherUid}`]: increment(1),
+//   });
+// }
+
+// export async function sendVoiceMessage(
+//   chatId: string,
+//   senderId: string,
+//   replyTo: any | null,
+//   voiceUrl: string,
+//   duration: number,
+//   waveform: number[]
+// ) {
+//   await addDoc(collection(db, "chats", chatId, "messages"), {
+//     senderId,
+//     text: "",
+//     voiceUrl,
+//     duration,
+//     waveform,
+//     replyTo: replyTo
+//       ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl }
+//       : null,
+//     createdAt: serverTimestamp(),
+//     readBy: [],
+//     reactions: {},
+//   });
+
+
+//   await updateDoc(doc(db, "chats", chatId), {
+//     lastMessage: "Voice message",
+//     lastMessageTime: serverTimestamp(),
+//     updatedAt: serverTimestamp(),
+//   });
+// }
+
+
 import {
   collection,
   doc,
@@ -91,8 +503,8 @@ export async function sendMessage(
     replyTo: replyTo
       ? {
           id: replyTo.id,
-          text: replyTo.text,
-          senderId: replyTo.senderId,
+          text: replyTo.text ?? "",
+          senderId: replyTo.senderId ?? null,
           imageUrl: replyTo.imageUrl || null,
         }
       : null,
@@ -394,13 +806,17 @@ export async function sendVoiceMessage(
     duration,
     waveform,
     replyTo: replyTo
-      ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl }
+      ? {
+          id: replyTo.id,
+          text: replyTo.text ?? "",
+          senderId: replyTo.senderId ?? null,
+          imageUrl: replyTo.imageUrl || null,
+        }
       : null,
     createdAt: serverTimestamp(),
     readBy: [],
     reactions: {},
   });
-
 
   await updateDoc(doc(db, "chats", chatId), {
     lastMessage: "Voice message",

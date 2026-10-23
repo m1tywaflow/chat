@@ -1,8 +1,9 @@
 import type { Timestamp } from "firebase/firestore";
+import type { Poll, PollVotes } from "@/lib/polls";
 
 export type GroupRole = "owner" | "admin" | "member";
 
-export type LastMessageType = "text" | "image" | "voice";
+export type LastMessageType = "text" | "image" | "voice" | "poll";
 
 export interface Group {
   id: string;
@@ -30,6 +31,7 @@ export interface Group {
 
 export interface GroupMessage {
   id: string;
+  type?: "poll";
   text: string;
   imageUrl?: string | null;
   voiceUrl?: string | null;
@@ -55,4 +57,6 @@ export interface GroupMessage {
   forwardedFrom?: import("@/types/forward").ForwardedFrom | null;
   imageWidth?: number | null;
   imageHeight?: number | null;
+  poll?: Poll;
+  pollVotes?: PollVotes;
 }

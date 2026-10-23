@@ -14,9 +14,10 @@ export async function createChannelPoll(
   authorId: string,
   question: string,
   options: string[],
-  multiple: boolean
+  multiple: boolean,
+  correctIndex: number | null = null
 ): Promise<void> {
-  const fields = buildPollMessage(question, options, multiple);
+  const fields = buildPollMessage(question, options, multiple, correctIndex);
   const postRef = doc(collection(db, "channels", channelId, "posts"));
   const channelRef = doc(db, "channels", channelId);
 
