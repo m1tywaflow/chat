@@ -91,8 +91,8 @@
 //     replyTo: replyTo
 //       ? {
 //           id: replyTo.id,
-//           text: replyTo.text,
-//           senderId: replyTo.senderId,
+//           text: replyTo.text ?? "",
+//           senderId: replyTo.senderId ?? null,
 //           imageUrl: replyTo.imageUrl || null,
 //         }
 //       : null,
@@ -394,13 +394,17 @@
 //     duration,
 //     waveform,
 //     replyTo: replyTo
-//       ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl }
+//       ? {
+//           id: replyTo.id,
+//           text: replyTo.text ?? "",
+//           senderId: replyTo.senderId ?? null,
+//           imageUrl: replyTo.imageUrl || null,
+//         }
 //       : null,
 //     createdAt: serverTimestamp(),
 //     readBy: [],
 //     reactions: {},
 //   });
-
 
 //   await updateDoc(doc(db, "chats", chatId), {
 //     lastMessage: "Voice message",
@@ -408,7 +412,6 @@
 //     updatedAt: serverTimestamp(),
 //   });
 // }
-
 
 import {
   collection,
@@ -434,6 +437,7 @@ import {
 import { db } from "@/lib/firebase";
 import type { ForwardableContent } from "@/types/forward";
 import { buildForwardedFrom } from "@/lib/forwarding";
+import { callPreviewText, encodeCallPreview } from "@/lib/firestore/callLog";
 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
@@ -631,7 +635,7 @@ export function subscribeToUserChats(
             chatId: chat.id,
             senderName: participant?.username || "New message",
             senderAvatar: participant?.avatar,
-            text: chat.lastMessage || "",
+            text: callPreviewText(chat.lastMessage, myUid),
           });
         }
       }
@@ -731,14 +735,25 @@ export async function deleteMessage(chatId: string, messageId: string) {
   );
   const last = snap.docs.map((d) => d.data()).find((m) => !m.deleted);
 
+  let lastMessage = "";
+  if (last) {
+    if (last.type === "call" && last.callStatus && last.senderId) {
+      lastMessage = encodeCallPreview({
+        status: last.callStatus,
+        callType: last.callType === "video" ? "video" : "audio",
+        senderId: last.senderId,
+      });
+    } else if (last.voiceUrl) {
+      lastMessage = "Voice message";
+    } else if (last.imageUrl && !last.text) {
+      lastMessage = "Photo";
+    } else {
+      lastMessage = last.text || "";
+    }
+  }
+
   await updateDoc(doc(db, "chats", chatId), {
-    lastMessage: last
-      ? last.voiceUrl
-        ? "Voice message"
-        : last.imageUrl && !last.text
-        ? "Photo"
-        : last.text || ""
-      : "",
+    lastMessage,
     ...(last?.createdAt ? { lastMessageTime: last.createdAt } : {}),
   });
 }
