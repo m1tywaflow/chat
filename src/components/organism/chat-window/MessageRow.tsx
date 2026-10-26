@@ -1,6 +1,14 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import {
+    memo,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import {
     CornerUpLeft,
     MoreVertical,
@@ -25,6 +33,120 @@ import { getReplyPreview, useReplyAuthor } from "./reply-preview";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [...REACTION_EMOJIS, ...CUSTOM_EMOJIS.map((e) => e.id)];
+
+const PICKER_MARGIN = 8;
+const PICKER_GAP = 8;
+const PICKER_TOP_LIMIT = 64;
+
+const ReactionPicker = memo(function ReactionPicker({
+    anchorRef,
+    messageId,
+    isMine,
+    expanded,
+    onReact,
+    onExpand,
+}: {
+    anchorRef: RefObject<HTMLDivElement | null>;
+    messageId: string;
+    isMine: boolean;
+    expanded: boolean;
+    onReact: (id: string, token: string) => void;
+    onExpand: () => void;
+}) {
+    const pickerRef = useRef<HTMLDivElement | null>(null);
+    const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+    useLayoutEffect(() => {
+        function place() {
+            const anchor = anchorRef.current;
+            const el = pickerRef.current;
+            if (!anchor || !el) return;
+            const a = anchor.getBoundingClientRect();
+            const { width, height } = el.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            let top = a.top - height - PICKER_GAP;
+            if (top < PICKER_TOP_LIMIT) top = a.bottom + PICKER_GAP;
+            top = Math.max(
+                PICKER_MARGIN,
+                Math.min(top, vh - height - PICKER_MARGIN)
+            );
+
+            let left = isMine ? a.right - width : a.left;
+            left = Math.max(
+                PICKER_MARGIN,
+                Math.min(left, vw - width - PICKER_MARGIN)
+            );
+
+            setPos((prev) =>
+                prev && prev.left === left && prev.top === top
+                    ? prev
+                    : { left, top }
+            );
+        }
+
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+        };
+    }, [anchorRef, isMine, expanded]);
+
+    if (typeof document === "undefined") return null;
+
+    return createPortal(
+        <div
+            ref={pickerRef}
+            className={`reaction-picker fixed z-[1000] rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${expanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
+                }`}
+            style={{
+                left: pos?.left ?? 0,
+                top: pos?.top ?? 0,
+                visibility: pos ? "visible" : "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+        >
+            {!expanded ? (
+                <div className="flex items-center gap-1">
+                    {REACTION_EMOJIS.map((token) => (
+                        <button
+                            key={token}
+                            onClick={() => onReact(messageId, token)}
+                            className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                        >
+                            <ReactionGlyph token={token} size={26} />
+                        </button>
+                    ))}
+                    <button
+                        onClick={onExpand}
+                        title="More reactions"
+                        aria-label="More reactions"
+                        className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
+                    >
+                        <ChevronDown size={22} />
+                    </button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-6 gap-1">
+                    {REACTION_OPTIONS.map((token) => (
+                        <button
+                            key={token}
+                            onClick={() => onReact(messageId, token)}
+                            className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
+                        >
+                            <ReactionGlyph token={token} size={26} />
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>,
+        document.body
+    );
+});
 
 const EditField = memo(function EditField({
     initial,
@@ -227,6 +349,8 @@ const MessageRow = memo(function MessageRow({
     onSubmitEdit,
     onCancelEdit,
 }: MessageRowProps) {
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+
     const reactionSummary = Object.entries(
         (m.reactions || {}) as Record<string, string[]>
     )
@@ -274,48 +398,20 @@ const MessageRow = memo(function MessageRow({
                     if (!m.deleted && !m.pending) onOpenMenu(e, m.id, isMine);
                 }}
             >
-                <div data-msg-anim={m.id} className="relative group max-w-[72%] min-w-0">
+                <div
+                    ref={wrapRef}
+                    data-msg-anim={m.id}
+                    className="relative group max-w-[72%] min-w-0"
+                >
                     {isPickerOpen && (
-                        <div
-                            className={`reaction-picker absolute z-30 bottom-full mb-2 ${isMine ? "right-0" : "left-0"
-                                } rounded-2xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 ${pickerExpanded ? "p-2.5 w-[252px]" : "px-2.5 py-2"
-                                }`}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {!pickerExpanded ? (
-                                <div className="flex items-center gap-1">
-                                    {REACTION_EMOJIS.map((token) => (
-                                        <button
-                                            key={token}
-                                            onClick={() => onReact(m.id, token)}
-                                            className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                                        >
-                                            <ReactionGlyph token={token} size={26} />
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={onExpandPicker}
-                                        title="More reactions"
-                                        aria-label="More reactions"
-                                        className="w-7 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] text-zinc-500 hover:text-white cursor-pointer"
-                                    >
-                                        <ChevronDown size={22} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-6 gap-1">
-                                    {REACTION_OPTIONS.map((token) => (
-                                        <button
-                                            key={token}
-                                            onClick={() => onReact(m.id, token)}
-                                            className="reaction-emoji-btn w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/[0.08] cursor-pointer"
-                                        >
-                                            <ReactionGlyph token={token} size={26} />
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        <ReactionPicker
+                            anchorRef={wrapRef}
+                            messageId={m.id}
+                            isMine={isMine}
+                            expanded={pickerExpanded}
+                            onReact={onReact}
+                            onExpand={onExpandPicker}
+                        />
                     )}
 
                     {!m.deleted && !m.pending && (

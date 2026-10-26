@@ -38,7 +38,7 @@
 // import ChannelSearchModal from "../channel/ChannelSearchModal";
 // import ProfileModal from "../profile-modal/ProfileModal";
 // import CreateGroupModal from "../group/createGroupModal";
-
+// import UserProfileModal from "../profile-modal/UserProfileModal";
 // import {
 //   Settings,
 //   Search,
@@ -56,7 +56,7 @@
 // } from "lucide-react";
 // import Link from "next/link";
 // import { db } from "@/lib/firebase";
-// import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+// import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 // import {
 //   useThemeStore,
 //   DEFAULT_DARK,
@@ -82,9 +82,6 @@
 //   id: string;
 //   isOwner?: boolean;
 // }
-
-// const SEARCH_BG = "#1E1830";
-// const SEARCH_BTN_BG = "#13101f";
 
 // export default function SideBar() {
 //   const chats = useChatStore((s) => s.chats);
@@ -125,16 +122,19 @@
 //   );
 //   const [myChannels, setMyChannels] = useState<Channel[]>([]);
 //   const [chatsLoadedFor, setChatsLoadedFor] = useState<string | null>(null);
-//   const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(null);
+//   const [channelsLoadedFor, setChannelsLoadedFor] = useState<string | null>(
+//     null
+//   );
 //   const [userDocLoadedFor, setUserDocLoadedFor] = useState<string | null>(null);
 //   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
 //   const [createChannelOpen, setCreateChannelOpen] = useState(false);
 //   const [searchChannelOpen, setSearchChannelOpen] = useState(false);
-
 //   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
 //   const [draggedId, setDraggedId] = useState<string | null>(null);
 //   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+//   const [profileUser, setProfileUser] = useState<any | null>(null);
 
 //   const ctxRef = useRef<HTMLDivElement | null>(null);
 //   const channelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -162,9 +162,7 @@
 //       },
 //       (payload) => {
 //         const { activeChatId } = useChatStore.getState();
-
 //         const isThisChatOpen = activeChatId === payload.chatId;
-
 //         const isWindowVisible = useWindowVisibilityStore.getState().isVisible;
 
 //         if (isThisChatOpen && isWindowVisible) {
@@ -271,6 +269,17 @@
 //     openConversation("chat", chatId);
 //     setQuery("");
 //     setUsers([]);
+//     setProfileUser(null);
+//   }
+
+//   async function openUserProfile(u: any) {
+//     setProfileUser(u);
+//     try {
+//       const snap = await getDoc(doc(db, "users", u.id));
+//       if (snap.exists()) setProfileUser({ id: u.id, ...snap.data() });
+//     } catch {
+//       // оставляем то, что вернул searchUsers
+//     }
 //   }
 
 //   function handleCtxMenu(
@@ -367,7 +376,15 @@
 //       pinnedList: sortConversationItems(allItems.filter(isPinned), order),
 //       mergedList: sortByRecency(allItems.filter((item) => !isPinned(item))),
 //     };
-//   }, [chats, groups, myChannels, order, pinnedChannels, pinnedChats, pinnedGroups]);
+//   }, [
+//     chats,
+//     groups,
+//     myChannels,
+//     order,
+//     pinnedChannels,
+//     pinnedChats,
+//     pinnedGroups,
+//   ]);
 
 //   const chatsLoaded = chatsLoadedFor === firebaseUser?.uid;
 //   const channelsLoaded = channelsLoadedFor === firebaseUser?.uid;
@@ -689,7 +706,7 @@
 //               users.map((u) => (
 //                 <button
 //                   key={u.id}
-//                   onClick={() => openChat(u.id)}
+//                   onClick={() => openUserProfile(u)}
 //                   className="w-full flex items-center gap-3 p-3 transition-colors text-left"
 //                   style={{ color: theme.text }}
 //                   onMouseEnter={(e) =>
@@ -726,7 +743,7 @@
 //           </div>
 //         )}
 
-//         {/* contacts list — same background as the rest of the sidebar */}
+//         {/* contacts list */}
 //         <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
 //           {!ready ? (
 //             <SidebarSkeleton />
@@ -771,9 +788,7 @@
 //           >
 //             <div
 //               className="flex h-8 w-8 items-center justify-center rounded-xl"
-//               style={{
-//                 background: `${accent}18`,
-//               }}
+//               style={{ background: `${accent}18` }}
 //             >
 //               <Settings size={17} style={{ color: accent }} />
 //             </div>
@@ -796,9 +811,7 @@
 //           >
 //             <div
 //               className="flex h-8 w-8 items-center justify-center rounded-xl"
-//               style={{
-//                 background: `${accent}18`,
-//               }}
+//               style={{ background: `${accent}18` }}
 //             >
 //               <UserCircle size={17} style={{ color: accent }} />
 //             </div>
@@ -845,6 +858,14 @@
 //             setActiveChannel(channelId);
 //             setSearchChannelOpen(false);
 //           }}
+//         />
+//       )}
+
+//       {profileUser && (
+//         <UserProfileModal
+//           user={profileUser}
+//           onClose={() => setProfileUser(null)}
+//           onWrite={() => openChat(profileUser.id)}
 //         />
 //       )}
 
@@ -953,6 +974,7 @@
 //           </button>
 //         </div>
 //       )}
+
 //       {deleteConfirm && (
 //         <div
 //           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -1019,7 +1041,6 @@
 //     </>
 //   );
 // }
-
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
@@ -1300,7 +1321,7 @@ export default function SideBar() {
       const snap = await getDoc(doc(db, "users", u.id));
       if (snap.exists()) setProfileUser({ id: u.id, ...snap.data() });
     } catch {
-      // оставляем то, что вернул searchUsers
+      return;
     }
   }
 
@@ -1413,12 +1434,35 @@ export default function SideBar() {
   const userDocLoaded = userDocLoadedFor === firebaseUser?.uid;
   const ready = chatsLoaded && channelsLoaded && groupsLoaded && userDocLoaded;
 
+  const isLight = mode === "light";
   const accent = "#522fb7";
-  const border = mode === "light" ? "#d1d5db" : "#1F2A37";
-  const hoverBg = mode === "light" ? "#e5e7eb" : "rgba(255,255,255,0.04)";
-  const subText = mode === "light" ? "#6b7280" : "#a1a1aa";
-  const menuText = mode === "light" ? "#374151" : "#d4d4d8";
-  const menuDivider = mode === "light" ? "#e5e7eb" : "rgba(255,255,255,0.06)";
+  const accentSoft = "#8b6cff";
+  const border = isLight ? "#e5e7eb" : "rgba(255,255,255,0.06)";
+  const hoverBg = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.06)";
+  const subText = isLight ? "#6b7280" : "#9a96ad";
+  const mutedText = isLight ? "#9ca3af" : "#6f6a85";
+  const menuText = isLight ? "#1f2937" : "#e4e1ef";
+  const menuDivider = isLight ? "#eceef2" : "rgba(255,255,255,0.07)";
+  const fieldBg = isLight ? "#f1f2f6" : "rgba(255,255,255,0.05)";
+  const fieldFocusBg = isLight ? "#ffffff" : "rgba(255,255,255,0.08)";
+  const popBg = isLight ? "#ffffff" : "#16141f";
+  const popBorder = isLight ? "#e5e7eb" : "rgba(255,255,255,0.09)";
+  const popShadow = isLight
+    ? "0 16px 40px rgba(20,15,50,0.16), 0 2px 8px rgba(20,15,50,0.06)"
+    : "0 16px 40px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3)";
+  const chipBg = isLight ? "rgba(82,47,183,0.1)" : "rgba(139,108,255,0.14)";
+  const newBtnBg = channelMenuOpen
+    ? isLight
+      ? "rgba(82,47,183,0.08)"
+      : "rgba(82,47,183,0.14)"
+    : isLight
+      ? "#ffffff"
+      : "rgba(255,255,255,0.025)";
+  const newBtnBorder = channelMenuOpen
+    ? "rgba(139,108,255,0.35)"
+    : isLight
+      ? "#d9dce3"
+      : "rgba(255,255,255,0.07)";
 
   function renderItem(
     item: ConversationItem,
@@ -1455,12 +1499,12 @@ export default function SideBar() {
               ? handleCtxMenu(e, "channel", item.id, pinned, isChannelOwner)
               : handleCtxMenu(e, "group", item.id, pinned, isGroupOwner)
         }
-        className="relative"
+        className="relative transition-opacity duration-150"
         style={{
           opacity: draggedId === item.id ? 0.4 : 1,
           boxShadow:
             dragOverId === item.id && draggedId !== item.id
-              ? "inset 0 2px 0 0 #A78BFA"
+              ? `inset 0 2px 0 0 ${accentSoft}`
               : undefined,
         }}
       >
@@ -1475,47 +1519,93 @@ export default function SideBar() {
     );
   }
 
+  const newMenuItems = [
+    {
+      key: "channel",
+      icon: <Megaphone size={15} />,
+      title: "New channel",
+      subtitle: "Broadcast to subscribers",
+      accented: true,
+      onClick: () => setCreateChannelOpen(true),
+    },
+    {
+      key: "group",
+      icon: <Users size={15} />,
+      title: "New group",
+      subtitle: "Chat with multiple people",
+      accented: true,
+      onClick: () => setCreateGroupOpen(true),
+    },
+    {
+      key: "find",
+      icon: <Search size={15} />,
+      title: "Find a channel",
+      subtitle: "Discover public channels",
+      accented: false,
+      onClick: () => setSearchChannelOpen(true),
+    },
+  ];
+
+  const sectionHeaderClass =
+    "sticky top-0 z-10 flex items-center justify-between px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]";
+
   return (
     <>
       <style>{`
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.25); border-radius: 999px; }
-        .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.5); }
-        .sidebar-search-box {
-          border: 1px solid rgba(167,139,250,0.12);
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
-          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.2); border-radius: 999px; }
+        .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.45); }
+        .sb-field {
+          background: var(--sb-field-bg);
+          box-shadow: inset 0 0 0 1px transparent;
+          transition: background 0.18s ease, box-shadow 0.18s ease;
         }
-        .sidebar-search-box:hover {
-          border-color: rgba(167,139,250,0.22);
+        .sb-field:hover { box-shadow: inset 0 0 0 1px var(--sb-border); }
+        .sb-field:focus-within {
+          background: var(--sb-field-focus);
+          box-shadow: inset 0 0 0 1.5px var(--sb-accent-soft);
         }
-        .sidebar-search-box:focus-within {
-          border-color: rgba(167,139,250,0.55);
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.25), 0 0 0 3px rgba(82,47,183,0.18);
-          background: #221a3a;
+        .sb-field input::placeholder { color: var(--sb-muted); }
+        .sb-new-btn { transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease; }
+        .sb-new-btn:hover { border-color: rgba(139,108,255,0.35); }
+        .sb-new-btn:active { transform: scale(0.985); }
+        .sb-pop { animation: sbPop 0.13s ease-out; transform-origin: top left; }
+        .sb-fade { animation: sbFade 0.15s ease; }
+        .sb-press { transition: background 0.15s ease, transform 0.12s ease; }
+        .sb-press:active { transform: scale(0.975); }
+        @keyframes sbPop {
+          from { opacity: 0; transform: scale(0.95) translateY(-3px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes sbFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
 
       <section
         className="sidebar-entrance w-full h-full flex flex-col overflow-x-hidden border-r transition-colors duration-200 relative"
-        style={{
-          background: theme.sideBarBg,
-          borderColor: border,
-          color: theme.text,
-        }}
+        style={
+          {
+            background: theme.sideBarBg,
+            borderColor: border,
+            color: theme.text,
+            "--sb-field-bg": fieldBg,
+            "--sb-field-focus": fieldFocusBg,
+            "--sb-border": border,
+            "--sb-accent-soft": accentSoft,
+            "--sb-muted": mutedText,
+          } as React.CSSProperties
+        }
       >
-        {/* search & actions */}
-        <div
-          className="px-4 pt-4 pb-3 border-b"
-          style={{ borderColor: "rgba(36,29,87,0.6)" }}
-        >
+        <div className="px-4 pt-4 pb-3">
           <div className="relative">
-            <div className="sidebar-search-box relative flex items-center w-full h-11 rounded-[15px]">
+            <div className="sb-field relative flex items-center w-full h-11 rounded-[15px]">
               <Search
-                size={17}
+                size={16}
                 className="absolute left-3.5 pointer-events-none"
-                style={{ color: "#8B85A0" }}
+                style={{ color: mutedText }}
               />
 
               <input
@@ -1523,54 +1613,53 @@ export default function SideBar() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search users..."
                 className="w-full h-full pl-10 pr-10 rounded-[15px] outline-none bg-transparent text-[13.5px]"
-                style={{ color: "#F3F1FA" }}
+                style={{ color: theme.text }}
               />
 
               {query ? (
                 <button
                   onClick={() => setQuery("")}
-                  className="absolute right-3 flex h-5 w-5 items-center justify-center rounded-full text-[#8B85A0] hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  className="absolute right-2.5 flex h-6 w-6 items-center justify-center rounded-full transition-colors cursor-pointer"
+                  style={{ color: subText }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = hoverBg)
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
                   <X size={13} />
                 </button>
               ) : (
                 <div
                   className="absolute right-3 pointer-events-none flex items-center justify-center"
-                  style={{ color: "#77718D" }}
+                  style={{ color: mutedText }}
                 >
                   <UserCircle size={16} strokeWidth={1.7} />
                 </div>
               )}
             </div>
 
-            {/* New menu */}
             <div className="relative mt-2.5" ref={channelMenuRef}>
               <button
                 onClick={() => setChannelMenuOpen((v) => !v)}
-                className="group w-full h-10 flex items-center justify-between rounded-[13px] px-3.5 border transition-all duration-200 cursor-pointer"
+                className="sb-new-btn group w-full h-10 flex items-center justify-between rounded-[13px] px-3.5 border cursor-pointer"
                 style={{
-                  background: channelMenuOpen
-                    ? "rgba(82,47,183,0.14)"
-                    : "rgba(255,255,255,0.025)",
-                  borderColor: channelMenuOpen
-                    ? "rgba(139,108,255,0.28)"
-                    : "rgba(255,255,255,0.06)",
+                  background: newBtnBg,
+                  borderColor: newBtnBorder,
                 }}
               >
                 <span className="flex items-center gap-2.5">
                   <span
-                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors"
-                    style={{
-                      background: "rgba(139,108,255,0.12)",
-                      color: "#9B83FF",
-                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg"
+                    style={{ background: chipBg, color: accentSoft }}
                   >
                     <Plus size={14} />
                   </span>
 
                   <span
                     className="text-[13px] font-medium"
-                    style={{ color: "#D9D5E7" }}
+                    style={{ color: menuText }}
                   >
                     New
                   </span>
@@ -1580,134 +1669,65 @@ export default function SideBar() {
                   size={14}
                   className={`transition-transform duration-200 ${channelMenuOpen ? "rotate-90" : ""
                     }`}
-                  style={{ color: "#716B83" }}
+                  style={{ color: mutedText }}
                 />
               </button>
 
               {channelMenuOpen && (
                 <div
-                  className="absolute left-0 right-0 top-[45px] rounded-[14px] border overflow-hidden z-50 p-1.5"
+                  className="sb-pop absolute left-0 right-0 top-[45px] rounded-[14px] border overflow-hidden z-50 p-1.5"
                   style={{
-                    background: mode === "light" ? "#ffffff" : "#11101a",
-                    borderColor:
-                      mode === "light"
-                        ? "#e5e7eb"
-                        : "rgba(255,255,255,0.08)",
-                    boxShadow:
-                      "0 18px 45px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25)",
+                    background: popBg,
+                    borderColor: popBorder,
+                    boxShadow: popShadow,
                   }}
                 >
-                  <button
-                    onClick={() => {
-                      setCreateChannelOpen(true);
-                      setChannelMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
-                    style={{ color: menuText }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = hoverBg)
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "transparent")
-                    }
-                  >
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{
-                        background: "rgba(139,108,255,0.11)",
-                        color: "#9B83FF",
-                      }}
-                    >
-                      <Megaphone size={15} />
-                    </span>
+                  {newMenuItems.map((entry, index) => (
+                    <div key={entry.key}>
+                      {index === newMenuItems.length - 1 && (
+                        <div
+                          className="my-1.5 h-px"
+                          style={{ background: menuDivider }}
+                        />
+                      )}
+                      <button
+                        onClick={() => {
+                          entry.onClick();
+                          setChannelMenuOpen(false);
+                        }}
+                        className="sb-press w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left cursor-pointer"
+                        style={{ color: menuText }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = hoverBg)
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                          style={{
+                            background: entry.accented ? chipBg : fieldBg,
+                            color: entry.accented ? accentSoft : mutedText,
+                          }}
+                        >
+                          {entry.icon}
+                        </span>
 
-                    <span className="flex flex-col">
-                      <span className="text-[13px] font-medium">
-                        New channel
-                      </span>
-                      <span className="text-[11px] text-zinc-500">
-                        Broadcast to subscribers
-                      </span>
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setCreateGroupOpen(true);
-                      setChannelMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
-                    style={{ color: menuText }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = hoverBg)
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "transparent")
-                    }
-                  >
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{
-                        background: "rgba(139,108,255,0.11)",
-                        color: "#9B83FF",
-                      }}
-                    >
-                      <Users size={15} />
-                    </span>
-
-                    <span className="flex flex-col">
-                      <span className="text-[13px] font-medium">
-                        New group
-                      </span>
-                      <span className="text-[11px] text-zinc-500">
-                        Chat with multiple people
-                      </span>
-                    </span>
-                  </button>
-
-                  <div
-                    className="my-1.5 h-px"
-                    style={{
-                      background:
-                        mode === "light"
-                          ? "#e5e7eb"
-                          : "rgba(255,255,255,0.06)",
-                    }}
-                  />
-
-                  <button
-                    onClick={() => {
-                      setSearchChannelOpen(true);
-                      setChannelMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors cursor-pointer"
-                    style={{ color: menuText }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = hoverBg)
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "transparent")
-                    }
-                  >
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{
-                        background: "rgba(255,255,255,0.04)",
-                        color: "#8B85A0",
-                      }}
-                    >
-                      <Search size={15} />
-                    </span>
-
-                    <span className="flex flex-col">
-                      <span className="text-[13px] font-medium">
-                        Find a channel
-                      </span>
-                      <span className="text-[11px] text-zinc-500">
-                        Discover public channels
-                      </span>
-                    </span>
-                  </button>
+                        <span className="flex flex-col leading-tight min-w-0">
+                          <span className="text-[13px] font-medium">
+                            {entry.title}
+                          </span>
+                          <span
+                            className="text-[11px] mt-0.5 truncate"
+                            style={{ color: mutedText }}
+                          >
+                            {entry.subtitle}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1715,22 +1735,23 @@ export default function SideBar() {
         </div>
 
         {query && (
-          <div
-            className="border-b transition-colors duration-200"
-            style={{ borderColor: border }}
-          >
+          <div className="sb-fade border-y" style={{ borderColor: border }}>
             {loading && (
-              <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
+              <p className="text-xs px-4 py-3" style={{ color: subText }}>
                 Searching...
               </p>
             )}
             {!loading &&
-              users.map((u) => (
+              users.map((u, index) => (
                 <button
                   key={u.id}
                   onClick={() => openUserProfile(u)}
-                  className="w-full flex items-center gap-3 p-3 transition-colors text-left"
-                  style={{ color: theme.text }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left cursor-pointer"
+                  style={{
+                    color: theme.text,
+                    borderTop:
+                      index === 0 ? "none" : `1px solid ${menuDivider}`,
+                  }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background = hoverBg)
                   }
@@ -1748,98 +1769,119 @@ export default function SideBar() {
                     />
                   ) : (
                     <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-black font-semibold"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold"
                       style={{ background: accent }}
                     >
                       {u.username?.[0]?.toUpperCase()}
                     </div>
                   )}
-                  <span className="text-sm">{u.username}</span>
+                  <span className="text-[13.5px] font-medium truncate">
+                    {u.username}
+                  </span>
                 </button>
               ))}
             {!loading && users.length === 0 && (
-              <p className="text-xs px-4 py-2.5" style={{ color: subText }}>
+              <p className="text-xs px-4 py-3" style={{ color: subText }}>
                 No users found
               </p>
             )}
           </div>
         )}
 
-        {/* contacts list */}
-        <div className="sidebar-scroll flex-1 overflow-y-auto mt-4">
+        <div className="sidebar-scroll flex-1 overflow-y-auto">
           {!ready ? (
             <SidebarSkeleton />
           ) : pinnedList.length === 0 && mergedList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2.5 h-full text-center px-6 pb-10">
+            <div className="sb-fade flex flex-col items-center justify-center gap-3 h-full text-center px-8 pb-10">
               <div
-                className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                style={{ background: `${accent}18` }}
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ background: chipBg }}
               >
-                <MessagesSquare size={18} style={{ color: accent }} />
+                <MessagesSquare size={20} style={{ color: accentSoft }} />
               </div>
-              <p className="text-sm" style={{ color: subText }}>
-                No chats yet. Search users above to start one.
-              </p>
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-[14px] font-semibold"
+                  style={{ color: theme.text }}
+                >
+                  No chats yet
+                </p>
+                <p
+                  className="text-[12.5px] leading-relaxed"
+                  style={{ color: subText }}
+                >
+                  Search users above to start a conversation.
+                </p>
+              </div>
             </div>
           ) : (
-            <div>
+            <div className="pb-2">
+              {pinnedList.length > 0 && (
+                <div
+                  className={sectionHeaderClass}
+                  style={{ color: mutedText, background: theme.sideBarBg }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Pin size={10} />
+                    Pinned
+                  </span>
+                  <span>{pinnedList.length}</span>
+                </div>
+              )}
               {pinnedList.map((item) => renderItem(item, true, pinnedList))}
+
+              {pinnedList.length > 0 && mergedList.length > 0 && (
+                <div
+                  className={sectionHeaderClass}
+                  style={{ color: mutedText, background: theme.sideBarBg }}
+                >
+                  <span>All chats</span>
+                  <span>{mergedList.length}</span>
+                </div>
+              )}
               {mergedList.map((item) => renderItem(item, false, mergedList))}
             </div>
           )}
         </div>
 
-        {/* footer */}
         <div
-          className="pt-3 pb-2 px-0 space-y-2 border-t"
-          style={{ borderColor: "rgba(36,29,87,0.5)" }}
+          className="flex items-center gap-2 px-3 py-3 border-t"
+          style={{ borderColor: border }}
         >
-          <Link
-            href="/settings"
-            className="group flex h-12 items-center gap-3 rounded-2xl border border-white/[0.05]
-               bg-white/[0.015] px-4 transition-all duration-200"
-            style={{ color: theme.text }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = hoverBg;
-              e.currentTarget.style.borderColor = accent + "40";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.015)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
-            }}
-          >
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-xl"
-              style={{ background: `${accent}18` }}
-            >
-              <Settings size={17} style={{ color: accent }} />
-            </div>
-
-            <span className="text-[14px] font-medium">Settings</span>
-          </Link>
-
           <button
             onClick={() => setShowProfile(true)}
-            className="group flex h-12 w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.015] px-4 text-left transition-all duration-200"
-            style={{ color: theme.text }}
+            className="sb-press flex h-11 flex-1 min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2.5 text-left"
+            style={{ color: theme.text, background: fieldBg }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = fieldBg)}
+          >
+            <span
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+              style={{ background: chipBg }}
+            >
+              <UserCircle size={16} style={{ color: accentSoft }} />
+            </span>
+            <span className="text-[13.5px] font-medium truncate">
+              Your profile
+            </span>
+          </button>
+
+          <Link
+            href="/settings"
+            className="sb-press flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            style={{ color: subText, background: fieldBg }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = hoverBg;
-              e.currentTarget.style.borderColor = accent + "40";
+              e.currentTarget.style.color = accentSoft;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.015)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+              e.currentTarget.style.background = fieldBg;
+              e.currentTarget.style.color = subText;
             }}
+            aria-label="Settings"
           >
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-xl"
-              style={{ background: `${accent}18` }}
-            >
-              <UserCircle size={17} style={{ color: accent }} />
-            </div>
-
-            <span className="text-[14px] font-medium">Your profile</span>
-          </button>
+            <Settings size={18} />
+          </Link>
         </div>
       </section>
 
@@ -1891,7 +1933,6 @@ export default function SideBar() {
         />
       )}
 
-      {/* context menu */}
       {ctxMenu && (
         <div
           ref={ctxRef}
@@ -1900,14 +1941,17 @@ export default function SideBar() {
             top: ctxMenu.y,
             left: ctxMenu.x,
             zIndex: 999,
-            background: mode === "light" ? "#ffffff" : "#151D28",
+            background: popBg,
+            borderColor: popBorder,
+            boxShadow: popShadow,
+            transformOrigin: "top left",
           }}
-          className="min-w-[168px] rounded-xl border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden"
+          className="sb-pop min-w-[180px] rounded-xl border p-1"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={handlePin}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-colors cursor-pointer"
             style={{ color: menuText }}
             onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
             onMouseLeave={(e) =>
@@ -1915,8 +1959,8 @@ export default function SideBar() {
             }
           >
             <Pin
-              size={13}
-              style={{ color: ctxMenu.pinned ? accent : "inherit" }}
+              size={14}
+              style={{ color: ctxMenu.pinned ? accentSoft : subText }}
             />
             {ctxMenu.pinned
               ? ctxMenu.type === "chat"
@@ -1934,20 +1978,21 @@ export default function SideBar() {
           {ctxMenu.type === "chat" && (
             <button
               onClick={() => handleMarkRead(ctxMenu.id)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-colors cursor-pointer"
               style={{ color: menuText }}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
               onMouseLeave={(e) =>
                 (e.currentTarget.style.background = "transparent")
               }
             >
-              <CheckCheck size={13} />
+              <CheckCheck size={14} style={{ color: subText }} />
               Mark as read
             </button>
           )}
 
           <div
-            style={{ height: 1, background: menuDivider, margin: "2px 0" }}
+            className="my-1 mx-1"
+            style={{ height: 1, background: menuDivider }}
           />
 
           <button
@@ -1959,37 +2004,39 @@ export default function SideBar() {
               });
               setCtxMenu(null);
             }}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors cursor-pointer text-red-400"
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-colors cursor-pointer text-red-400"
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(239,68,68,0.1)")
+            }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
             }
           >
             {ctxMenu.type === "chat" ? (
               <>
-                <Trash2 size={13} className="text-red-400/70" />
+                <Trash2 size={14} />
                 Delete chat
               </>
             ) : ctxMenu.type === "channel" ? (
               ctxMenu.isOwner ? (
                 <>
-                  <Trash2 size={13} className="text-red-400/70" />
+                  <Trash2 size={14} />
                   Delete channel
                 </>
               ) : (
                 <>
-                  <LogOut size={13} className="text-red-400/70" />
+                  <LogOut size={14} />
                   Leave channel
                 </>
               )
             ) : ctxMenu.isOwner ? (
               <>
-                <Trash2 size={13} className="text-red-400/70" />
+                <Trash2 size={14} />
                 Delete group
               </>
             ) : (
               <>
-                <LogOut size={13} className="text-red-400/70" />
+                <LogOut size={14} />
                 Leave group
               </>
             )}
@@ -1999,62 +2046,86 @@ export default function SideBar() {
 
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="sb-fade fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-[3px]"
           onClick={() => setDeleteConfirm(null)}
         >
           <div
-            className="w-80 rounded-2xl bg-gray-900 border border-white/10 shadow-2xl shadow-black/60 overflow-hidden"
+            className="sb-pop w-[320px] rounded-2xl border p-5 text-center"
+            style={{
+              background: popBg,
+              borderColor: popBorder,
+              boxShadow: popShadow,
+              transformOrigin: "center",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 pt-6 pb-4">
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-                {(deleteConfirm.type === "channel" ||
-                  deleteConfirm.type === "group") &&
-                  !deleteConfirm.isOwner ? (
-                  <LogOut size={18} className="text-red-400" />
-                ) : (
-                  <Trash2 size={18} className="text-red-400" />
-                )}
-              </div>
-              <h3 className="text-[15px] font-semibold text-white mb-1">
-                {deleteConfirm.type === "chat"
-                  ? "Delete chat?"
-                  : deleteConfirm.type === "channel"
-                    ? deleteConfirm.isOwner
-                      ? "Delete channel?"
-                      : "Leave channel?"
-                    : deleteConfirm.isOwner
-                      ? "Delete group?"
-                      : "Leave group?"}
-              </h3>
-              <p className="text-[13px] text-zinc-400 leading-relaxed">
-                {deleteConfirm.type === "chat"
-                  ? "This will permanently delete the entire conversation. This action cannot be undone."
-                  : deleteConfirm.type === "channel"
-                    ? deleteConfirm.isOwner
-                      ? "This will permanently delete the channel for all subscribers. This action cannot be undone."
-                      : "You will stop receiving posts from this channel. You can subscribe again anytime."
-                    : deleteConfirm.isOwner
-                      ? "This will permanently delete the group for all members. This action cannot be undone."
-                      : "You will stop receiving messages from this group. You'll need a new invite to rejoin."}
-              </p>
+            <div
+              className="mx-auto mb-3.5 w-11 h-11 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(239,68,68,0.12)" }}
+            >
+              {(deleteConfirm.type === "channel" ||
+                deleteConfirm.type === "group") &&
+                !deleteConfirm.isOwner ? (
+                <LogOut size={18} className="text-red-400" />
+              ) : (
+                <Trash2 size={18} className="text-red-400" />
+              )}
             </div>
-            <div className="flex border-t border-white/[0.06]">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-3.5 text-sm text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors font-medium border-r border-white/[0.06] cursor-pointer"
-              >
-                Cancel
-              </button>
+
+            <h3
+              className="text-[16px] font-semibold mb-1.5"
+              style={{ color: isLight ? "#111827" : "#ffffff" }}
+            >
+              {deleteConfirm.type === "chat"
+                ? "Delete chat?"
+                : deleteConfirm.type === "channel"
+                  ? deleteConfirm.isOwner
+                    ? "Delete channel?"
+                    : "Leave channel?"
+                  : deleteConfirm.isOwner
+                    ? "Delete group?"
+                    : "Leave group?"}
+            </h3>
+
+            <p
+              className="text-[13px] leading-relaxed mb-5"
+              style={{ color: subText }}
+            >
+              {deleteConfirm.type === "chat"
+                ? "This will permanently delete the entire conversation. This action cannot be undone."
+                : deleteConfirm.type === "channel"
+                  ? deleteConfirm.isOwner
+                    ? "This will permanently delete the channel for all subscribers. This action cannot be undone."
+                    : "You will stop receiving posts from this channel. You can subscribe again anytime."
+                  : deleteConfirm.isOwner
+                    ? "This will permanently delete the group for all members. This action cannot be undone."
+                    : "You will stop receiving messages from this group. You'll need a new invite to rejoin."}
+            </p>
+
+            <div className="flex flex-col gap-2">
               <button
                 onClick={confirmDelete}
-                className="flex-1 py-3.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors font-semibold cursor-pointer"
+                className="sb-press w-full h-10 rounded-xl text-sm font-semibold text-white cursor-pointer hover:brightness-110"
+                style={{ background: "#ef4444" }}
               >
                 {(deleteConfirm.type === "channel" ||
                   deleteConfirm.type === "group") &&
                   !deleteConfirm.isOwner
                   ? "Leave"
                   : "Delete"}
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="sb-press w-full h-10 rounded-xl text-sm font-medium cursor-pointer"
+                style={{ color: menuText, background: fieldBg }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = hoverBg)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = fieldBg)
+                }
+              >
+                Cancel
               </button>
             </div>
           </div>

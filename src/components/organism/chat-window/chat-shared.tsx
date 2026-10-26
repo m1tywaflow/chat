@@ -4,7 +4,6 @@ import { memo, useEffect } from "react";
 import { Check, CheckCheck, Clock } from "lucide-react";
 import { getCustomEmoji } from "@/lib/customEmoji";
 
-/* ───────────── stickers / rich text ───────────── */
 
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
@@ -16,7 +15,6 @@ export function isStickerOnlyText(text: string): boolean {
     return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
-/* ───────────── media helpers ───────────── */
 
 export function isVideo(url: string) {
     return (
@@ -43,7 +41,6 @@ export async function uploadToCloudinary(
     return data.secure_url;
 }
 
-/** Отдаёт Cloudinary-картинку в нужном размере и современном формате. */
 export function optimizeImage(url: string, width = 520): string {
     if (!url.includes("res.cloudinary.com") || !url.includes("/image/upload/"))
         return url;
@@ -51,7 +48,7 @@ export function optimizeImage(url: string, width = 520): string {
     return url.replace("/upload/", `/upload/f_auto,q_auto,w_${width},c_limit/`);
 }
 
-/* ───────────── dates ───────────── */
+
 
 export function toDate(ts: any): Date {
     if (!ts) return new Date();
@@ -84,7 +81,7 @@ export function formatDayLabel(d: Date): string {
     });
 }
 
-/* ───────────── small components ───────────── */
+
 
 export const ReactionGlyph = memo(function ReactionGlyph({
     token,
