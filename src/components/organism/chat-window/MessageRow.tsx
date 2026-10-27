@@ -610,7 +610,7 @@ const MessageRow = memo(function MessageRow({
 
                     {hasReactions && (
                         <div
-                            className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"
+                            className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end pr-4" : "justify-start pl-1"
                                 }`}
                         >
                             {reactionSummary.map(({ token, count, mine }) => (

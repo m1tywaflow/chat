@@ -76,6 +76,15 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const PRIORITY_TAIL = 8;
 const MENU_MARGIN = 8;
+const SCROLL_KEYS = [
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+];
 
 interface MsgMenuState {
   id: string;
@@ -105,6 +114,13 @@ function sameList(a: string[], b: string[]) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
 export default function ChatWindow() {
@@ -167,7 +183,10 @@ export default function ChatWindow() {
   const visibleRef = useRef(isWindowVisible);
   const unreadRef = useRef(0);
   const callBusyRef = useRef(false);
+  const scrollLockedRef = useRef(false);
   const loadOlderRef = useRef<() => void>(() => { });
+
+  const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
 
   useLayoutEffect(() => {
     activeChatIdRef.current = chatId;
@@ -180,6 +199,10 @@ export default function ChatWindow() {
   useLayoutEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useLayoutEffect(() => {
+    scrollLockedRef.current = scrollLocked;
+  }, [scrollLocked]);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
@@ -430,7 +453,7 @@ export default function ChatWindow() {
     if (!root || !target || !hasMoreMessages) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) loadOlderRef.current();
+        if (entry.isIntersecting && !scrollLockedRef.current) loadOlderRef.current();
       },
       { root, rootMargin: "200px 0px 0px 0px" }
     );
@@ -447,6 +470,7 @@ export default function ChatWindow() {
   }, [messages]);
 
   const scrollToBottom = useCallback((smooth = false) => {
+    if (scrollLockedRef.current) return;
     const el = chatScrollRef.current;
     if (!el) return;
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -461,6 +485,10 @@ export default function ChatWindow() {
     if (!chatId) return;
     const intent = scrollIntentRef.current;
     if (!intent) return;
+    if (scrollLockedRef.current && intent !== "initial") {
+      scrollIntentRef.current = null;
+      return;
+    }
     if (intent === "initial" || intent === "force" || isNearBottom.current) {
       scrollToBottom();
       isNearBottom.current = true;
@@ -516,13 +544,54 @@ export default function ChatWindow() {
     };
     window.addEventListener("resize", close);
     window.addEventListener("keydown", handleKey);
-    window.addEventListener("scroll", close, true);
     return () => {
       window.removeEventListener("resize", close);
       window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("scroll", close, true);
     };
   }, [msgMenu]);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!scrollLocked || !el) return;
+
+    const lockedTop = el.scrollTop;
+
+    const isAllowed = (target: EventTarget | null) => {
+      const node = target as HTMLElement | null;
+      if (!node || !(node instanceof Node)) return true;
+      if (!el.contains(node)) return true;
+      return Boolean(node.closest?.("[data-allow-scroll]"));
+    };
+
+    const blockScroll = (e: Event) => {
+      if (isAllowed(e.target)) return;
+      e.preventDefault();
+    };
+    const blockKeys = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if (SCROLL_KEYS.includes(e.key)) e.preventDefault();
+    };
+    const blockScrollbar = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      if (e.clientX > rect.left + el.clientWidth) e.preventDefault();
+    };
+    const restore = () => {
+      if (el.scrollTop !== lockedTop) el.scrollTop = lockedTop;
+    };
+
+    window.addEventListener("wheel", blockScroll, { passive: false, capture: true });
+    window.addEventListener("touchmove", blockScroll, { passive: false, capture: true });
+    el.addEventListener("mousedown", blockScrollbar, true);
+    el.addEventListener("scroll", restore);
+    window.addEventListener("keydown", blockKeys, true);
+    return () => {
+      window.removeEventListener("wheel", blockScroll, true);
+      window.removeEventListener("touchmove", blockScroll, true);
+      el.removeEventListener("mousedown", blockScrollbar, true);
+      el.removeEventListener("scroll", restore);
+      window.removeEventListener("keydown", blockKeys, true);
+    };
+  }, [scrollLocked]);
 
   useLayoutEffect(() => {
     if (!msgMenu) {
