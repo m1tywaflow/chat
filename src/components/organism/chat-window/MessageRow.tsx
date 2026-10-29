@@ -30,6 +30,7 @@ import {
     optimizeImage,
 } from "./chat-shared";
 import { getReplyPreview, useReplyAuthor } from "./reply-preview";
+import LinkPreview from "./LinkPreview";
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 const REACTION_OPTIONS = [...REACTION_EMOJIS, ...CUSTOM_EMOJIS.map((e) => e.id)];
@@ -37,6 +38,21 @@ const REACTION_OPTIONS = [...REACTION_EMOJIS, ...CUSTOM_EMOJIS.map((e) => e.id)]
 const PICKER_MARGIN = 8;
 const PICKER_GAP = 8;
 const PICKER_TOP_LIMIT = 64;
+
+const URL_REGEX = /https?:\/\/[^\s<>"]+/i;
+
+function extractUrl(text: unknown): string | null {
+    if (typeof text !== "string") return null;
+    const match = text.match(URL_REGEX);
+    if (!match) return null;
+    const cleaned = match[0].replace(/[.,!?;:)\]}'"]+$/, "");
+    try {
+        const u = new URL(cleaned);
+        return u.protocol === "http:" || u.protocol === "https:" ? cleaned : null;
+    } catch {
+        return null;
+    }
+}
 
 const ReactionPicker = memo(function ReactionPicker({
     anchorRef,
@@ -368,6 +384,10 @@ const MessageRow = memo(function MessageRow({
     const isStickerMsg = isImageStickerMsg || isTextStickerMsg;
     const isVoiceMsg = !!m.voiceUrl;
     const time = formatTime(m.createdAt);
+    const linkUrl =
+        !isStickerMsg && !isVoiceMsg && !m.pending && !m.deleted
+            ? extractUrl(m.text)
+            : null;
 
     const bubbleClass = isStickerMsg
         ? `leading-none ${m.pending ? "msg-bubble-pending" : ""}`
@@ -401,7 +421,8 @@ const MessageRow = memo(function MessageRow({
                 <div
                     ref={wrapRef}
                     data-msg-anim={m.id}
-                    className="relative group max-w-[72%] min-w-0"
+                    className={`relative group min-w-0 ${linkUrl && !m.imageUrl ? "max-w-[min(72%,360px)]" : "max-w-[min(72%,480px)]"
+                        }`}
                 >
                     {isPickerOpen && (
                         <ReactionPicker
@@ -571,26 +592,35 @@ const MessageRow = memo(function MessageRow({
                                     />
                                 ) : (
                                     m.text && (
-                                        <div
-                                            className={`flex items-end gap-2.5 flex-wrap justify-between ${m.imageUrl ? "px-3 pb-1 pt-2" : ""
-                                                }`}
-                                        >
-                                            <span className="whitespace-pre-wrap break-words">
-                                                <RichText text={m.text} />
-                                                {m.edited && (
-                                                    <span className="text-[10px] ml-1 opacity-50">
-                                                        (edited)
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <MessageMeta
-                                                time={time}
-                                                pending={m.pending}
-                                                isMine={isMine}
-                                                isRead={isRead}
-                                                variant="inline"
-                                            />
-                                        </div>
+                                        <>
+                                            <div
+                                                className={`flex items-end gap-2.5 flex-wrap justify-between ${m.imageUrl ? "px-3 pb-1 pt-2" : ""
+                                                    }`}
+                                            >
+                                                <span className="whitespace-pre-wrap [overflow-wrap:anywhere] min-w-0 max-w-full">
+                                                    <RichText text={m.text} />
+                                                    {m.edited && (
+                                                        <span className="text-[10px] ml-1 opacity-50">
+                                                            (edited)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <MessageMeta
+                                                    time={time}
+                                                    pending={m.pending}
+                                                    isMine={isMine}
+                                                    isRead={isRead}
+                                                    variant="inline"
+                                                />
+                                            </div>
+                                            {linkUrl && !m.imageUrl && (
+                                                <LinkPreview
+                                                    url={linkUrl}
+                                                    isMine={isMine}
+                                                    onLayout={onMediaLoad}
+                                                />
+                                            )}
+                                        </>
                                     )
                                 )}
                                 {!m.text && m.imageUrl && isMine && (
@@ -610,7 +640,7 @@ const MessageRow = memo(function MessageRow({
 
                     {hasReactions && (
                         <div
-                            className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end pr-1" : "justify-start pl-1"
+                            className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start pl-1"
                                 }`}
                         >
                             {reactionSummary.map(({ token, count, mine }) => (

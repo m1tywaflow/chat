@@ -4,17 +4,17 @@ import { memo, useEffect } from "react";
 import { Check, CheckCheck, Clock } from "lucide-react";
 import { getCustomEmoji } from "@/lib/customEmoji";
 
-
-const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const RICH_SPLIT_RE = /(::[\w-]+::|https?:\/\/[^\s<>"]+)/gi;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+const URL_PART_RE = /^https?:\/\//i;
+const URL_TAIL_RE = /^(.*?)([.,!?;:)\]}'"]*)$/;
 
 export function isStickerOnlyText(text: string): boolean {
     if (!text) return false;
     const trimmed = text.trim();
     return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
-
 
 export function isVideo(url: string) {
     return (
@@ -44,11 +44,9 @@ export async function uploadToCloudinary(
 export function optimizeImage(url: string, width = 520): string {
     if (!url.includes("res.cloudinary.com") || !url.includes("/image/upload/"))
         return url;
-    if (/\/upload\/[a-z]+_/.test(url)) return url; // трансформации уже есть
+    if (/\/upload\/[a-z]+_/.test(url)) return url;
     return url.replace("/upload/", `/upload/f_auto,q_auto,w_${width},c_limit/`);
 }
-
-
 
 export function toDate(ts: any): Date {
     if (!ts) return new Date();
@@ -80,8 +78,6 @@ export function formatDayLabel(d: Date): string {
         ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
     });
 }
-
-
 
 export const ReactionGlyph = memo(function ReactionGlyph({
     token,
@@ -115,7 +111,7 @@ export const RichText = memo(function RichText({
     text: string;
     variant?: "inline" | "large";
 }) {
-    const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+    const parts = text.split(RICH_SPLIT_RE);
     return (
         <>
             {parts.map((part, i) => {
@@ -139,6 +135,25 @@ export const RichText = memo(function RichText({
                             />
                         );
                     }
+                }
+                if (variant === "inline" && URL_PART_RE.test(part)) {
+                    const tailMatch = part.match(URL_TAIL_RE);
+                    const href = tailMatch ? tailMatch[1] : part;
+                    const tail = tailMatch ? tailMatch[2] : "";
+                    return (
+                        <span key={i}>
+                            <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                onClick={(e) => e.stopPropagation()}
+                                className="underline underline-offset-2 decoration-white/40 hover:decoration-white break-all"
+                            >
+                                {href}
+                            </a>
+                            {tail}
+                        </span>
+                    );
                 }
                 if (variant === "large" && !part.trim()) return null;
                 return part ? <span key={i}>{part}</span> : null;
