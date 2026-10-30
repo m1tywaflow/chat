@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useGroupStore } from "@/store/group-store";
 import {
   subscribeToGroupMessages,
@@ -75,14 +76,28 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const PENDING_LOOKBACK = 50;
 const MAX_JUMP_PAGES = 12;
+const MENU_MARGIN = 8;
+const SCROLL_KEYS = [
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+];
 const EMPTY_MESSAGES: any[] = [];
 
 interface MsgMenuState {
   id: string;
   x: number;
   y: number;
-  openUpward: boolean;
   isMine: boolean;
+}
+
+interface MenuPos {
+  left: number;
+  top: number;
 }
 
 type Row =
@@ -97,6 +112,17 @@ type Row =
 
 function sameList(a: string[], b: string[]) {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
 function sameValue(a: any, b: any): boolean {
@@ -169,6 +195,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
   const [pickerExpanded, setPickerExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
+  const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
   const [pinnedMessage, setPinnedMessage] = useState<{
     id: string;
     text: string;
@@ -190,6 +217,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
 
   const composerRef = useRef<GroupComposerHandle | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const msgMenuRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
@@ -211,7 +239,10 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
   const pendingRef = useRef<any[]>([]);
   const hasMoreRef = useRef(false);
   const jumpingRef = useRef(false);
+  const scrollLockedRef = useRef(false);
   const loadOlderRef = useRef<() => Promise<void>>(async () => { });
+
+  const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
 
   useLayoutEffect(() => {
     myUidRef.current = myUid;
@@ -228,6 +259,10 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
   useLayoutEffect(() => {
     hasMoreRef.current = hasMoreMessages;
   }, [hasMoreMessages]);
+
+  useLayoutEffect(() => {
+    scrollLockedRef.current = scrollLocked;
+  }, [scrollLocked]);
 
   useEffect(() => {
     return () => {
@@ -481,7 +516,8 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     if (!root || !target || !hasMoreMessages) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) loadOlderRef.current();
+        if (entry.isIntersecting && !scrollLockedRef.current)
+          loadOlderRef.current();
       },
       { root, rootMargin: "200px 0px 0px 0px" }
     );
@@ -498,6 +534,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
   }, [messages]);
 
   const scrollToBottom = useCallback((smooth = false) => {
+    if (scrollLockedRef.current) return;
     const el = chatScrollRef.current;
     if (!el) return;
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -512,12 +549,24 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     if (!groupId) return;
     const intent = scrollIntentRef.current;
     if (!intent) return;
+    if (scrollLockedRef.current && intent !== "initial") {
+      scrollIntentRef.current = null;
+      return;
+    }
     if (intent === "initial" || intent === "force" || isNearBottom.current) {
       scrollToBottom();
       isNearBottom.current = true;
+      setShowScrollButton(false);
     }
     scrollIntentRef.current = null;
   }, [groupId, messages, pendingMessages, scrollToBottom]);
+
+  useEffect(() => {
+    document.body.style.overflow = lightboxUrl ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [lightboxUrl]);
 
   useEffect(() => {
     if (!lightboxUrl) return;
@@ -538,6 +587,99 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, [pickerOpenId, msgMenu]);
+
+  useEffect(() => {
+    if (!pickerOpenId) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPickerOpenId(null);
+        setPickerExpanded(false);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [pickerOpenId]);
+
+  useEffect(() => {
+    if (!msgMenu) return;
+    const close = () => setMsgMenu(null);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMsgMenu(null);
+    };
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [msgMenu]);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!scrollLocked || !el) return;
+
+    const lockedTop = el.scrollTop;
+
+    const isAllowed = (target: EventTarget | null) => {
+      const node = target as HTMLElement | null;
+      if (!node || !(node instanceof Node)) return true;
+      if (!el.contains(node)) return true;
+      return Boolean(node.closest?.("[data-allow-scroll]"));
+    };
+
+    const blockScroll = (e: Event) => {
+      if (isAllowed(e.target)) return;
+      e.preventDefault();
+    };
+    const blockKeys = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if (SCROLL_KEYS.includes(e.key)) e.preventDefault();
+    };
+    const blockScrollbar = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      if (e.clientX > rect.left + el.clientWidth) e.preventDefault();
+    };
+    const restore = () => {
+      if (el.scrollTop !== lockedTop) el.scrollTop = lockedTop;
+    };
+
+    window.addEventListener("wheel", blockScroll, { passive: false, capture: true });
+    window.addEventListener("touchmove", blockScroll, { passive: false, capture: true });
+    el.addEventListener("mousedown", blockScrollbar, true);
+    el.addEventListener("scroll", restore);
+    window.addEventListener("keydown", blockKeys, true);
+    return () => {
+      window.removeEventListener("wheel", blockScroll, true);
+      window.removeEventListener("touchmove", blockScroll, true);
+      el.removeEventListener("mousedown", blockScrollbar, true);
+      el.removeEventListener("scroll", restore);
+      window.removeEventListener("keydown", blockKeys, true);
+    };
+  }, [scrollLocked]);
+
+  useLayoutEffect(() => {
+    if (!msgMenu) {
+      setMenuPos(null);
+      return;
+    }
+    const el = msgMenuRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = msgMenu.x;
+    if (left + width > vw - MENU_MARGIN) left = msgMenu.x - width;
+    left = clamp(left, MENU_MARGIN, Math.max(MENU_MARGIN, vw - width - MENU_MARGIN));
+
+    let top = msgMenu.y;
+    if (top + height > vh - MENU_MARGIN) top = msgMenu.y - height;
+    top = clamp(top, MENU_MARGIN, Math.max(MENU_MARGIN, vh - height - MENU_MARGIN));
+
+    setMenuPos((prev) =>
+      prev && prev.left === left && prev.top === top ? prev : { left, top }
+    );
+  }, [msgMenu, copiedId, pinnedMessage?.id]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -590,6 +732,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     async (messageId: string, token: string) => {
       if (!groupId || !myUid) return;
       setPickerOpenId(null);
+      setPickerExpanded(false);
       try {
         await toggleGroupReaction(groupId, messageId, token, myUid);
       } catch (err) {
@@ -638,24 +781,10 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     (e: React.MouseEvent, msgId: string, isMine: boolean) => {
       e.preventDefault();
       e.stopPropagation();
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? {
-        bottom: e.clientY,
-        top: e.clientY,
-      };
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const openUpward = spaceBelow < 180;
-      setMsgMenu((prev) =>
-        prev?.id === msgId
-          ? null
-          : {
-            id: msgId,
-            x: e.clientX,
-            y: openUpward ? rect.top : rect.bottom,
-            openUpward,
-            isMine,
-          }
-      );
+      setMenuPos(null);
+      setMsgMenu({ id: msgId, x: e.clientX, y: e.clientY, isMine });
       setPickerOpenId(null);
+      setPickerExpanded(false);
     },
     []
   );
@@ -896,87 +1025,91 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
 
   return (
     <>
-      {msgMenu && currentMsgMenu && !currentMsgMenu.deleted && (
-        <div
-          className="msg-ctx-menu fixed z-[100] min-w-[168px] rounded-2xl bg-[#0d0b17]/95 border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
-          style={
-            msgMenu.openUpward
-              ? {
-                bottom: window.innerHeight - msgMenu.y,
-                right: window.innerWidth - msgMenu.x - 8,
-              }
-              : { top: msgMenu.y, right: window.innerWidth - msgMenu.x - 8 }
-          }
-          onClick={(e) => e.stopPropagation()}
-        >
-          {msgMenu.isMine &&
-            currentMsgMenu.text &&
-            !currentMsgMenu.imageUrl &&
-            !currentIsPoll && (
-              <button
-                className="ctx-item text-zinc-300"
-                onClick={() => startEdit(currentMsgMenu)}
-              >
-                <Pencil size={14} className="text-zinc-500" />
-                Edit message
-              </button>
-            )}
-          <button
-            className="ctx-item text-zinc-300"
-            onClick={() => {
-              handleReply(currentMsgMenu);
-              setMsgMenu(null);
+      {msgMenu &&
+        currentMsgMenu &&
+        !currentMsgMenu.deleted &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={msgMenuRef}
+            className="msg-ctx-menu fixed z-[1000] min-w-[168px] rounded-2xl bg-[#0d0b17]/95 border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+            style={{
+              left: menuPos?.left ?? msgMenu.x,
+              top: menuPos?.top ?? msgMenu.y,
+              visibility: menuPos ? "visible" : "hidden",
             }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
           >
-            <CornerUpLeft size={14} className="text-zinc-500" />
-            Reply
-          </button>
-          {!currentIsPoll && (
+            {msgMenu.isMine &&
+              currentMsgMenu.text &&
+              !currentMsgMenu.imageUrl &&
+              !currentIsPoll && (
+                <button
+                  className="ctx-item text-zinc-300"
+                  onClick={() => startEdit(currentMsgMenu)}
+                >
+                  <Pencil size={14} className="text-zinc-500" />
+                  Edit message
+                </button>
+              )}
             <button
               className="ctx-item text-zinc-300"
               onClick={() => {
-                setForwardData(currentMsgMenu);
+                handleReply(currentMsgMenu);
                 setMsgMenu(null);
               }}
             >
-              <Forward size={14} className="text-zinc-500" />
-              Forward
+              <CornerUpLeft size={14} className="text-zinc-500" />
+              Reply
             </button>
-          )}
-          {currentMsgMenu.text && !currentIsPoll && (
+            {!currentIsPoll && (
+              <button
+                className="ctx-item text-zinc-300"
+                onClick={() => {
+                  setForwardData(currentMsgMenu);
+                  setMsgMenu(null);
+                }}
+              >
+                <Forward size={14} className="text-zinc-500" />
+                Forward
+              </button>
+            )}
+            {currentMsgMenu.text && !currentIsPoll && (
+              <button
+                className="ctx-item text-zinc-300"
+                onClick={() => handleCopy(currentMsgMenu)}
+              >
+                <Copy size={14} className="text-zinc-500" />
+                {copiedId === currentMsgMenu.id ? "Copied!" : "Copy text"}
+              </button>
+            )}
             <button
               className="ctx-item text-zinc-300"
-              onClick={() => handleCopy(currentMsgMenu)}
+              onClick={() => handlePin(currentMsgMenu)}
             >
-              <Copy size={14} className="text-zinc-500" />
-              {copiedId === currentMsgMenu.id ? "Copied!" : "Copy text"}
+              {pinnedMessage?.id === currentMsgMenu.id ? (
+                <PinOff size={14} className="text-zinc-500" />
+              ) : (
+                <Pin size={14} className="text-zinc-500" />
+              )}
+              {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
             </button>
-          )}
-          <button
-            className="ctx-item text-zinc-300"
-            onClick={() => handlePin(currentMsgMenu)}
-          >
-            {pinnedMessage?.id === currentMsgMenu.id ? (
-              <PinOff size={14} className="text-zinc-500" />
-            ) : (
-              <Pin size={14} className="text-zinc-500" />
+            {msgMenu.isMine && (
+              <>
+                <div className="ctx-divider" />
+                <button
+                  className="ctx-item text-red-400"
+                  onClick={() => handleDelete(currentMsgMenu.id)}
+                >
+                  <Trash2 size={14} className="text-red-400/60" />
+                  Delete
+                </button>
+              </>
             )}
-            {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
-          </button>
-          {msgMenu.isMine && (
-            <>
-              <div className="ctx-divider" />
-              <button
-                className="ctx-item text-red-400"
-                onClick={() => handleDelete(currentMsgMenu.id)}
-              >
-                <Trash2 size={14} className="text-red-400/60" />
-                Delete
-              </button>
-            </>
-          )}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {lightboxUrl && (
         <div
@@ -1073,14 +1206,10 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
         {wallpaper?.url ? (
           <GroupWallpaper url={wallpaper.url} />
         ) : (
-          <div
-            className="pointer-events-none absolute inset-0 z-0"
-            style={{
-              background:
-                "radial-gradient(420px 420px at 0% 0%, rgba(91,61,240,.10), transparent 70%)," +
-                "radial-gradient(380px 380px at 100% 100%, rgba(43,31,120,.12), transparent 70%)",
-            }}
-          />
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+            <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
+            <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
+          </div>
         )}
 
         {isDraggingFile && (
