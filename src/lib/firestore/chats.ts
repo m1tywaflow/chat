@@ -25,6 +25,11 @@
 // import { buildForwardedFrom } from "@/lib/forwarding";
 // import { callPreviewText, encodeCallPreview } from "@/lib/firestore/callLog";
 // import { getCustomEmoji } from "@/lib/customEmoji";
+// import {
+//   ensureSavedChat,
+//   getSavedChatId,
+//   getSavedParticipant,
+// } from "@/lib/savedChat";
 
 // export function getChatId(uid1: string, uid2: string) {
 //   return [uid1, uid2].sort().join("_");
@@ -34,6 +39,8 @@
 //   uid: string,
 //   isTyping: boolean
 // ) {
+//   if (chatId === getSavedChatId(uid)) return;
+
 //   const ref = doc(db, "chats", chatId);
 
 //   await updateDoc(ref, {
@@ -41,6 +48,11 @@
 //   });
 // }
 // export async function createOrGetChat(myUid: string, otherUid: string) {
+//   if (myUid === otherUid) {
+//     await ensureSavedChat(myUid);
+//     return getSavedChatId(myUid);
+//   }
+
 //   const chatId = [myUid, otherUid].sort().join("_");
 
 //   await setDoc(
@@ -86,6 +98,8 @@
 //   const [uid1, uid2] = chatId.split("_");
 //   const otherUid = uid1 === myUid ? uid2 : uid1;
 
+//   if (chatId === getSavedChatId(myUid)) await ensureSavedChat(myUid);
+
 //   const docRef = await addDoc(collection(db, "chats", chatId, "messages"), {
 //     senderId: myUid,
 //     text: text.trim(),
@@ -101,12 +115,16 @@
 //       : null,
 //   });
 
-//   await updateDoc(doc(db, "chats", chatId), {
+//   const chatUpdate: Record<string, any> = {
 //     lastMessage: imageUrl && !text.trim() ? "📷 Photo" : text.trim(),
 //     lastMessageTime: serverTimestamp(),
 //     updatedAt: serverTimestamp(),
-//     [`unreadCount.${otherUid}`]: increment(1),
-//   });
+//   };
+//   if (otherUid !== myUid) {
+//     chatUpdate[`unreadCount.${otherUid}`] = increment(1);
+//   }
+
+//   await updateDoc(doc(db, "chats", chatId), chatUpdate);
 
 //   return docRef.id;
 // }
@@ -172,6 +190,8 @@
 // ) {
 //   if (!myUid) return () => {};
 
+//   const savedChatId = getSavedChatId(myUid);
+
 //   const q = query(
 //     collection(db, "chats"),
 //     where("participantIds", "array-contains", myUid),
@@ -199,8 +219,10 @@
 //   const chatUnsub = onSnapshot(q, (snap) => {
 //     chatCache = snap.docs.map((d) => {
 //       const chat = d.data() as any;
-//       const otherUid =
-//         chat?.participantIds?.find((id: string) => id !== myUid) || "";
+//       const isSaved = d.id === savedChatId;
+//       const otherUid = isSaved
+//         ? ""
+//         : chat?.participantIds?.find((id: string) => id !== myUid) || "";
 
 //       if (otherUid && !userUnsubs.has(otherUid)) {
 //         const unsub = onSnapshot(doc(db, "users", otherUid), (userSnap) => {
@@ -212,9 +234,14 @@
 //         userUnsubs.set(otherUid, unsub);
 //       }
 
-//       const unreadCount = chat.unreadCount?.[myUid] || 0;
+//       const unreadCount = isSaved ? 0 : chat.unreadCount?.[myUid] || 0;
 
-//       if (!isFirstSnapshot && onNewMessage && !chat.deleted?.[myUid]) {
+//       if (
+//         !isFirstSnapshot &&
+//         !isSaved &&
+//         onNewMessage &&
+//         !chat.deleted?.[myUid]
+//       ) {
 //         const prev = prevUnread.get(chat.id) ?? 0;
 //         if (unreadCount > prev) {
 //           const participant = userCache.get(otherUid);
@@ -226,26 +253,29 @@
 //           });
 //         }
 //       }
-//       prevUnread.set(chat.id, unreadCount);
+//       prevUnread.set(chat.id || d.id, unreadCount);
 
 //       if (chat.lastMessageTime) {
 //         lastKnownTime.set(d.id, chat.lastMessageTime);
 //       }
 
 //       return {
-//         id: chat.id,
+//         id: chat.id || d.id,
 //         _otherUid: otherUid,
-//         participant: userCache.get(otherUid) || {
-//           id: otherUid,
-//           username: "Unknown user",
-//           avatar: "",
-//           online: false,
-//         },
+//         isSaved,
+//         participant: isSaved
+//           ? getSavedParticipant(myUid)
+//           : userCache.get(otherUid) || {
+//               id: otherUid,
+//               username: "Unknown user",
+//               avatar: "",
+//               online: false,
+//             },
 //         lastMessage: chat.lastMessage || "",
 //         lastMessageTime:
 //           chat.lastMessageTime || lastKnownTime.get(d.id) || null,
 //         unreadCount,
-//         deleted: chat.deleted?.[myUid] || false,
+//         deleted: isSaved ? false : chat.deleted?.[myUid] || false,
 //       };
 //     });
 
@@ -397,6 +427,8 @@
 //   const [uid1, uid2] = targetChatId.split("_");
 //   const otherUid = uid1 === myUid ? uid2 : uid1;
 
+//   if (targetChatId === getSavedChatId(myUid)) await ensureSavedChat(myUid);
+
 //   await addDoc(collection(db, "chats", targetChatId, "messages"), {
 //     senderId: myUid,
 //     text: original.text || "",
@@ -409,13 +441,21 @@
 //     forwardedFrom: buildForwardedFrom(original),
 //   });
 
-//   await updateDoc(doc(db, "chats", targetChatId), {
+//   const chatUpdate: Record<string, any> = {
 //     lastMessage:
-//       original.imageUrl && !original.text ? "📷 Photo" : original.text,
+//       original.imageUrl && !original.text
+//         ? "📷 Photo"
+//         : original.voiceUrl && !original.text
+//         ? "Voice message"
+//         : original.text || "",
 //     lastMessageTime: serverTimestamp(),
 //     updatedAt: serverTimestamp(),
-//     [`unreadCount.${otherUid}`]: increment(1),
-//   });
+//   };
+//   if (otherUid !== myUid) {
+//     chatUpdate[`unreadCount.${otherUid}`] = increment(1);
+//   }
+
+//   await updateDoc(doc(db, "chats", targetChatId), chatUpdate);
 // }
 
 // export async function sendVoiceMessage(
@@ -426,6 +466,8 @@
 //   duration: number,
 //   waveform: number[]
 // ) {
+//   if (chatId === getSavedChatId(senderId)) await ensureSavedChat(senderId);
+
 //   await addDoc(collection(db, "chats", chatId, "messages"), {
 //     senderId,
 //     text: "",
@@ -471,6 +513,7 @@ import {
   getDoc,
   limit,
   startAfter,
+  runTransaction,
   FieldPath,
 } from "firebase/firestore";
 
@@ -484,6 +527,30 @@ import {
   getSavedChatId,
   getSavedParticipant,
 } from "@/lib/savedChat";
+
+export interface PinnedItem {
+  id: string;
+  text: string;
+}
+
+export function readPins(data: any): PinnedItem[] {
+  if (Array.isArray(data?.pinnedMessages)) {
+    return data.pinnedMessages
+      .filter((p: any) => p && p.id)
+      .map((p: any) => ({ id: p.id, text: p.text || "" }));
+  }
+  if (data?.pinnedMessage?.id) {
+    return [{ id: data.pinnedMessage.id, text: data.pinnedMessage.text || "" }];
+  }
+  return [];
+}
+
+function buildPinPatch(next: PinnedItem[]) {
+  return {
+    pinnedMessages: next,
+    pinnedMessage: next.length ? next[next.length - 1] : null,
+  };
+}
 
 export function getChatId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("_");
@@ -822,6 +889,12 @@ export async function deleteMessage(chatId: string, messageId: string) {
     voiceUrl: null,
   });
 
+  try {
+    await removePinnedMessage(chatId, messageId);
+  } catch (err) {
+    console.warn("Unpin on delete failed:", err);
+  }
+
   const snap = await getDocs(
     query(
       collection(db, "chats", chatId, "messages"),
@@ -854,14 +927,41 @@ export async function deleteMessage(chatId: string, messageId: string) {
   });
 }
 
+export async function addPinnedMessage(
+  chatId: string,
+  messageId: string,
+  text: string
+) {
+  const ref = doc(db, "chats", chatId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const current = readPins(snap.data());
+    if (current.some((p) => p.id === messageId)) return;
+    tx.update(ref, buildPinPatch([...current, { id: messageId, text }]));
+  });
+}
+
+export async function removePinnedMessage(chatId: string, messageId: string) {
+  const ref = doc(db, "chats", chatId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const current = readPins(snap.data());
+    const next = current.filter((p) => p.id !== messageId);
+    if (next.length === current.length) return;
+    tx.update(ref, buildPinPatch(next));
+  });
+}
+
 export async function pinMessage(
   chatId: string,
   messageId: string | null,
   messageText: string | null
 ) {
-  await updateDoc(doc(db, "chats", chatId), {
-    pinnedMessage: messageId ? { id: messageId, text: messageText } : null,
-  });
+  if (messageId) {
+    await addPinnedMessage(chatId, messageId, messageText || "");
+    return;
+  }
+  await updateDoc(doc(db, "chats", chatId), buildPinPatch([]));
 }
 
 export async function togglePinChat(

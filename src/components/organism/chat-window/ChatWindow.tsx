@@ -45,6 +45,7 @@
 //   Forward,
 //   Phone,
 //   Video,
+//   Bookmark,
 // } from "lucide-react";
 // import ProfileModal from "../profile-modal/ProfileModal";
 // import MediaGallery from "../media-gallery/MediaGallery";
@@ -54,6 +55,7 @@
 // import { createCall, fetchLiveKitToken } from "@/lib/calls";
 // import { useCallStore } from "@/store/call-store";
 // import { disintegrate } from "@/lib/disintegrate";
+// import { getSavedChatId, SAVED_CHAT_TITLE } from "@/lib/savedChat";
 
 // import MessageRow from "./MessageRow";
 // import CallLogMessage from "./CallLogMessage";
@@ -187,6 +189,7 @@
 //   const loadOlderRef = useRef<() => void>(() => { });
 
 //   const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
+//   const isSaved = !!chatId && !!myUid && chatId === getSavedChatId(myUid);
 
 //   useLayoutEffect(() => {
 //     activeChatIdRef.current = chatId;
@@ -831,7 +834,7 @@
 //   }
 
 //   async function confirmDeleteChat() {
-//     if (!chatId || !myUid) return;
+//     if (!chatId || !myUid || isSaved) return;
 //     try {
 //       await updateDoc(doc(db, "chats", chatId), { [`deleted.${myUid}`]: true });
 //       useChatStore.getState().setActiveChat(null);
@@ -877,21 +880,35 @@
 //     return otherUser?.username || "user";
 //   }
 
-//   function buildForwardPayload() {
+//   function buildForwardPayload(source: any) {
 //     return {
-//       text: forwardData.text,
-//       imageUrl: forwardData.imageUrl,
-//       imageWidth: forwardData.imageWidth ?? null,
-//       imageHeight: forwardData.imageHeight ?? null,
-//       voiceUrl: forwardData.voiceUrl,
-//       duration: forwardData.duration,
-//       waveform: forwardData.waveform,
-//       senderId: forwardData.senderId,
-//       senderName: resolveForwardSenderName(forwardData),
+//       text: source.text,
+//       imageUrl: source.imageUrl,
+//       imageWidth: source.imageWidth ?? null,
+//       imageHeight: source.imageHeight ?? null,
+//       voiceUrl: source.voiceUrl,
+//       duration: source.duration,
+//       waveform: source.waveform,
+//       senderId: source.senderId,
+//       senderName: resolveForwardSenderName(source),
 //       chatId: chatId!,
-//       messageId: forwardData.id,
-//       forwardedFrom: forwardData.forwardedFrom || null,
+//       messageId: source.id,
+//       forwardedFrom: source.forwardedFrom || null,
 //     };
+//   }
+
+//   async function handleSaveToSaved(m: any) {
+//     if (!myUid) return;
+//     setMsgMenu(null);
+//     try {
+//       await forwardMessageToChat(
+//         getSavedChatId(myUid),
+//         myUid,
+//         buildForwardPayload(m)
+//       );
+//     } catch (err) {
+//       console.error("Save to saved messages failed:", err);
+//     }
 //   }
 
 //   async function handleWallpaperChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -919,6 +936,7 @@
 //   }
 
 //   async function handleStartCall(type: "audio" | "video") {
+//     if (isSaved) return;
 //     if (!myUid || !chatId || !otherUser?.id || callBusyRef.current) return;
 //     callBusyRef.current = true;
 //     try {
@@ -1039,6 +1057,9 @@
 //     );
 //   }
 
+//   const showSavedHint =
+//     isSaved && rows.length === 0 && unreadComputedForChat.current === chatId;
+
 //   return (
 //     <>
 //       {msgMenu &&
@@ -1105,6 +1126,15 @@
 //               <Forward size={14} className="text-zinc-500" />
 //               Forward
 //             </button>
+//             {!isSaved && (
+//               <button
+//                 className="ctx-item text-zinc-300"
+//                 onClick={() => handleSaveToSaved(currentMsgMenu)}
+//               >
+//                 <Bookmark size={14} className="text-zinc-500" />
+//                 Save to {SAVED_CHAT_TITLE}
+//               </button>
+//             )}
 //             {msgMenu.isMine && (
 //               <>
 //                 <div className="ctx-divider" />
@@ -1165,7 +1195,7 @@
 //         </div>
 //       )}
 
-//       {profileOpen && otherUser?.id && (
+//       {profileOpen && !isSaved && otherUser?.id && (
 //         <ProfileModal userId={otherUser.id} onClose={() => setProfileOpen(false)} />
 //       )}
 
@@ -1179,7 +1209,7 @@
 //         />
 //       )}
 
-//       {deleteChatConfirm && (
+//       {deleteChatConfirm && !isSaved && (
 //         <ConfirmDialog
 //           icon={<Trash2 size={18} className="text-red-400" />}
 //           title="Delete chat?"
@@ -1194,15 +1224,27 @@
 //           myUid={myUid}
 //           onClose={() => setForwardData(null)}
 //           onSelectChat={async (targetChatId) => {
-//             await forwardMessageToChat(targetChatId, myUid, buildForwardPayload());
+//             await forwardMessageToChat(
+//               targetChatId,
+//               myUid,
+//               buildForwardPayload(forwardData)
+//             );
 //             setForwardData(null);
 //           }}
 //           onSelectChannel={async (channelId) => {
-//             await forwardMessageToChannel(channelId, myUid, buildForwardPayload());
+//             await forwardMessageToChannel(
+//               channelId,
+//               myUid,
+//               buildForwardPayload(forwardData)
+//             );
 //             setForwardData(null);
 //           }}
 //           onSelectGroup={async (groupId) => {
-//             await forwardMessageToGroup(groupId, myUid, buildForwardPayload());
+//             await forwardMessageToGroup(
+//               groupId,
+//               myUid,
+//               buildForwardPayload(forwardData)
+//             );
 //             setForwardData(null);
 //           }}
 //         />
@@ -1241,90 +1283,116 @@
 
 //         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 relative z-20">
 //           <div className="h-14 flex items-center justify-between px-5">
-//             <button
-//               onClick={() => setProfileOpen(true)}
-//               className="flex items-center gap-3 cursor-pointer group"
-//             >
-//               <div className="relative shrink-0">
-//                 {otherUser?.avatar ? (
-//                   <img
-//                     src={otherUser.avatar}
-//                     alt={otherUser.username ?? "User"}
-//                     width={36}
-//                     height={36}
-//                     decoding="async"
-//                     className="w-9 h-9 rounded-full object-cover ring-1 ring-white/[0.08]"
-//                   />
-//                 ) : (
-//                   <div className="w-9 h-9 rounded-full bg-[#522fb7]/30 flex items-center justify-center text-sm font-semibold text-white/80 ring-1 ring-white/[0.08]">
-//                     {(otherUser?.username?.[0] ?? "?").toUpperCase()}
-//                   </div>
-//                 )}
-//                 {otherUser && isOnline(otherUser) && (
-//                   <span className="absolute right-0 bottom-0 w-2.5 h-2.5 rounded-full bg-[#34D399] border-2 border-[#0d0b17]" />
-//                 )}
+//             {isSaved ? (
+//               <div className="flex items-center gap-3">
+//                 <div
+//                   className="w-9 h-9 rounded-full flex items-center justify-center text-white ring-1 ring-white/[0.08] shrink-0"
+//                   style={{
+//                     background:
+//                       "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)",
+//                   }}
+//                 >
+//                   <Bookmark size={17} strokeWidth={2.2} />
+//                 </div>
+//                 <div className="flex flex-col items-start min-w-0">
+//                   <span className="text-sm font-semibold text-white/80 leading-tight">
+//                     {SAVED_CHAT_TITLE}
+//                   </span>
+//                   <span className="text-[11px] leading-tight text-zinc-500">
+//                     Only you can see this chat
+//                   </span>
+//                 </div>
 //               </div>
-
-//               <div className="flex flex-col items-start min-w-0">
-//                 <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
-//                   {otherUser?.username ?? "..."}
-//                   {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+//             ) : (
+//               <button
+//                 onClick={() => setProfileOpen(true)}
+//                 className="flex items-center gap-3 cursor-pointer group"
+//               >
+//                 <div className="relative shrink-0">
+//                   {otherUser?.avatar ? (
 //                     <img
-//                       src={GIFTS[otherUser.featuredGift].imageUrl}
-//                       alt={GIFTS[otherUser.featuredGift].name}
-//                       title={GIFTS[otherUser.featuredGift].name}
-//                       width={16}
-//                       height={16}
+//                       src={otherUser.avatar}
+//                       alt={otherUser.username ?? "User"}
+//                       width={36}
+//                       height={36}
 //                       decoding="async"
-//                       className="shrink-0 w-4 h-4 object-contain"
-//                       style={{
-//                         filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
-//                           }90)`,
-//                       }}
+//                       className="w-9 h-9 rounded-full object-cover ring-1 ring-white/[0.08]"
 //                     />
+//                   ) : (
+//                     <div className="w-9 h-9 rounded-full bg-[#522fb7]/30 flex items-center justify-center text-sm font-semibold text-white/80 ring-1 ring-white/[0.08]">
+//                       {(otherUser?.username?.[0] ?? "?").toUpperCase()}
+//                     </div>
 //                   )}
-//                 </span>
+//                   {otherUser && isOnline(otherUser) && (
+//                     <span className="absolute right-0 bottom-0 w-2.5 h-2.5 rounded-full bg-[#34D399] border-2 border-[#0d0b17]" />
+//                   )}
+//                 </div>
 
-//                 {otherUser && (
-//                   <span className="text-[11px] leading-tight">
-//                     {typingUsers.length > 0 ? (
-//                       <span className="flex items-center gap-1 text-[#a893ff]">
-//                         typing
-//                         <span className="typing-dots">
-//                           <span className="typing-dot" />
-//                           <span className="typing-dot" />
-//                           <span className="typing-dot" />
-//                         </span>
-//                       </span>
-//                     ) : isOnline(otherUser) ? (
-//                       <span className="text-[#34D399]">Online</span>
-//                     ) : (
-//                       <span className="text-zinc-500">
-//                         {formatLastSeen(otherUser.lastSeen)}
-//                       </span>
+//                 <div className="flex flex-col items-start min-w-0">
+//                   <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
+//                     {otherUser?.username ?? "..."}
+//                     {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+//                       <img
+//                         src={GIFTS[otherUser.featuredGift].imageUrl}
+//                         alt={GIFTS[otherUser.featuredGift].name}
+//                         title={GIFTS[otherUser.featuredGift].name}
+//                         width={16}
+//                         height={16}
+//                         decoding="async"
+//                         className="shrink-0 w-4 h-4 object-contain"
+//                         style={{
+//                           filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
+//                             }90)`,
+//                         }}
+//                       />
 //                     )}
 //                   </span>
-//                 )}
-//               </div>
-//             </button>
+
+//                   {otherUser && (
+//                     <span className="text-[11px] leading-tight">
+//                       {typingUsers.length > 0 ? (
+//                         <span className="flex items-center gap-1 text-[#a893ff]">
+//                           typing
+//                           <span className="typing-dots">
+//                             <span className="typing-dot" />
+//                             <span className="typing-dot" />
+//                             <span className="typing-dot" />
+//                           </span>
+//                         </span>
+//                       ) : isOnline(otherUser) ? (
+//                         <span className="text-[#34D399]">Online</span>
+//                       ) : (
+//                         <span className="text-zinc-500">
+//                           {formatLastSeen(otherUser.lastSeen)}
+//                         </span>
+//                       )}
+//                     </span>
+//                   )}
+//                 </div>
+//               </button>
+//             )}
 
 //             <div className="flex items-center gap-1">
-//               <button
-//                 onClick={() => handleStartCall("audio")}
-//                 title="Voice call"
-//                 aria-label="Voice call"
-//                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
-//               >
-//                 <Phone size={16} />
-//               </button>
-//               <button
-//                 onClick={() => handleStartCall("video")}
-//                 title="Video call"
-//                 aria-label="Video call"
-//                 className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
-//               >
-//                 <Video size={16} />
-//               </button>
+//               {!isSaved && (
+//                 <>
+//                   <button
+//                     onClick={() => handleStartCall("audio")}
+//                     title="Voice call"
+//                     aria-label="Voice call"
+//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
+//                   >
+//                     <Phone size={16} />
+//                   </button>
+//                   <button
+//                     onClick={() => handleStartCall("video")}
+//                     title="Video call"
+//                     aria-label="Video call"
+//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
+//                   >
+//                     <Video size={16} />
+//                   </button>
+//                 </>
+//               )}
 
 //               <div className="relative" ref={menuRef}>
 //                 <button
@@ -1365,17 +1433,21 @@
 //                         Remove wallpaper
 //                       </button>
 //                     )}
-//                     <div className="ctx-divider" />
-//                     <button
-//                       className="ctx-item text-red-400"
-//                       onClick={() => {
-//                         setDeleteChatConfirm(true);
-//                         setMenuOpen(false);
-//                       }}
-//                     >
-//                       <Trash2 size={14} className="text-red-400/60" />
-//                       Delete chat
-//                     </button>
+//                     {!isSaved && (
+//                       <>
+//                         <div className="ctx-divider" />
+//                         <button
+//                           className="ctx-item text-red-400"
+//                           onClick={() => {
+//                             setDeleteChatConfirm(true);
+//                             setMenuOpen(false);
+//                           }}
+//                         >
+//                           <Trash2 size={14} className="text-red-400/60" />
+//                           Delete chat
+//                         </button>
+//                       </>
+//                     )}
 //                   </div>
 //                 )}
 //               </div>
@@ -1419,6 +1491,28 @@
 //           {isLoadingOlder && (
 //             <div className="flex justify-center py-2 text-xs text-zinc-500">
 //               Loading earlier messages…
+//             </div>
+//           )}
+
+//           {showSavedHint && (
+//             <div className="flex flex-col items-center justify-center gap-3 text-center px-8 py-24">
+//               <div
+//                 className="w-12 h-12 rounded-full flex items-center justify-center text-white"
+//                 style={{
+//                   background:
+//                     "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)",
+//                 }}
+//               >
+//                 <Bookmark size={20} strokeWidth={2.2} />
+//               </div>
+//               <div className="flex flex-col gap-1">
+//                 <p className="text-sm font-semibold text-white/80">
+//                   Nothing saved yet
+//                 </p>
+//                 <p className="text-[12.5px] leading-relaxed text-zinc-500">
+//                   Forward messages here or write a note to yourself.
+//                 </p>
+//               </div>
 //             </div>
 //           )}
 
@@ -1521,6 +1615,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -1540,11 +1635,15 @@ import {
   toggleReaction,
   editMessage,
   deleteMessage,
-  pinMessage,
+  addPinnedMessage,
+  removePinnedMessage,
+  readPins,
   forwardMessageToChat,
+  type PinnedItem,
 } from "@/lib/firestore/chats";
 import { forwardMessageToChannel } from "@/lib/firestore/channels";
 import { forwardMessageToGroup } from "@/lib/firestore/groups";
+import { getCustomEmoji, CUSTOM_EMOJIS } from "@/lib/customEmoji";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
@@ -1566,6 +1665,7 @@ import {
   Phone,
   Video,
   Bookmark,
+  List,
 } from "lucide-react";
 import ProfileModal from "../profile-modal/ProfileModal";
 import MediaGallery from "../media-gallery/MediaGallery";
@@ -1608,6 +1708,9 @@ const SCROLL_KEYS = [
   " ",
 ];
 
+const PIN_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const PIN_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
+
 interface MsgMenuState {
   id: string;
   x: number;
@@ -1630,8 +1733,40 @@ type Row =
     priority: boolean;
   };
 
+const PinText = memo(function PinText({ text }: { text: string }) {
+  const parts = text.split(PIN_TOKEN_SPLIT_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(PIN_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block align-text-bottom w-4 h-4 object-contain mx-0.5"
+              />
+            );
+          }
+        }
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
+  );
+});
+
 function sameList(a: string[], b: string[]) {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function samePins(a: PinnedItem[], b: PinnedItem[]) {
+  return (
+    a.length === b.length &&
+    a.every((p, i) => p.id === b[i].id && p.text === b[i].text)
+  );
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -1643,6 +1778,16 @@ function isTypingTarget(target: EventTarget | null) {
   if (!el) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
+function buildPinText(m: any): string {
+  if (m.text) return m.text;
+  if (m.voiceUrl) return "🎤 Voice message";
+  if (m.imageUrl) {
+    const sticker = CUSTOM_EMOJIS.find((e) => e.url === m.imageUrl);
+    if (sticker) return `::${sticker.id}::`;
+  }
+  return "📷 Photo";
 }
 
 export default function ChatWindow() {
@@ -1667,10 +1812,9 @@ export default function ChatWindow() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
-  const [pinnedMessage, setPinnedMessage] = useState<{
-    id: string;
-    text: string;
-  } | null>(null);
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedItem[]>([]);
+  const [pinIndex, setPinIndex] = useState(0);
+  const [pinListOpen, setPinListOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -1706,6 +1850,7 @@ export default function ChatWindow() {
   const unreadRef = useRef(0);
   const callBusyRef = useRef(false);
   const scrollLockedRef = useRef(false);
+  const pinsLenRef = useRef(0);
   const loadOlderRef = useRef<() => void>(() => { });
 
   const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
@@ -1761,6 +1906,10 @@ export default function ChatWindow() {
     setEditingId(null);
     setPickerOpenId(null);
     setMsgMenu(null);
+    setPinnedMessages([]);
+    setPinIndex(0);
+    setPinListOpen(false);
+    pinsLenRef.current = 0;
     setFreshIds(new Set());
     setWallpaper(chatId ? getCachedWallpaper(chatId) : null);
     unreadComputedForChat.current = null;
@@ -1876,10 +2025,15 @@ export default function ChatWindow() {
         : [];
       setTypingUsers((prev) => (sameList(prev, typingList) ? prev : typingList));
 
-      const pin = data?.pinnedMessage || null;
-      setPinnedMessage((prev) =>
-        prev?.id === pin?.id && prev?.text === pin?.text ? prev : pin
-      );
+      const pins = readPins(data);
+      const prevLen = pinsLenRef.current;
+      pinsLenRef.current = pins.length;
+      setPinnedMessages((prev) => (samePins(prev, pins) ? prev : pins));
+      if (pins.length > prevLen) {
+        setPinIndex(pins.length - 1);
+      } else {
+        setPinIndex((i) => Math.min(i, Math.max(0, pins.length - 1)));
+      }
 
       const wp = data?.wallpaper || null;
       cacheWallpaper(chatId, wp);
@@ -2074,6 +2228,24 @@ export default function ChatWindow() {
   }, [msgMenu]);
 
   useEffect(() => {
+    if (!pinListOpen) return;
+    const close = () => setPinListOpen(false);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPinListOpen(false);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [pinListOpen]);
+
+  useEffect(() => {
+    if (pinnedMessages.length < 2) setPinListOpen(false);
+  }, [pinnedMessages.length]);
+
+  useEffect(() => {
     const el = chatScrollRef.current;
     if (!scrollLocked || !el) return;
 
@@ -2138,7 +2310,7 @@ export default function ChatWindow() {
     setMenuPos((prev) =>
       prev && prev.left === left && prev.top === top ? prev : { left, top }
     );
-  }, [msgMenu, copiedId, pinnedMessage?.id]);
+  }, [msgMenu, copiedId, pinnedMessages]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2367,18 +2539,42 @@ export default function ChatWindow() {
   async function handlePin(m: any) {
     if (!chatId) return;
     setMsgMenu(null);
-    const isAlreadyPinned = pinnedMessage?.id === m.id;
+    const isAlreadyPinned = pinnedMessages.some((p) => p.id === m.id);
     try {
-      await pinMessage(
-        chatId,
-        isAlreadyPinned ? null : m.id,
-        isAlreadyPinned
-          ? null
-          : m.text || (m.voiceUrl ? "🎤 Voice message" : "📷 Photo")
-      );
+      if (isAlreadyPinned) {
+        await removePinnedMessage(chatId, m.id);
+      } else {
+        await addPinnedMessage(chatId, m.id, buildPinText(m));
+      }
     } catch (err) {
       console.error("Pin failed:", err);
     }
+  }
+
+  async function handleUnpin(messageId: string) {
+    if (!chatId) return;
+    try {
+      await removePinnedMessage(chatId, messageId);
+    } catch (err) {
+      console.error("Unpin failed:", err);
+    }
+  }
+
+  function handlePinBannerClick() {
+    const total = pinnedMessages.length;
+    if (!total) return;
+    const index = Math.min(pinIndex, total - 1);
+    scrollToMessage(pinnedMessages[index].id);
+    setPinListOpen(false);
+    if (total > 1) setPinIndex((index - 1 + total) % total);
+  }
+
+  function handlePinListSelect(index: number) {
+    const target = pinnedMessages[index];
+    if (!target) return;
+    setPinIndex(index);
+    setPinListOpen(false);
+    scrollToMessage(target.id);
   }
 
   async function handleCopy(m: any) {
@@ -2556,9 +2752,21 @@ export default function ChatWindow() {
     return out;
   }, [messages, pendingMessages, firstUnreadId]);
 
+  const pinnedIds = useMemo(
+    () => new Set(pinnedMessages.map((p) => p.id)),
+    [pinnedMessages]
+  );
+
+  const safePinIndex = Math.min(pinIndex, Math.max(0, pinnedMessages.length - 1));
+  const currentPin = pinnedMessages[safePinIndex] ?? null;
+  const hasManyPins = pinnedMessages.length > 1;
+
   const currentMsgMenu = msgMenu
     ? messages.find((m) => m.id === msgMenu.id)
     : null;
+  const isCurrentMenuPinned = currentMsgMenu
+    ? pinnedIds.has(currentMsgMenu.id)
+    : false;
 
   if (!chatId) {
     return (
@@ -2629,12 +2837,12 @@ export default function ChatWindow() {
               className="ctx-item text-zinc-300"
               onClick={() => handlePin(currentMsgMenu)}
             >
-              {pinnedMessage?.id === currentMsgMenu.id ? (
+              {isCurrentMenuPinned ? (
                 <PinOff size={14} className="text-zinc-500" />
               ) : (
                 <Pin size={14} className="text-zinc-500" />
               )}
-              {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
+              {isCurrentMenuPinned ? "Unpin" : "Pin message"}
             </button>
             <button
               className="ctx-item text-zinc-300"
@@ -2974,30 +3182,102 @@ export default function ChatWindow() {
             </div>
           </div>
 
-          {pinnedMessage && (
-            <div
-              onClick={() => scrollToMessage(pinnedMessage.id)}
-              className="flex items-center gap-2.5 px-4 py-2 border-t border-white/[0.05] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors"
-            >
-              <Pin size={12} className="text-[#a893ff] shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-[#a893ff] leading-none mb-0.5">
-                  Pinned message
-                </div>
-                <div className="text-xs text-zinc-400 truncate">
-                  {pinnedMessage.text}
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  pinMessage(chatId, null, null);
-                }}
-                aria-label="Unpin message"
-                className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
+          {currentPin && (
+            <div className="relative border-t border-white/[0.05] bg-white/[0.02]">
+              <div
+                onClick={handlePinBannerClick}
+                className="flex items-center gap-2.5 px-4 py-2 cursor-pointer hover:bg-white/[0.04] transition-colors"
               >
-                <X size={12} />
-              </button>
+                {hasManyPins ? (
+                  <div className="flex flex-col gap-[2px] w-[3px] h-8 shrink-0">
+                    {pinnedMessages.map((p, i) => (
+                      <span
+                        key={p.id}
+                        className={`flex-1 min-h-[2px] rounded-[1px] transition-colors ${i === safePinIndex ? "bg-[#a893ff]" : "bg-white/15"
+                          }`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Pin size={12} className="text-[#a893ff] shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-[#a893ff] leading-none mb-0.5">
+                    {hasManyPins
+                      ? `Pinned message #${safePinIndex + 1}`
+                      : "Pinned message"}
+                  </div>
+                  <div className="text-xs text-zinc-400 truncate">
+                    <PinText text={currentPin.text} />
+                  </div>
+                </div>
+                {hasManyPins ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinListOpen((v) => !v);
+                    }}
+                    aria-label="All pinned messages"
+                    title="All pinned messages"
+                    className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-md transition-colors cursor-pointer ${pinListOpen
+                      ? "text-[#a893ff] bg-[#7c5cff]/15"
+                      : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+                      }`}
+                  >
+                    <List size={14} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUnpin(currentPin.id);
+                    }}
+                    aria-label="Unpin message"
+                    className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {hasManyPins && pinListOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="msg-ctx-menu absolute left-3 right-3 top-full mt-1 z-30 max-h-64 overflow-y-auto rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/50"
+                >
+                  <div className="px-3 pt-2 pb-1 text-[11px] font-medium text-zinc-500">
+                    {pinnedMessages.length} pinned messages
+                  </div>
+                  {pinnedMessages.map((p, i) => (
+                    <div
+                      key={p.id}
+                      onClick={() => handlePinListSelect(i)}
+                      className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors hover:bg-white/[0.05] ${i === safePinIndex ? "bg-[#7c5cff]/10" : ""
+                        }`}
+                    >
+                      <span
+                        className={`shrink-0 w-5 text-[11px] font-semibold ${i === safePinIndex ? "text-[#a893ff]" : "text-zinc-600"
+                          }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 min-w-0 text-xs text-zinc-300 truncate">
+                        <PinText text={p.text} />
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUnpin(p.id);
+                        }}
+                        aria-label="Unpin message"
+                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -3074,7 +3354,7 @@ export default function ChatWindow() {
                 isUnreadStart={firstUnreadId === m.id}
                 isPickerOpen={isPickerOpen}
                 pickerExpanded={isPickerOpen && pickerExpanded}
-                isPinned={pinnedMessage?.id === m.id}
+                isPinned={pinnedIds.has(m.id)}
                 isEditing={editingId === m.id}
                 animate={!!m.pending || freshIds.has(m.id)}
                 priority={row.priority}
