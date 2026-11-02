@@ -1,6 +1,7 @@
 // "use client";
 
 // import {
+//   memo,
 //   useCallback,
 //   useEffect,
 //   useLayoutEffect,
@@ -18,15 +19,19 @@
 //   toggleGroupReaction,
 //   editGroupMessage,
 //   deleteGroupMessage,
-//   pinGroupMessage,
+//   addGroupPinnedMessage,
+//   removeGroupPinnedMessage,
+//   readPins,
 //   leaveGroup,
 //   deleteGroup,
 //   forwardMessageToGroup,
+//   type PinnedItem,
 // } from "@/lib/firestore/groups";
 // import { createGroupPoll } from "@/lib/firestore/groupPolls";
 // import { votePoll } from "@/lib/polls";
 // import { forwardMessageToChat } from "@/lib/firestore/chats";
 // import { forwardMessageToChannel } from "@/lib/firestore/channels";
+// import { getCustomEmoji, CUSTOM_EMOJIS } from "@/lib/customEmoji";
 // import { auth, db } from "@/lib/firebase";
 // import { onAuthStateChanged } from "firebase/auth";
 // import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
@@ -48,6 +53,7 @@
 //   Users,
 //   LogOut,
 //   ListChecks,
+//   List,
 // } from "lucide-react";
 // import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 // import GroupModal from "./groupModal";
@@ -87,6 +93,8 @@
 //   " ",
 // ];
 // const EMPTY_MESSAGES: any[] = [];
+// const PIN_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+// const PIN_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 
 // interface MsgMenuState {
 //   id: string;
@@ -110,8 +118,40 @@
 //     priority: boolean;
 //   };
 
+// const PinText = memo(function PinText({ text }: { text: string }) {
+//   const parts = text.split(PIN_TOKEN_SPLIT_RE);
+//   return (
+//     <>
+//       {parts.map((part, i) => {
+//         const match = part.match(PIN_TOKEN_MATCH_RE);
+//         if (match) {
+//           const custom = getCustomEmoji(match[1]);
+//           if (custom) {
+//             return (
+//               <img
+//                 key={i}
+//                 src={custom.url}
+//                 alt={custom.id}
+//                 className="inline-block align-text-bottom w-4 h-4 object-contain mx-0.5"
+//               />
+//             );
+//           }
+//         }
+//         return part ? <span key={i}>{part}</span> : null;
+//       })}
+//     </>
+//   );
+// });
+
 // function sameList(a: string[], b: string[]) {
 //   return a.length === b.length && a.every((v, i) => v === b[i]);
+// }
+
+// function samePins(a: PinnedItem[], b: PinnedItem[]) {
+//   return (
+//     a.length === b.length &&
+//     a.every((p, i) => p.id === b[i].id && p.text === b[i].text)
+//   );
 // }
 
 // function clamp(value: number, min: number, max: number) {
@@ -159,6 +199,17 @@
 //   );
 // }
 
+// function buildPinText(m: any): string {
+//   if (m.poll) return `📊 ${m.poll.question}`;
+//   if (m.text) return m.text;
+//   if (m.voiceUrl) return "🎤 Voice message";
+//   if (m.imageUrl) {
+//     const sticker = CUSTOM_EMOJIS.find((e) => e.url === m.imageUrl);
+//     if (sticker) return `::${sticker.id}::`;
+//   }
+//   return "📷 Photo";
+// }
+
 // export default function GroupWindow() {
 //   const groupId = useGroupStore((s) => s.activeGroupId);
 //   return <GroupWindowInner key={groupId ?? "none"} groupId={groupId} />;
@@ -196,10 +247,9 @@
 //   const [editingId, setEditingId] = useState<string | null>(null);
 //   const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
 //   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
-//   const [pinnedMessage, setPinnedMessage] = useState<{
-//     id: string;
-//     text: string;
-//   } | null>(null);
+//   const [pinnedMessages, setPinnedMessages] = useState<PinnedItem[]>([]);
+//   const [pinIndex, setPinIndex] = useState(0);
+//   const [pinListOpen, setPinListOpen] = useState(false);
 //   const [copiedId, setCopiedId] = useState<string | null>(null);
 //   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 //   const [leaveConfirm, setLeaveConfirm] = useState(false);
@@ -240,6 +290,7 @@
 //   const hasMoreRef = useRef(false);
 //   const jumpingRef = useRef(false);
 //   const scrollLockedRef = useRef(false);
+//   const pinsLenRef = useRef(0);
 //   const loadOlderRef = useRef<() => Promise<void>>(async () => { });
 
 //   const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
@@ -389,10 +440,15 @@
 //       if (activeGroupIdRef.current !== groupId) return;
 //       const data = snap.data();
 
-//       const pin = data?.pinnedMessage || null;
-//       setPinnedMessage((prev) =>
-//         prev?.id === pin?.id && prev?.text === pin?.text ? prev : pin
-//       );
+//       const pins = readPins(data);
+//       const prevLen = pinsLenRef.current;
+//       pinsLenRef.current = pins.length;
+//       setPinnedMessages((prev) => (samePins(prev, pins) ? prev : pins));
+//       if (pins.length > prevLen) {
+//         setPinIndex(pins.length - 1);
+//       } else {
+//         setPinIndex((i) => Math.min(i, Math.max(0, pins.length - 1)));
+//       }
 
 //       const wp = data?.wallpaper || null;
 //       cacheWallpaper(groupId, wp);
@@ -615,6 +671,24 @@
 //   }, [msgMenu]);
 
 //   useEffect(() => {
+//     if (!pinListOpen) return;
+//     const close = () => setPinListOpen(false);
+//     const handleKey = (e: KeyboardEvent) => {
+//       if (e.key === "Escape") setPinListOpen(false);
+//     };
+//     window.addEventListener("click", close);
+//     window.addEventListener("keydown", handleKey);
+//     return () => {
+//       window.removeEventListener("click", close);
+//       window.removeEventListener("keydown", handleKey);
+//     };
+//   }, [pinListOpen]);
+
+//   useEffect(() => {
+//     if (pinnedMessages.length < 2) setPinListOpen(false);
+//   }, [pinnedMessages.length]);
+
+//   useEffect(() => {
 //     const el = chatScrollRef.current;
 //     if (!scrollLocked || !el) return;
 
@@ -679,7 +753,7 @@
 //     setMenuPos((prev) =>
 //       prev && prev.left === left && prev.top === top ? prev : { left, top }
 //     );
-//   }, [msgMenu, copiedId, pinnedMessage?.id]);
+//   }, [msgMenu, copiedId, pinnedMessages]);
 
 //   useEffect(() => {
 //     if (!menuOpen) return;
@@ -856,20 +930,42 @@
 //   async function handlePin(m: any) {
 //     if (!groupId) return;
 //     setMsgMenu(null);
-//     const isAlreadyPinned = pinnedMessage?.id === m.id;
+//     const isAlreadyPinned = pinnedMessages.some((p) => p.id === m.id);
 //     try {
-//       await pinGroupMessage(
-//         groupId,
-//         isAlreadyPinned ? null : m.id,
-//         isAlreadyPinned
-//           ? null
-//           : m.poll
-//             ? `📊 ${m.poll.question}`
-//             : m.text || (m.voiceUrl ? "🎤 Voice message" : "📷 Photo")
-//       );
+//       if (isAlreadyPinned) {
+//         await removeGroupPinnedMessage(groupId, m.id);
+//       } else {
+//         await addGroupPinnedMessage(groupId, m.id, buildPinText(m));
+//       }
 //     } catch (err) {
 //       console.error("Pin failed:", err);
 //     }
+//   }
+
+//   async function handleUnpin(messageId: string) {
+//     if (!groupId) return;
+//     try {
+//       await removeGroupPinnedMessage(groupId, messageId);
+//     } catch (err) {
+//       console.error("Unpin failed:", err);
+//     }
+//   }
+
+//   function handlePinBannerClick() {
+//     const total = pinnedMessages.length;
+//     if (!total) return;
+//     const index = Math.min(pinIndex, total - 1);
+//     scrollToMessage(pinnedMessages[index].id);
+//     setPinListOpen(false);
+//     if (total > 1) setPinIndex((index - 1 + total) % total);
+//   }
+
+//   function handlePinListSelect(index: number) {
+//     const target = pinnedMessages[index];
+//     if (!target) return;
+//     setPinIndex(index);
+//     setPinListOpen(false);
+//     scrollToMessage(target.id);
 //   }
 
 //   async function handleCopy(m: any) {
@@ -999,6 +1095,11 @@
 //     return out;
 //   }, [messages, messagesGroupId, groupId, pendingMessages]);
 
+//   const pinnedIds = useMemo(
+//     () => new Set(pinnedMessages.map((p) => p.id)),
+//     [pinnedMessages]
+//   );
+
 //   if (!groupId || !group) {
 //     return (
 //       <div
@@ -1015,6 +1116,13 @@
 //     : null;
 //   const isOwner = group.ownerId === myUid;
 //   const currentIsPoll = currentMsgMenu?.type === "poll";
+//   const isCurrentMenuPinned = currentMsgMenu
+//     ? pinnedIds.has(currentMsgMenu.id)
+//     : false;
+
+//   const safePinIndex = Math.min(pinIndex, Math.max(0, pinnedMessages.length - 1));
+//   const currentPin = pinnedMessages[safePinIndex] ?? null;
+//   const hasManyPins = pinnedMessages.length > 1;
 
 //   const typingLabel =
 //     typingUsers.length === 1
@@ -1088,12 +1196,12 @@
 //               className="ctx-item text-zinc-300"
 //               onClick={() => handlePin(currentMsgMenu)}
 //             >
-//               {pinnedMessage?.id === currentMsgMenu.id ? (
+//               {isCurrentMenuPinned ? (
 //                 <PinOff size={14} className="text-zinc-500" />
 //               ) : (
 //                 <Pin size={14} className="text-zinc-500" />
 //               )}
-//               {pinnedMessage?.id === currentMsgMenu.id ? "Unpin" : "Pin message"}
+//               {isCurrentMenuPinned ? "Unpin" : "Pin message"}
 //             </button>
 //             {msgMenu.isMine && (
 //               <>
@@ -1328,32 +1436,102 @@
 //             </div>
 //           </div>
 
-//           {pinnedMessage && (
-//             <div
-//               onClick={() => scrollToMessage(pinnedMessage.id)}
-//               className="flex items-center gap-2.5 px-4 py-2 border-t border-white/[0.05] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors"
-//             >
-//               <Pin size={12} className="text-[#a893ff] shrink-0" />
-//               <div className="flex-1 min-w-0">
-//                 <div className="text-[11px] font-medium text-[#a893ff] leading-none mb-0.5">
-//                   Pinned message
-//                 </div>
-//                 <div className="text-xs text-zinc-400 truncate">
-//                   {pinnedMessage.text}
-//                 </div>
-//               </div>
-//               <button
-//                 onClick={(e) => {
-//                   e.stopPropagation();
-//                   pinGroupMessage(groupId, null, null).catch((err) =>
-//                     console.error("Unpin failed:", err)
-//                   );
-//                 }}
-//                 aria-label="Unpin message"
-//                 className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
+//           {currentPin && (
+//             <div className="relative border-t border-white/[0.05] bg-white/[0.02]">
+//               <div
+//                 onClick={handlePinBannerClick}
+//                 className="flex items-center gap-2.5 px-4 py-2 cursor-pointer hover:bg-white/[0.04] transition-colors"
 //               >
-//                 <X size={12} />
-//               </button>
+//                 {hasManyPins ? (
+//                   <div className="flex flex-col gap-[2px] w-[3px] h-8 shrink-0">
+//                     {pinnedMessages.map((p, i) => (
+//                       <span
+//                         key={p.id}
+//                         className={`flex-1 min-h-[2px] rounded-[1px] transition-colors ${i === safePinIndex ? "bg-[#a893ff]" : "bg-white/15"
+//                           }`}
+//                       />
+//                     ))}
+//                   </div>
+//                 ) : (
+//                   <Pin size={12} className="text-[#a893ff] shrink-0" />
+//                 )}
+//                 <div className="flex-1 min-w-0">
+//                   <div className="text-[11px] font-medium text-[#a893ff] leading-none mb-0.5">
+//                     {hasManyPins
+//                       ? `Pinned message #${safePinIndex + 1}`
+//                       : "Pinned message"}
+//                   </div>
+//                   <div className="text-xs text-zinc-400 truncate">
+//                     <PinText text={currentPin.text} />
+//                   </div>
+//                 </div>
+//                 {hasManyPins ? (
+//                   <button
+//                     onClick={(e) => {
+//                       e.stopPropagation();
+//                       setPinListOpen((v) => !v);
+//                     }}
+//                     aria-label="All pinned messages"
+//                     title="All pinned messages"
+//                     className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-md transition-colors cursor-pointer ${pinListOpen
+//                       ? "text-[#a893ff] bg-[#7c5cff]/15"
+//                       : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+//                       }`}
+//                   >
+//                     <List size={14} />
+//                   </button>
+//                 ) : (
+//                   <button
+//                     onClick={(e) => {
+//                       e.stopPropagation();
+//                       handleUnpin(currentPin.id);
+//                     }}
+//                     aria-label="Unpin message"
+//                     className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+//                   >
+//                     <X size={12} />
+//                   </button>
+//                 )}
+//               </div>
+
+//               {hasManyPins && pinListOpen && (
+//                 <div
+//                   onClick={(e) => e.stopPropagation()}
+//                   className="msg-ctx-menu absolute left-3 right-3 top-full mt-1 z-30 max-h-64 overflow-y-auto rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/50"
+//                 >
+//                   <div className="px-3 pt-2 pb-1 text-[11px] font-medium text-zinc-500">
+//                     {pinnedMessages.length} pinned messages
+//                   </div>
+//                   {pinnedMessages.map((p, i) => (
+//                     <div
+//                       key={p.id}
+//                       onClick={() => handlePinListSelect(i)}
+//                       className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors hover:bg-white/[0.05] ${i === safePinIndex ? "bg-[#7c5cff]/10" : ""
+//                         }`}
+//                     >
+//                       <span
+//                         className={`shrink-0 w-5 text-[11px] font-semibold ${i === safePinIndex ? "text-[#a893ff]" : "text-zinc-600"
+//                           }`}
+//                       >
+//                         {i + 1}
+//                       </span>
+//                       <span className="flex-1 min-w-0 text-xs text-zinc-300 truncate">
+//                         <PinText text={p.text} />
+//                       </span>
+//                       <button
+//                         onClick={(e) => {
+//                           e.stopPropagation();
+//                           handleUnpin(p.id);
+//                         }}
+//                         aria-label="Unpin message"
+//                         className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                       >
+//                         <X size={12} />
+//                       </button>
+//                     </div>
+//                   ))}
+//                 </div>
+//               )}
 //             </div>
 //           )}
 //         </div>
@@ -1451,7 +1629,7 @@
 //                 isLastInGroup={row.isLastInGroup}
 //                 isPickerOpen={isPickerOpen}
 //                 pickerExpanded={isPickerOpen && pickerExpanded}
-//                 isPinned={pinnedMessage?.id === m.id}
+//                 isPinned={pinnedIds.has(m.id)}
 //                 isEditing={editingId === m.id}
 //                 animate={!!m.pending || freshIds.has(m.id)}
 //                 priority={row.priority}
@@ -2990,7 +3168,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
           </div>
 
           {currentPin && (
-            <div className="relative border-t border-white/[0.05] bg-white/[0.02]">
+            <div className="absolute left-0 right-0 top-full z-30 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md">
               <div
                 onClick={handlePinBannerClick}
                 className="flex items-center gap-2.5 px-4 py-2 cursor-pointer hover:bg-white/[0.04] transition-colors"
