@@ -6,7 +6,7 @@
 // import { useChatStore } from "@/store/chat-store";
 // import { formatTime } from "@/lib/format-time";
 // import { isOnline } from "@/lib/formatLastSeen";
-// import { ArrowDownLeft, ArrowUpRight, Pin } from "lucide-react";
+// import { ArrowDownLeft, ArrowUpRight, Bookmark, Pin } from "lucide-react";
 // import {
 //   useThemeStore,
 //   DEFAULT_DARK,
@@ -20,6 +20,7 @@
 // import { auth } from "@/lib/firebase";
 // import TypingLabel from "@/components/atoms/TypingLabel";
 // import { getCallTitle, parseCallPreview } from "@/lib/firestore/callLog";
+// import { ensureSavedChat } from "@/lib/savedChat";
 
 // interface Props {
 //   chat: Chat;
@@ -34,6 +35,8 @@
 
 // const ACTIVE_DOT_BORDER = "#0a0b16";
 // const ACTIVE_BAR = "#a996ff";
+
+// const SAVED_AVATAR_BG = "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)";
 
 // const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 // const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
@@ -129,19 +132,22 @@
 //         : s.customTheme.sideBarBg
 //   );
 
-//   const online = isOnline(chat.participant);
+//   const isSaved = !!chat.isSaved;
+//   const online = !isSaved && isOnline(chat.participant);
 //   const myUid = auth.currentUser?.uid;
 //   const typingMap = (chat as any).typing as Record<string, boolean> | undefined;
 
 //   const typing = useMemo(
 //     () =>
+//       !isSaved &&
 //       Object.entries(typingMap ?? {}).some(([uid, v]) => v && uid !== myUid),
-//     [typingMap, myUid]
+//     [typingMap, myUid, isSaved]
 //   );
 
-//   const gift = chat.participant.featuredGift
-//     ? GIFTS[chat.participant.featuredGift]
-//     : null;
+//   const gift =
+//     !isSaved && chat.participant.featuredGift
+//       ? GIFTS[chat.participant.featuredGift]
+//       : null;
 
 //   const accent = "#A78BFA";
 //   const hoverBg = mode === "light" ? "#efeafd" : "rgba(255,255,255,0.04)";
@@ -164,11 +170,22 @@
 //     width: "calc(100% - 9px)",
 //   } as CSSProperties;
 
+//   async function handleOpen() {
+//     if (isSaved && myUid) {
+//       try {
+//         await ensureSavedChat(myUid);
+//       } catch (err) {
+//         console.error("Saved chat init failed:", err);
+//       }
+//     }
+//     openConversation("chat", chat.id);
+//   }
+
 //   return (
 //     <button
 //       type="button"
 //       aria-current={isActive ? "true" : undefined}
-//       onClick={() => openConversation("chat", chat.id)}
+//       onClick={handleOpen}
 //       className="w-full h-[64px] flex-none flex items-center gap-3 px-3 py-2 mx-2 my-[1px] transition-colors duration-150 cursor-pointer overflow-hidden relative group [background:var(--row-bg)] hover:[background:var(--row-hover-bg)]"
 //       style={rowStyle}
 //     >
@@ -180,7 +197,16 @@
 //       )}
 
 //       <div className="shrink-0 relative w-11 h-11">
-//         {chat.participant?.avatar ? (
+//         {isSaved ? (
+//           <div
+//             className="w-11 h-11 rounded-full flex items-center justify-center text-white"
+//             style={{
+//               background: isActive ? "rgba(255,255,255,0.18)" : SAVED_AVATAR_BG,
+//             }}
+//           >
+//             <Bookmark size={20} strokeWidth={2.2} />
+//           </div>
+//         ) : chat.participant?.avatar ? (
 //           <SmoothImage
 //             src={avatarThumb(chat.participant.avatar, 88)}
 //             alt={chat.participant?.username || "avatar"}
@@ -199,17 +225,19 @@
 //             {chat.participant.username?.[0]?.toUpperCase()}
 //           </div>
 //         )}
-//         <span
-//           className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full border-[2px] transition-colors"
-//           style={{
-//             background: online
-//               ? "#34D399"
-//               : mode === "light"
-//                 ? "#d1d5db"
-//                 : "#3f3f46",
-//             borderColor: isActive ? ACTIVE_DOT_BORDER : sideBarBg,
-//           }}
-//         />
+//         {!isSaved && (
+//           <span
+//             className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full border-[2px] transition-colors"
+//             style={{
+//               background: online
+//                 ? "#34D399"
+//                 : mode === "light"
+//                   ? "#d1d5db"
+//                   : "#3f3f46",
+//               borderColor: isActive ? ACTIVE_DOT_BORDER : sideBarBg,
+//             }}
+//           />
+//         )}
 //       </div>
 
 //       <div className="flex-1 min-w-0 text-left">
@@ -245,7 +273,9 @@
 //             className="text-[11px] shrink-0 tabular-nums"
 //             style={{ color: timeColor }}
 //           >
-//             {formatTime(chat.lastMessageTime)}
+//             {isSaved && !chat.lastMessage
+//               ? ""
+//               : formatTime(chat.lastMessageTime)}
 //           </span>
 //         </div>
 
@@ -256,11 +286,13 @@
 //           >
 //             {typing ? (
 //               <TypingLabel text="typing" color={isActive ? "#ffffff" : accent} />
+//             ) : isSaved && !chat.lastMessage ? (
+//               <>Forward messages here</>
 //             ) : (
 //               <LastMessagePreview text={chat.lastMessage} myUid={myUid} />
 //             )}
 //           </p>
-//           {!!chat.unreadCount && (
+//           {!isSaved && !!chat.unreadCount && (
 //             <span
 //               className="shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
 //               style={{
@@ -277,6 +309,7 @@
 // }
 
 // export default memo(ChatItem);
+
 
 "use client";
 
@@ -318,6 +351,10 @@ const ACTIVE_BAR = "#a996ff";
 
 const SAVED_AVATAR_BG = "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)";
 
+const DRAFT_COLOR = "#f87171";
+const DRAFT_COLOR_ACTIVE = "#fca5a5";
+const DRAFT_PREVIEW_LIMIT = 200;
+
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
@@ -332,13 +369,15 @@ function isStickerOnlyText(text: string): boolean {
 function LastMessagePreview({
   text,
   myUid,
+  plain,
 }: {
   text?: string;
   myUid?: string;
+  plain?: boolean;
 }) {
   if (!text) return <>No messages yet</>;
 
-  const call = parseCallPreview(text);
+  const call = plain ? null : parseCallPreview(text);
   if (call) {
     const isMine = call.senderId === myUid;
     const Arrow = isMine ? ArrowUpRight : ArrowDownLeft;
@@ -403,6 +442,7 @@ function LastMessagePreview({
 
 function ChatItem({ chat, pinned }: Props) {
   const isActive = useChatStore((s) => s.activeChatId === chat.id);
+  const draftRaw = useChatStore((s) => s.drafts[chat.id]);
   const mode = useThemeStore((s) => s.mode);
   const sideBarBg = useThemeStore((s) =>
     s.mode === "dark"
@@ -424,6 +464,15 @@ function ChatItem({ chat, pinned }: Props) {
     [typingMap, myUid, isSaved]
   );
 
+  const draftText = useMemo(
+    () =>
+      draftRaw
+        ? draftRaw.replace(/\s+/g, " ").trim().slice(0, DRAFT_PREVIEW_LIMIT)
+        : "",
+    [draftRaw]
+  );
+  const showDraft = !typing && draftText.length > 0;
+
   const gift =
     !isSaved && chat.participant.featuredGift
       ? GIFTS[chat.participant.featuredGift]
@@ -436,6 +485,7 @@ function ChatItem({ chat, pinned }: Props) {
   const lastMsgColor = isActive ? "#D7D1EF" : "#8B85A0";
   const timeColor = isActive ? "#D7D1EF" : "#7C7690";
   const pinColor = isActive ? "#ffffff" : accent;
+  const draftColor = isActive ? DRAFT_COLOR_ACTIVE : DRAFT_COLOR;
 
   const avatarFallbackBg = isActive
     ? "rgba(255,255,255,0.18)"
@@ -566,6 +616,13 @@ function ChatItem({ chat, pinned }: Props) {
           >
             {typing ? (
               <TypingLabel text="typing" color={isActive ? "#ffffff" : accent} />
+            ) : showDraft ? (
+              <>
+                <span className="mr-1" style={{ color: draftColor }}>
+                  Draft:
+                </span>
+                <LastMessagePreview text={draftText} myUid={myUid} plain />
+              </>
             ) : isSaved && !chat.lastMessage ? (
               <>Forward messages here</>
             ) : (
