@@ -5,6 +5,7 @@
 // import { onAuthStateChanged } from "firebase/auth";
 // import { Chat } from "@/types/chat";
 // import { useChannelStore } from "@/store/channel-store";
+// import { useGroupStore } from "@/store/group-store";
 // import { auth } from "@/lib/firebase";
 // import { subscribeToDrafts, type DraftChange } from "@/lib/firestore/drafts";
 
@@ -83,17 +84,19 @@
 //   snapshotIds: string[] | null
 // ) {
 //   const state = useChatStore.getState();
-//   const activeId = state.activeChatId;
+//   const activeChatId = state.activeChatId;
+//   const activeGroupId = useGroupStore.getState().activeGroupId;
+//   const isActive = (id: string) => id === activeChatId || id === activeGroupId;
 
 //   if (snapshotIds) {
 //     const remote = new Set(snapshotIds);
-//     for (const chatId of Object.keys(state.drafts)) {
-//       if (chatId !== activeId && !remote.has(chatId)) state.clearDraft(chatId);
+//     for (const id of Object.keys(state.drafts)) {
+//       if (!isActive(id) && !remote.has(id)) state.clearDraft(id);
 //     }
 //   }
 
 //   for (const change of changes) {
-//     if (change.chatId === activeId) continue;
+//     if (isActive(change.chatId)) continue;
 //     if (change.removed) state.clearDraft(change.chatId);
 //     else state.setDraft(change.chatId, change.text);
 //   }
@@ -218,7 +221,9 @@ function applyDraftChanges(
   const state = useChatStore.getState();
   const activeChatId = state.activeChatId;
   const activeGroupId = useGroupStore.getState().activeGroupId;
-  const isActive = (id: string) => id === activeChatId || id === activeGroupId;
+  const activeChannelId = useChannelStore.getState().activeChannelId;
+  const isActive = (id: string) =>
+    id === activeChatId || id === activeGroupId || id === activeChannelId;
 
   if (snapshotIds) {
     const remote = new Set(snapshotIds);
