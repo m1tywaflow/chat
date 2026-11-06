@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import ConditionalProviders from "@/components/providers/ConditionalProviders";
 import { FatalErrorBoundary } from "@/components/molecules/ErrorBoundary";
-
 export const metadata: Metadata = {
   title: "Nexo",
   description: "Chat Nexo",

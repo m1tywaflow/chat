@@ -99,3 +99,53 @@ body {
     transform: translateY(-2px);
   }
 }
+
+/* Electron draggable header */
+header {
+  -webkit-app-region: drag;
+}
+
+.nexo-window-controls {
+  -webkit-app-region: no-drag;
+}
+.nexo-window-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  height: 100%;
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.nexo-window-controls button {
+  width: 46px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #aaa2bd;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.nexo-window-controls button:hover {
+  background: rgba(169, 150, 255, 0.12);
+  color: #fff;
+}
+
+.nexo-window-controls button.close:hover {
+  background: #e04455;
+  color: #fff;
+}
+
+.nexo-window-controls button:active {
+  background: rgba(169, 150, 255, 0.2);
+}
+
+.nexo-window-controls button.close:active {
+  background: #c52d3e;
+}

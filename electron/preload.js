@@ -34,5 +34,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(visible);
     });
   },
-  
+
+  minimizeWindow() {
+    ipcRenderer.send("window-minimize");
+  },
+
+  maximizeWindow() {
+    ipcRenderer.send("window-maximize");
+  },
+
+  closeWindow() {
+    ipcRenderer.send("window-close");
+  },
+
+  async isWindowMaximized() {
+    return ipcRenderer.invoke("window-is-maximized");
+  },
+
+  onWindowMaximizedChange(callback) {
+    const listener = (_, maximized) => callback(maximized);
+    ipcRenderer.on("window-maximized-change", listener);
+
+    return () => {
+      ipcRenderer.removeListener("window-maximized-change", listener);
+    };
+  },
 });
