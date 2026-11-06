@@ -586,7 +586,7 @@
 //       {pinnedPost && (
 //         <div
 //           onClick={() => scrollToPost(pinnedPost.id)}
-//           className="relative z-10 flex-none flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors"
+//           className="absolute left-0 right-0 top-14 z-20 flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md cursor-pointer hover:bg-white/[0.04] transition-colors"
 //         >
 //           <Pin size={13} className="text-[#a893ff] shrink-0" />
 //           <div className="text-[12px] text-zinc-400 truncate flex-1">
@@ -852,6 +852,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -888,10 +889,17 @@ import {
   Pencil,
   Forward,
   ListChecks,
+  ChevronDown,
 } from "lucide-react";
 import { useChannelStore } from "@/store/channel-store";
-import { isCustomEmojiUrl } from "@/lib/customEmoji";
+import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+import {
+  isCustomEmojiUrl,
+  getCustomEmoji,
+  CUSTOM_EMOJIS,
+} from "@/lib/customEmoji";
 import { votePoll } from "@/lib/polls";
+import { disintegrate } from "@/lib/disintegrate";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ChannelInfoModal from "./ChannelInfoModal";
@@ -912,11 +920,58 @@ import "./ChannelWindow.css";
 
 const NEAR_BOTTOM_THRESHOLD = 150;
 const VIEW_DWELL_MS = 1000;
+const MENU_MARGIN = 8;
 const EMPTY_POSTS: ChannelPost[] = [];
+const PIN_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
+const PIN_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 
 type Row =
   | { type: "date"; key: string; label: string }
   | { type: "post"; post: ChannelPost; priority: boolean };
+
+interface MenuPos {
+  left: number;
+  top: number;
+}
+
+const PinText = memo(function PinText({ text }: { text: string }) {
+  const parts = text.split(PIN_TOKEN_SPLIT_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(PIN_TOKEN_MATCH_RE);
+        if (match) {
+          const custom = getCustomEmoji(match[1]);
+          if (custom) {
+            return (
+              <img
+                key={i}
+                src={custom.url}
+                alt={custom.id}
+                className="inline-block align-text-bottom w-4 h-4 object-contain mx-0.5"
+              />
+            );
+          }
+        }
+        return part ? <span key={i}>{part}</span> : null;
+      })}
+    </>
+  );
+});
+
+function buildPinPreview(post: ChannelPost): string {
+  if (post.type === "poll" && post.poll) return `📊 ${post.poll.question}`;
+  if (post.text) return post.text;
+  if (post.imageUrl) {
+    const sticker = CUSTOM_EMOJIS.find((e) => e.url === post.imageUrl);
+    if (sticker) return `::${sticker.id}::`;
+  }
+  return "📷 Photo";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
 
 export default function ChannelWindow({
   channelId,
@@ -926,6 +981,7 @@ export default function ChannelWindow({
   myUid: string;
 }) {
   const openPostComments = useChannelStore((s) => s.openPostComments);
+  const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
 
   const [channel, setChannel] = useState<Channel | null>(null);
   const [posts, setPosts] = useState<ChannelPost[]>([]);
@@ -949,9 +1005,11 @@ export default function ChannelWindow({
     x: number;
     y: number;
   } | null>(null);
+  const [postMenuPos, setPostMenuPos] = useState<MenuPos | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [forwardData, setForwardData] = useState<ChannelPost | null>(null);
   const [freshIds, setFreshIds] = useState<Set<string>>(() => new Set());
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const postMenuRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -961,17 +1019,25 @@ export default function ChannelWindow({
   const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(null);
   const viewObserverRef = useRef<IntersectionObserver | null>(null);
   const postElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const refCallbacksRef = useRef<
+    Map<string, (el: HTMLElement | null) => void>
+  >(new Map());
   const viewTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map()
   );
   const viewedIdsRef = useRef<Set<string>>(new Set());
   const channelIdRef = useRef(channelId);
   const myUidRef = useRef(myUid);
+  const visibleRef = useRef(isWindowVisible);
 
   useLayoutEffect(() => {
     channelIdRef.current = channelId;
     myUidRef.current = myUid;
   }, [channelId, myUid]);
+
+  useLayoutEffect(() => {
+    visibleRef.current = isWindowVisible;
+  }, [isWindowVisible]);
 
   const isOwner = channel?.ownerId === myUid;
 
@@ -986,13 +1052,16 @@ export default function ChannelWindow({
     setReactionPickerOpenId(null);
     setPostMenu(null);
     setPollModalOpen(false);
+    setShowScrollButton(false);
   }, [channelId]);
 
   function handleScroll() {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+    const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+    isNearBottomRef.current = nearBottom;
+    setShowScrollButton((prev) => (prev === !nearBottom ? prev : !nearBottom));
   }
 
   useLayoutEffect(() => {
@@ -1002,6 +1071,7 @@ export default function ChannelWindow({
     if (intent === "initial" || intent === "force" || isNearBottomRef.current) {
       el.scrollTop = el.scrollHeight;
       isNearBottomRef.current = true;
+      setShowScrollButton(false);
     }
     scrollIntentRef.current = null;
   }, [channelId, posts]);
@@ -1025,6 +1095,7 @@ export default function ChannelWindow({
             const timer = setTimeout(() => {
               viewTimersRef.current.delete(postId);
               if (viewedIdsRef.current.has(postId)) return;
+              if (!visibleRef.current) return;
               viewedIdsRef.current.add(postId);
 
               const uid = myUidRef.current;
@@ -1070,6 +1141,21 @@ export default function ChannelWindow({
     viewObserverRef.current?.observe(el);
   }, []);
 
+  const getObserveRef = useCallback(
+    (postId: string) => {
+      let callback = refCallbacksRef.current.get(postId);
+      if (!callback) {
+        callback = (el: HTMLElement | null) => {
+          observePost(el, postId);
+          if (!el) refCallbacksRef.current.delete(postId);
+        };
+        refCallbacksRef.current.set(postId, callback);
+      }
+      return callback;
+    },
+    [observePost]
+  );
+
   useEffect(() => {
     const unsub = subscribeToChannelDoc(channelId, (nextChannel) => {
       if (channelIdRef.current === channelId) setChannel(nextChannel);
@@ -1108,21 +1194,34 @@ export default function ChannelWindow({
 
   useEffect(() => {
     let cancelled = false;
-    checkIsSubscribed(channelId, myUid).then((subscribed) => {
-      if (!cancelled && channelIdRef.current === channelId) {
-        setIsSub(subscribed);
-        setSubscriptionChannelId(channelId);
-      }
-    });
+    checkIsSubscribed(channelId, myUid)
+      .then((subscribed) => {
+        if (!cancelled && channelIdRef.current === channelId) {
+          setIsSub(subscribed);
+          setSubscriptionChannelId(channelId);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && channelIdRef.current === channelId) {
+          setIsSub(false);
+          setSubscriptionChannelId(channelId);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [channelId, myUid]);
 
   useEffect(() => {
-    if (!channelId || !myUid) return;
+    if (
+      !channelId ||
+      !myUid ||
+      !isWindowVisible ||
+      postsChannelId !== channelId
+    )
+      return;
     markChannelAsRead(channelId, myUid).catch(() => { });
-  }, [channelId, myUid, posts.length]);
+  }, [channelId, myUid, isWindowVisible, postsChannelId, posts.length]);
 
   useEffect(() => {
     if (!pickerOpenId && !reactionPickerOpenId) return;
@@ -1147,13 +1246,52 @@ export default function ChannelWindow({
         setPostMenu(null);
       }
     };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPostMenu(null);
+    };
     const handleScrollClose = () => setPostMenu(null);
     window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", handleScrollClose);
     window.addEventListener("scroll", handleScrollClose, true);
     return () => {
       window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("resize", handleScrollClose);
       window.removeEventListener("scroll", handleScrollClose, true);
     };
+  }, [postMenu]);
+
+  useLayoutEffect(() => {
+    if (!postMenu) {
+      setPostMenuPos(null);
+      return;
+    }
+    const el = postMenuRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = postMenu.x;
+    if (left + width > vw - MENU_MARGIN) left = postMenu.x - width;
+    left = clamp(
+      left,
+      MENU_MARGIN,
+      Math.max(MENU_MARGIN, vw - width - MENU_MARGIN)
+    );
+
+    let top = postMenu.y;
+    if (top + height > vh - MENU_MARGIN) top = postMenu.y - height;
+    top = clamp(
+      top,
+      MENU_MARGIN,
+      Math.max(MENU_MARGIN, vh - height - MENU_MARGIN)
+    );
+
+    setPostMenuPos((prev) =>
+      prev && prev.left === left && prev.top === top ? prev : { left, top }
+    );
   }, [postMenu]);
 
   const handleReact = useCallback(
@@ -1178,6 +1316,7 @@ export default function ChannelWindow({
 
   const openPostMenu = useCallback((e: React.MouseEvent, postId: string) => {
     e.preventDefault();
+    setPostMenuPos(null);
     setPostMenu({ postId, x: e.clientX, y: e.clientY });
   }, []);
 
@@ -1280,10 +1419,13 @@ export default function ChannelWindow({
     if (!channelId || !deleteConfirmId) return;
     const id = deleteConfirmId;
     setDeleteConfirmId(null);
+    const el = document.getElementById(`channel-post-${id}`);
     try {
+      if (el) await disintegrate(el);
       await deleteChannelPost(channelId, id);
     } catch (err) {
       console.error("Delete failed:", err);
+      if (el) el.style.visibility = "";
     }
   }
 
@@ -1344,7 +1486,20 @@ export default function ChannelWindow({
   }, [displayPosts]);
 
   if (!channel || channel.id !== channelId) {
-    return null;
+    return (
+      <div
+        className="relative flex flex-col w-full h-full overflow-hidden"
+        style={{ background: "var(--color-chat-bg)" }}
+      >
+        <div className="flex-none flex items-center gap-3 h-14 px-5 border-b border-white/[0.06] bg-[#0d0b17]/90">
+          <div className="w-9 h-9 rounded-full bg-white/[0.06] animate-pulse" />
+          <div className="flex flex-col gap-1.5">
+            <div className="h-3 w-28 rounded bg-white/[0.06] animate-pulse" />
+            <div className="h-2.5 w-16 rounded bg-white/[0.04] animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const pinnedPost = channel.pinnedPostId
@@ -1354,7 +1509,8 @@ export default function ChannelWindow({
   const menuPost = postMenu
     ? displayPosts.find((p) => p.id === postMenu.postId)
     : undefined;
-  const isSubscribed = subscriptionChannelId === channelId && isSub;
+  const subscriptionKnown = subscriptionChannelId === channelId;
+  const isSubscribed = subscriptionKnown && isSub;
 
   return (
     <div
@@ -1394,7 +1550,7 @@ export default function ChannelWindow({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isOwner && (
+          {!isOwner && subscriptionKnown && (
             <button
               onClick={toggleSub}
               className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${isSubscribed
@@ -1437,11 +1593,11 @@ export default function ChannelWindow({
       {pinnedPost && (
         <div
           onClick={() => scrollToPost(pinnedPost.id)}
-          className="absolute left-0 right-0 top-14 z-20 flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md cursor-pointer hover:bg-white/[0.04] transition-colors"
+          className="relative z-20 flex-none flex items-center gap-2.5 px-5 h-10 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md cursor-pointer hover:bg-white/[0.04] transition-colors"
         >
           <Pin size={13} className="text-[#a893ff] shrink-0" />
           <div className="text-[12px] text-zinc-400 truncate flex-1">
-            {pinnedPost.text || "Photo"}
+            <PinText text={buildPinPreview(pinnedPost)} />
           </div>
           {isOwner && (
             <button
@@ -1486,7 +1642,7 @@ export default function ChannelWindow({
                 <div
                   key={p.id}
                   id={`channel-post-${p.id}`}
-                  ref={(el) => observePost(el, p.id)}
+                  ref={getObserveRef(p.id)}
                   onContextMenu={(e) => openPostMenu(e, p.id)}
                   className="flex justify-start"
                 >
@@ -1542,6 +1698,22 @@ export default function ChannelWindow({
             </div>
           )}
         </div>
+
+        {showScrollButton && (
+          <button
+            onClick={() => {
+              const el = scrollContainerRef.current;
+              if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+              isNearBottomRef.current = true;
+              setShowScrollButton(false);
+            }}
+            title="Scroll to bottom"
+            aria-label="Scroll to bottom"
+            className="sticky float-right z-20 bottom-2 w-10 h-10 flex items-center justify-center rounded-full bg-[#12111f] border border-white/[0.10] shadow-lg shadow-black/40 text-[#a893ff] hover:bg-[#1b1633] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          >
+            <ChevronDown size={18} />
+          </button>
+        )}
       </div>
 
       {postMenu && menuPost && (
@@ -1549,11 +1721,14 @@ export default function ChannelWindow({
           ref={postMenuRef}
           style={{
             position: "fixed",
-            top: Math.min(postMenu.y, window.innerHeight - 190),
-            left: Math.min(postMenu.x, window.innerWidth - 190),
+            top: postMenuPos?.top ?? postMenu.y,
+            left: postMenuPos?.left ?? postMenu.x,
+            visibility: postMenuPos ? "visible" : "hidden",
             zIndex: 250,
           }}
           className="w-44 rounded-xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           {isOwner &&
             menuPost.type !== "poll" &&
@@ -1614,7 +1789,14 @@ export default function ChannelWindow({
         </div>
       )}
 
-      {isOwner && <ChannelComposer key={channelId} onPost={handlePost} />}
+      {isOwner && (
+        <ChannelComposer
+          key={channelId}
+          channelId={channelId}
+          myUid={myUid}
+          onPost={handlePost}
+        />
+      )}
 
       {isOwner && (
         <CreatePollModal
