@@ -589,6 +589,7 @@
 
 import {
     forwardRef,
+    memo,
     useCallback,
     useImperativeHandle,
     useEffect,
@@ -723,7 +724,7 @@ function ReplyBar({
     );
 }
 
-const GroupComposer = forwardRef<GroupComposerHandle, GroupComposerProps>(
+const GroupComposer = memo(forwardRef<GroupComposerHandle, GroupComposerProps>(
     function GroupComposer(
         {
             groupId,
@@ -1251,6 +1252,6 @@ const GroupComposer = forwardRef<GroupComposerHandle, GroupComposerProps>(
             </div>
         );
     }
-);
+));
 
 export default GroupComposer;

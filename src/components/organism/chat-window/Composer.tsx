@@ -2,6 +2,7 @@
 
 import {
     forwardRef,
+    memo,
     useCallback,
     useEffect,
     useImperativeHandle,
@@ -117,7 +118,7 @@ function ReplyBar({
     );
 }
 
-const Composer = forwardRef<ComposerHandle, Props>(function Composer(
+const Composer = memo(forwardRef<ComposerHandle, Props>(function Composer(
     { chatId, myUid, replyMessage, onCancelReply, onSend, onSendVoice },
     ref
 ) {
@@ -522,6 +523,6 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </div>
         </div>
     );
-});
+}));
 
 export default Composer;

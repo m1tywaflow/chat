@@ -48,7 +48,7 @@ export default function VoiceBubble({
   id: string;
   audioUrl: string;
   duration: number;
-  waveform: number[];
+  waveform?: number[] | null;
   isMine: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -79,7 +79,7 @@ export default function VoiceBubble({
   );
 
   const bars = useMemo(
-    () => (barCount ? resample(waveform, barCount) : []),
+    () => (barCount ? resample(Array.isArray(waveform) ? waveform : [], barCount) : []),
     [waveform, barCount]
   );
 
@@ -194,10 +194,14 @@ export default function VoiceBubble({
   useEffect(
     () => () => {
       cancelAnimationFrame(rafRef.current);
-      audioRef.current?.pause();
+      const audio = audioRef.current;
+      audio?.pause();
+      audio?.removeAttribute("src");
+      audio?.load();
+      if (usePlayerStore.getState().currentlyPlayingId === id) setCurrentlyPlaying(null);
       audioRef.current = null;
     },
-    [audioUrl]
+    [audioUrl, id, setCurrentlyPlaying]
   );
 
   useEffect(() => {

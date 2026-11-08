@@ -116,7 +116,9 @@ export async function sendMessage(
   myUid: string,
   text: string,
   replyTo?: any,
-  imageUrl?: string
+  imageUrl?: string,
+  imageWidth?: number | null,
+  imageHeight?: number | null
 ) {
   if (!chatId || !myUid || (!text.trim() && !imageUrl)) return;
 
@@ -129,6 +131,9 @@ export async function sendMessage(
     senderId: myUid,
     text: text.trim(),
     imageUrl: imageUrl || null,
+    ...(imageUrl && imageWidth && imageHeight
+      ? { imageWidth, imageHeight }
+      : {}),
     createdAt: serverTimestamp(),
     replyTo: replyTo
       ? {
@@ -158,7 +163,8 @@ const MESSAGES_PAGE_SIZE = 50;
 export function subscribeToMessages(
   chatId: string,
   cb: (m: any[], hasMore: boolean) => void,
-  pageSize: number = MESSAGES_PAGE_SIZE
+  pageSize: number = MESSAGES_PAGE_SIZE,
+  onError?: (error: Error) => void
 ) {
   if (!chatId) return () => {};
 
@@ -169,16 +175,20 @@ export function subscribeToMessages(
     limit(pageSize)
   );
 
-  return onSnapshot(q, (snap) => {
-    const docs = [...snap.docs].reverse();
-    cb(
-      docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })),
-      snap.docs.length === pageSize
-    );
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const docs = [...snap.docs].reverse();
+      cb(
+        docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })),
+        snap.docs.length === pageSize
+      );
+    },
+    (error) => onError?.(error)
+  );
 }
 export async function loadOlderMessages(
   chatId: string,
@@ -491,6 +501,9 @@ export async function forwardMessageToChat(
     senderId: myUid,
     text: original.text || "",
     imageUrl: original.imageUrl || null,
+    ...(original.imageUrl && original.imageWidth && original.imageHeight
+      ? { imageWidth: original.imageWidth, imageHeight: original.imageHeight }
+      : {}),
     voiceUrl: original.voiceUrl || null,
     duration: original.duration ?? null,
     waveform: original.waveform ?? null,

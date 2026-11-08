@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { formatLastSeen, isOnline } from "@/lib/formatLastSeen";
 import { useChatStore } from "@/store/chat-store";
@@ -53,9 +54,6 @@ import {
   Bookmark,
   List,
 } from "lucide-react";
-import ProfileModal from "../profile-modal/ProfileModal";
-import MediaGallery from "../media-gallery/MediaGallery";
-import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
 import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
 import { createCall, fetchLiveKitToken } from "@/lib/calls";
@@ -79,6 +77,12 @@ import {
   uploadToCloudinary,
 } from "./chat-shared";
 import "./chat-window.css";
+
+const ProfileModal = dynamic(() => import("../profile-modal/ProfileModal"));
+const MediaGallery = dynamic(() => import("../media-gallery/MediaGallery"));
+const ForwardPicker = dynamic(
+  () => import("@/components/molecules/forward-picker/ForwardPicker")
+);
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -107,6 +111,12 @@ interface MsgMenuState {
 interface MenuPos {
   left: number;
   top: number;
+}
+
+interface PendingMessageMatch {
+  senderId?: string;
+  text?: string;
+  imageUrl?: string | null;
 }
 
 type Row =
@@ -174,6 +184,21 @@ function buildPinText(m: any): string {
     if (sticker) return `::${sticker.id}::`;
   }
   return "📷 Photo";
+}
+
+function matchesPendingMessage(
+  pending: PendingMessageMatch,
+  message: PendingMessageMatch
+) {
+  if (
+    pending.senderId !== message.senderId ||
+    (pending.text || "") !== (message.text || "")
+  ) {
+    return false;
+  }
+  return typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")
+    ? Boolean(message.imageUrl)
+    : (pending.imageUrl || null) === (message.imageUrl || null);
 }
 
 export default function ChatWindow() {
@@ -263,11 +288,14 @@ export default function ChatWindow() {
   }, []);
 
   useEffect(() => {
-    if (!chatId || !myUid) return;
+    if (!chatId || !myUid || chatId === getSavedChatId(myUid)) return;
     const [uid1, uid2] = chatId.split("_");
     const otherUid = uid1 === myUid ? uid2 : uid1;
     const unsub = onSnapshot(doc(db, "users", otherUid), (snap) => {
-      if (snap.exists()) setOtherUser({ id: snap.id, ...snap.data() });
+      if (activeChatIdRef.current !== chatId) return;
+      setOtherUser(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    }, () => {
+      if (activeChatIdRef.current === chatId) setOtherUser(null);
     });
     return () => unsub();
   }, [chatId, myUid]);
@@ -285,6 +313,8 @@ export default function ChatWindow() {
       return [];
     });
     setMessages([]);
+    setOtherUser(null);
+    setProfileOpen(false);
     setFirstUnreadId(null);
     setShowScrollButton(false);
     setTypingUsers([]);
@@ -363,11 +393,7 @@ export default function ChatWindow() {
           const matchIndex = msgs.findIndex(
             (message, index) =>
               !consumed.has(index) &&
-              message.senderId === pending.senderId &&
-              (message.text || "") === (pending.text || "") &&
-              (isBlob
-                ? Boolean(message.imageUrl)
-                : (message.imageUrl || null) === (pending.imageUrl || null))
+              matchesPendingMessage(pending, message)
           );
           if (matchIndex === -1) return true;
           consumed.add(matchIndex);
@@ -376,6 +402,8 @@ export default function ChatWindow() {
         });
         return next.length === previous.length ? previous : next;
       });
+    }, undefined, (error) => {
+      if (activeChatIdRef.current === chatId) console.error("Message listener failed:", error);
     });
     return () => unsub();
   }, [chatId, myUid]);
@@ -472,7 +500,7 @@ export default function ChatWindow() {
     setShowScrollButton((prev) => (prev === !nearBottom ? prev : !nearBottom));
   }
 
-  async function loadOlder() {
+  const loadOlder = useCallback(async () => {
     if (!chatId) return;
     if (isLoadingOlderRef.current || !hasMoreMessages) return;
     const oldest = messages[0];
@@ -501,10 +529,12 @@ export default function ChatWindow() {
         preserveScrollRef.current = null;
       }
     } finally {
-      isLoadingOlderRef.current = false;
-      setIsLoadingOlder(false);
+      if (activeChatIdRef.current === chatId) {
+        isLoadingOlderRef.current = false;
+        setIsLoadingOlder(false);
+      }
     }
-  }
+  }, [chatId, hasMoreMessages, messages]);
 
   useLayoutEffect(() => {
     loadOlderRef.current = loadOlder;
@@ -733,7 +763,7 @@ export default function ChatWindow() {
     }
   }
 
-  async function handleSend({ text, file, previewUrl, isVideo: wasVideo }: SendPayload) {
+  const handleSend = useCallback(async ({ text, file, previewUrl, isVideo: wasVideo }: SendPayload) => {
     if (!chatId || !myUid) return;
     const currentReply = replyMessage;
 
@@ -763,22 +793,32 @@ export default function ChatWindow() {
     scrollIntentRef.current = "force";
 
     try {
-      let imageUrl: string | undefined;
-      if (file) imageUrl = await uploadToCloudinary(file);
-      await sendMessage(chatId, myUid, text, currentReply, imageUrl);
+      let upload: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+      if (file) upload = await uploadToCloudinary(file);
+      await sendMessage(
+        chatId,
+        myUid,
+        text,
+        currentReply,
+        upload?.url,
+        upload?.width,
+        upload?.height
+      );
     } catch (err) {
       console.error("Send failed:", err);
-      setPendingMessages((prev) => prev.filter((p) => p.id !== tempId));
+      if (activeChatIdRef.current === chatId) {
+        setPendingMessages((prev) => prev.filter((p) => p.id !== tempId));
+      }
       if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
-      if (text) composerRef.current?.restoreText(text);
+      if (text && activeChatIdRef.current === chatId) composerRef.current?.restoreText(text);
     }
-  }
+  }, [chatId, myUid, replyMessage]);
 
-  async function handleVoiceSend(r: {
+  const handleVoiceSend = useCallback(async (r: {
     audioUrl: string;
     duration: number;
     waveform: number[];
-  }) {
+  }) => {
     if (!chatId || !myUid) return;
     const currentReply = replyMessage;
     setReplyMessage(null);
@@ -796,7 +836,7 @@ export default function ChatWindow() {
     } catch (err) {
       console.error("Voice send failed:", err);
     }
-  }
+  }, [chatId, myUid, replyMessage]);
 
   const handleReply = useCallback((m: any) => {
     setReplyMessage(m);
@@ -1018,7 +1058,7 @@ export default function ChatWindow() {
     e.target.value = "";
     if (!file || !chatId) return;
     try {
-      const url = await uploadToCloudinary(file, "chat_wallpapers");
+      const { url } = await uploadToCloudinary(file, "chat_wallpapers");
       await updateDoc(doc(db, "chats", chatId), {
         wallpaper: { url, type: "image" },
       });
@@ -1096,9 +1136,7 @@ export default function ChatWindow() {
       const idx = messages.findIndex(
         (m, i) =>
           !consumed.has(i) &&
-          m.senderId === p.senderId &&
-          (m.text || "") === (p.text || "") &&
-          (m.imageUrl || null) === (p.imageUrl || null)
+          matchesPendingMessage(p, m)
       );
       if (idx === -1) return true;
       consumed.add(idx);

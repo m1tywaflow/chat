@@ -26,7 +26,7 @@ export function isVideo(url: string) {
 export async function uploadToCloudinary(
     file: File,
     folder?: string
-): Promise<string> {
+): Promise<{ url: string; width?: number; height?: number }> {
     const isVid = file.type.startsWith("video/");
     const formData = new FormData();
     formData.append("file", file);
@@ -38,7 +38,11 @@ export async function uploadToCloudinary(
     );
     if (!res.ok) throw new Error("Upload failed");
     const data = await res.json();
-    return data.secure_url;
+    return {
+        url: data.secure_url,
+        ...(typeof data.width === "number" ? { width: data.width } : {}),
+        ...(typeof data.height === "number" ? { height: data.height } : {}),
+    };
 }
 
 export function optimizeImage(url: string, width = 520): string {

@@ -2,6 +2,7 @@
 
 import {
     memo,
+    useCallback,
     useEffect,
     useLayoutEffect,
     useRef,
@@ -53,6 +54,64 @@ function extractUrl(text: unknown): string | null {
         return null;
     }
 }
+
+const cloudinaryUrl = (url: string, transform: string) =>
+    url.includes("/upload/") ? url.replace("/upload/", `/upload/${transform}/`) : url;
+
+const ChatImage = memo(function ChatImage({
+    url,
+    width,
+    height,
+    priority,
+    onLoad,
+    onOpen,
+}: {
+    url: string;
+    width?: number | null;
+    height?: number | null;
+    priority?: boolean;
+    onLoad: () => void;
+    onOpen: (url: string) => void;
+}) {
+    const [loaded, setLoaded] = useState(false);
+    const handleLoad = useCallback(() => {
+        setLoaded(true);
+        onLoad();
+    }, [onLoad]);
+    const hasDimensions =
+        typeof width === "number" && width > 0 && typeof height === "number" && height > 0;
+    const canUseBlurPlaceholder = url.includes("/image/upload/");
+
+    return (
+        <div
+            className="relative max-w-[260px] w-full overflow-hidden rounded-xl bg-white/[0.03]"
+            style={hasDimensions ? { aspectRatio: `${width} / ${height}` } : undefined}
+        >
+            {canUseBlurPlaceholder && hasDimensions && (
+                <img
+                    src={cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto")}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className="absolute inset-0 h-full w-full scale-105 object-cover"
+                    style={{ filter: "blur(10px)" }}
+                />
+            )}
+            <img
+                src={optimizeImage(url)}
+                alt="image"
+                loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
+                decoding="async"
+                draggable={false}
+                className={`${hasDimensions ? "absolute inset-0 h-full w-full" : "chat-img block w-full"} cursor-zoom-in object-cover transition-opacity duration-150`}
+                style={hasDimensions ? { opacity: loaded ? 1 : 0 } : undefined}
+                onLoad={handleLoad}
+                onClick={() => onOpen(url)}
+            />
+        </div>
+    );
+});
 
 const ReactionPicker = memo(function ReactionPicker({
     anchorRef,
@@ -318,6 +377,8 @@ function sameMsg(a: any, b: any) {
         a.edited === b.edited &&
         a.deleted === b.deleted &&
         a.imageUrl === b.imageUrl &&
+        a.imageWidth === b.imageWidth &&
+        a.imageHeight === b.imageHeight &&
         a.voiceUrl === b.voiceUrl &&
         a.pending === b.pending &&
         a.isLocalVideo === b.isLocalVideo &&
@@ -574,14 +635,13 @@ const MessageRow = memo(function MessageRow({
                                             </div>
                                         </div>
                                     ) : (
-                                        <img
-                                            src={optimizeImage(m.imageUrl)}
-                                            alt="image"
-                                            loading="lazy"
-                                            decoding="async"
-                                            className="chat-img rounded-xl max-w-[260px] w-full object-cover block"
+                                        <ChatImage
+                                            url={m.imageUrl}
+                                            width={m.imageWidth}
+                                            height={m.imageHeight}
+                                            priority={priority}
                                             onLoad={onMediaLoad}
-                                            onClick={() => !m.pending && onOpenLightbox(m.imageUrl)}
+                                            onOpen={(url) => !m.pending && onOpenLightbox(url)}
                                         />
                                     ))}
                                 {isEditing ? (

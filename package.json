@@ -53,12 +53,14 @@
       "en",
       "ru"
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "m1tywaflow",
-      "repo": "chat",
-      "draft": false
-    },
+    "publish": [
+  {
+    "provider": "github",
+    "owner": "m1tywaflow",
+    "repo": "chat",
+    "releaseType": "release"
+  }
+],
     "files": [
       ".next/**/*",
       "!.next/cache/**/*",

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useGroupStore } from "@/store/group-store";
@@ -15,9 +16,7 @@ import {
   getGroupRecentMedia,
   type GroupMediaItem,
 } from "@/lib/firestore/groups";
-import MediaGallery from "../media-gallery/MediaGallery";
 import { isOnline, formatLastSeen } from "@/lib/formatLastSeen";
-import ProfileModal from "../profile-modal/ProfileModal";
 import {
   X,
   Users,
@@ -36,6 +35,9 @@ import {
   LogOut,
   Play,
 } from "lucide-react";
+
+const MediaGallery = dynamic(() => import("../media-gallery/MediaGallery"));
+const ProfileModal = dynamic(() => import("../profile-modal/ProfileModal"));
 
 interface Props {
   groupId: string;
@@ -204,12 +206,16 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
 
     setLoadingProfiles(true);
 
-    getUserProfiles(group.members).then((res) => {
-      if (!cancelled) {
-        setProfiles(res);
-        setLoadingProfiles(false);
-      }
-    });
+    getUserProfiles(group.members)
+      .then((res) => {
+        if (!cancelled) setProfiles(res);
+      })
+      .catch(() => {
+        if (!cancelled) setProfiles({});
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProfiles(false);
+      });
 
     return () => {
       cancelled = true;
@@ -304,8 +310,9 @@ export default function GroupModal({ groupId, myUid, onClose }: Props) {
     const t = setTimeout(async () => {
       try {
         const res = await searchUsersByUsername(term, group?.members ?? []);
-
         setSearchResults(res);
+      } catch {
+        setSearchResults([]);
       } finally {
         setSearching(false);
       }
