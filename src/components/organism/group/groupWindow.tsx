@@ -84,7 +84,6 @@
 
 // const NEAR_BOTTOM_THRESHOLD = 120;
 // const GROUP_GAP_MS = 5 * 60 * 1000;
-// const PENDING_LOOKBACK = 50;
 // const MAX_JUMP_PAGES = 12;
 // const MENU_MARGIN = 8;
 // const SCROLL_KEYS = [
@@ -97,6 +96,7 @@
 //   " ",
 // ];
 // const EMPTY_MESSAGES: any[] = [];
+// const EMPTY_VOTES: Record<string, any> = {};
 // const PIN_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 // const PIN_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 
@@ -147,6 +147,70 @@
 //   );
 // });
 
+// interface GroupPollRowProps {
+//   m: any;
+//   groupId: string;
+//   myUid: string;
+//   isMine: boolean;
+//   isFirstInGroup: boolean;
+//   onReply: (m: any) => void;
+//   onOpenMenu: (e: React.MouseEvent, msgId: string, isMine: boolean) => void;
+// }
+
+// const GroupPollRow = memo(function GroupPollRow({
+//   m,
+//   groupId,
+//   myUid,
+//   isMine,
+//   isFirstInGroup,
+//   onReply,
+//   onOpenMenu,
+// }: GroupPollRowProps) {
+//   const poll = m.poll;
+//   const votes = m.pollVotes ?? EMPTY_VOTES;
+//   return (
+//     <div className={isFirstInGroup ? "pt-2.5" : "pt-0.5"}>
+//       <div
+//         id={`gmsg-${m.id}`}
+//         data-msg-anim={m.id}
+//         onContextMenu={(e) => onOpenMenu(e, m.id, isMine)}
+//         className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
+//       >
+//         {!isMine && isFirstInGroup && (
+//           <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
+//             {m.senderName}
+//           </div>
+//         )}
+//         <div className="msg-row relative">
+//           <PollCard
+//             poll={poll}
+//             votes={votes}
+//             myUid={myUid}
+//             onVote={(optionId) =>
+//               votePoll(
+//                 doc(db, "groups", groupId, "messages", m.id),
+//                 myUid,
+//                 optionId,
+//                 poll,
+//                 votes
+//               )
+//             }
+//           />
+//           <button
+//             onClick={() => onReply(m)}
+//             title="Reply"
+//             aria-label="Reply"
+//             className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-9" : "-right-9"
+//               } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 transition-colors border border-white/[0.08]`}
+//           >
+//             <CornerUpLeft size={13} />
+//           </button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// });
+
 // function sameList(a: string[], b: string[]) {
 //   return a.length === b.length && a.every((v, i) => v === b[i]);
 // }
@@ -167,6 +231,15 @@
 //   if (!el) return false;
 //   const tag = el.tagName;
 //   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+// }
+
+// function msTime(m: any): number | null {
+//   const c = m?.createdAt;
+//   if (!c) return null;
+//   if (typeof c.toMillis === "function") return c.toMillis();
+//   if (c instanceof Date) return c.getTime();
+//   if (typeof c.seconds === "number") return c.seconds * 1000;
+//   return null;
 // }
 
 // function sameValue(a: any, b: any): boolean {
@@ -214,6 +287,10 @@
 //   return "📷 Photo";
 // }
 
+// function isBlobUrl(value: unknown): value is string {
+//   return typeof value === "string" && value.startsWith("blob:");
+// }
+
 // function matchesPendingMessage(pending: any, message: any) {
 //   if (
 //     pending.senderId !== message.senderId ||
@@ -221,7 +298,7 @@
 //   ) {
 //     return false;
 //   }
-//   return typeof pending.imageUrl === "string" && pending.imageUrl.startsWith("blob:")
+//   return isBlobUrl(pending.imageUrl)
 //     ? Boolean(message.imageUrl)
 //     : (pending.imageUrl || null) === (message.imageUrl || null);
 // }
@@ -288,13 +365,13 @@
 //   const topSentinelRef = useRef<HTMLDivElement | null>(null);
 //   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
 //   const isNearBottom = useRef(true);
-//   const activeGroupIdRef = useRef<string | null>(groupId);
 //   const myUidRef = useRef<string | null>(null);
 //   const confirmedMessageIdsRef = useRef<Set<string>>(new Set());
 //   const receivedSnapshotRef = useRef(false);
 //   const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(null);
 //   const dragCounter = useRef(0);
 //   const isLoadingOlderRef = useRef(false);
+//   const reachedStartRef = useRef(false);
 //   const olderMessageIdsRef = useRef<Set<string>>(new Set());
 //   const readReceiptIdsRef = useRef<Set<string>>(new Set());
 //   const preserveScrollRef = useRef<{ height: number; top: number } | null>(
@@ -334,10 +411,7 @@
 //   useEffect(() => {
 //     return () => {
 //       pendingRef.current.forEach((message) => {
-//         if (
-//           typeof message.imageUrl === "string" &&
-//           message.imageUrl.startsWith("blob:")
-//         ) {
+//         if (isBlobUrl(message.imageUrl)) {
 //           URL.revokeObjectURL(message.imageUrl);
 //         }
 //       });
@@ -350,22 +424,26 @@
 
 //   useEffect(() => {
 //     if (!myUid) return;
-//     const unsub = onSnapshot(doc(db, "users", myUid), (snap) => {
-//       setMyUsername(snap.data()?.username || "");
-//     }, undefined, (error) => {
-//       if (activeGroupIdRef.current === groupId) console.error("Group message listener failed:", error);
-//     });
+//     const unsub = onSnapshot(
+//       doc(db, "users", myUid),
+//       (snap) => {
+//         setMyUsername(snap.data()?.username || "");
+//       },
+//       (error) => {
+//         console.error("User listener failed:", error);
+//       }
+//     );
 //     return () => unsub();
 //   }, [myUid]);
 
 //   useEffect(() => {
 //     if (!groupId) return;
 //     const unsub = subscribeToGroupMessages(groupId, (msgs, hasMore) => {
-//       if (activeGroupIdRef.current !== groupId) return;
-
 //       const prevIds = confirmedMessageIdsRef.current;
 //       const nextIds = new Set<string>(msgs.map((m) => m.id));
-//       const hasNewConfirmedMessage = [...nextIds].some((id) => !prevIds.has(id));
+//       const newMessages = msgs.filter(
+//         (m) => !prevIds.has(m.id) && !olderMessageIdsRef.current.has(m.id)
+//       );
 //       const isInitialSnapshot = !receivedSnapshotRef.current;
 //       confirmedMessageIdsRef.current = nextIds;
 //       receivedSnapshotRef.current = true;
@@ -373,26 +451,32 @@
 //       if (isInitialSnapshot) {
 //         scrollIntentRef.current = "initial";
 //       } else {
-//         if (hasNewConfirmedMessage && isNearBottom.current) {
+//         if (newMessages.length > 0 && isNearBottom.current) {
 //           scrollIntentRef.current = "follow";
 //         }
-//         const added = msgs
-//           .filter((m) => !prevIds.has(m.id) && m.senderId !== myUidRef.current)
+//         const added = newMessages
+//           .filter((m) => m.senderId !== myUidRef.current)
 //           .map((m) => m.id);
 //         if (added.length) {
 //           setFreshIds((prev) => new Set([...prev, ...added]));
 //         }
 //       }
 
-//       setHasMoreMessages(hasMore);
+//       const liveStart = msgs.length ? msTime(msgs[0]) : null;
+
+//       setHasMoreMessages(reachedStartRef.current ? false : hasMore);
 //       setMessages((previous) => {
 //         const previousById = new Map<string, any>();
 //         previous.forEach((message) => previousById.set(message.id, message));
-//         const kept = previous.filter(
-//           (message) =>
-//             olderMessageIdsRef.current.has(message.id) &&
-//             !nextIds.has(message.id)
-//         );
+//         const kept = previous.filter((message) => {
+//           if (nextIds.has(message.id)) return false;
+//           if (olderMessageIdsRef.current.has(message.id)) return true;
+//           if (!hasMore || liveStart === null) return false;
+//           const time = msTime(message);
+//           if (time === null || time >= liveStart) return false;
+//           olderMessageIdsRef.current.add(message.id);
+//           return true;
+//         });
 //         const live = msgs.map((message) => {
 //           const old = previousById.get(message.id);
 //           return old && sameValue(old, message) ? old : message;
@@ -409,20 +493,18 @@
 //       setMessagesGroupId(groupId);
 
 //       setPendingMessages((previous) => {
-//         if (!previous.length) return previous;
+//         if (!previous.length || !newMessages.length) return previous;
 //         const consumed = new Set<number>();
 //         const next = previous.filter((pending) => {
-//           const isBlob =
-//             typeof pending.imageUrl === "string" &&
-//             pending.imageUrl.startsWith("blob:");
-//           const matchIndex = msgs.findIndex(
+//           const matchIndex = newMessages.findIndex(
 //             (message, index) =>
-//               !consumed.has(index) &&
-//               matchesPendingMessage(pending, message)
+//               !consumed.has(index) && matchesPendingMessage(pending, message)
 //           );
 //           if (matchIndex === -1) return true;
 //           consumed.add(matchIndex);
-//           if (isBlob) URL.revokeObjectURL(pending.imageUrl);
+//           if (isBlobUrl(pending.imageUrl)) {
+//             URL.revokeObjectURL(pending.imageUrl);
+//           }
 //           return false;
 //         });
 //         return next.length === previous.length ? previous : next;
@@ -450,40 +532,47 @@
 
 //   useEffect(() => {
 //     if (!groupId || !myUid) return;
-//     const unsub = onSnapshot(doc(db, "groups", groupId), (snap) => {
-//       if (activeGroupIdRef.current !== groupId) return;
-//       const data = snap.data();
+//     const unsub = onSnapshot(
+//       doc(db, "groups", groupId),
+//       (snap) => {
+//         const data = snap.data();
 
-//       const pins = readPins(data);
-//       const prevLen = pinsLenRef.current;
-//       pinsLenRef.current = pins.length;
-//       setPinnedMessages((prev) => (samePins(prev, pins) ? prev : pins));
-//       if (pins.length > prevLen) {
-//         setPinIndex(pins.length - 1);
-//       } else {
-//         setPinIndex((i) => Math.min(i, Math.max(0, pins.length - 1)));
+//         const pins = readPins(data);
+//         const prevLen = pinsLenRef.current;
+//         pinsLenRef.current = pins.length;
+//         setPinnedMessages((prev) => (samePins(prev, pins) ? prev : pins));
+//         if (pins.length > prevLen) {
+//           setPinIndex(pins.length - 1);
+//         } else {
+//           setPinIndex((i) => Math.min(i, Math.max(0, pins.length - 1)));
+//         }
+
+//         const wp = data?.wallpaper || null;
+//         cacheWallpaper(groupId, wp);
+//         setWallpaper((prev: any) =>
+//           (prev?.url ?? null) === (wp?.url ?? null) ? prev : wp
+//         );
+
+//         const typingList = data?.typing
+//           ? Object.entries(data.typing)
+//             .filter(([uid, val]) => val && uid !== myUid)
+//             .map(([uid]) => uid)
+//           : [];
+//         setTypingUsers((prev) =>
+//           sameList(prev, typingList) ? prev : typingList
+//         );
+
+//         const unread = data?.unreadCounts?.[myUid] || 0;
+//         unreadRef.current = unread;
+//         if (unread > 0 && visibleRef.current) {
+//           unreadRef.current = 0;
+//           markGroupAsRead(groupId, myUid).catch(() => { });
+//         }
+//       },
+//       (error) => {
+//         console.error("Group listener failed:", error);
 //       }
-
-//       const wp = data?.wallpaper || null;
-//       cacheWallpaper(groupId, wp);
-//       setWallpaper((prev: any) =>
-//         (prev?.url ?? null) === (wp?.url ?? null) ? prev : wp
-//       );
-
-//       const typingList = data?.typing
-//         ? Object.entries(data.typing)
-//           .filter(([uid, val]) => val && uid !== myUid)
-//           .map(([uid]) => uid)
-//         : [];
-//       setTypingUsers((prev) => (sameList(prev, typingList) ? prev : typingList));
-
-//       const unread = data?.unreadCounts?.[myUid] || 0;
-//       unreadRef.current = unread;
-//       if (unread > 0 && visibleRef.current) {
-//         unreadRef.current = 0;
-//         markGroupAsRead(groupId, myUid).catch(() => { });
-//       }
-//     });
+//     );
 //     return () => unsub();
 //   }, [groupId, myUid]);
 
@@ -494,7 +583,7 @@
 //   }, [isWindowVisible, groupId, myUid]);
 
 //   useEffect(() => {
-//     if (!groupId || !myUid) return;
+//     if (!groupId || !myUid || !visibleRef.current) return;
 //     markGroupAsRead(groupId, myUid).catch(() => { });
 //   }, [groupId, myUid]);
 
@@ -556,7 +645,7 @@
 //         groupId,
 //         oldest
 //       );
-//       if (activeGroupIdRef.current !== groupId) return;
+//       if (!hasMore) reachedStartRef.current = true;
 //       setHasMoreMessages(hasMore);
 //       if (older.length) {
 //         setMessages((previous) => {
@@ -570,11 +659,12 @@
 //       } else {
 //         preserveScrollRef.current = null;
 //       }
+//     } catch (err) {
+//       preserveScrollRef.current = null;
+//       console.error("Load older failed:", err);
 //     } finally {
-//       if (activeGroupIdRef.current === groupId) {
-//         isLoadingOlderRef.current = false;
-//         setIsLoadingOlder(false);
-//       }
+//       isLoadingOlderRef.current = false;
+//       setIsLoadingOlder(false);
 //     }
 //   }, [groupId, hasMoreMessages, messages]);
 
@@ -1053,25 +1143,7 @@
 
 //   const rows = useMemo<Row[]>(() => {
 //     const confirmed = messagesGroupId === groupId ? messages : EMPTY_MESSAGES;
-//     const consumed = new Set<number>();
-//     const tailStart = Math.max(0, confirmed.length - PENDING_LOOKBACK);
-//     const visiblePending = pendingMessages.filter((p) => {
-//       let idx = -1;
-//       for (let i = tailStart; i < confirmed.length; i++) {
-//         if (consumed.has(i)) continue;
-//         const m = confirmed[i];
-//         if (
-//           matchesPendingMessage(p, m)
-//         ) {
-//           idx = i;
-//           break;
-//         }
-//       }
-//       if (idx === -1) return true;
-//       consumed.add(idx);
-//       return false;
-//     });
-//     const all = [...confirmed, ...visiblePending].filter((m) => !m.deleted);
+//     const all = [...confirmed, ...pendingMessages].filter((m) => !m.deleted);
 //     const dates = all.map((m) => toDate(m.createdAt));
 //     const keys = dates.map((d) => dayKey(d));
 
@@ -1124,6 +1196,8 @@
 //       </div>
 //     );
 //   }
+
+//   const gid = groupId;
 
 //   const currentMsgMenu = msgMenu
 //     ? messages.find((m) => m.id === msgMenu.id)
@@ -1576,51 +1650,17 @@
 //             const isMine = m.senderId === myUid;
 
 //             if (m.type === "poll" && m.poll && myUid) {
-//               const poll = m.poll;
-//               const votes = m.pollVotes ?? {};
 //               return (
-//                 <div
+//                 <GroupPollRow
 //                   key={m.id}
-//                   className={row.isFirstInGroup ? "pt-2.5" : "pt-0.5"}
-//                 >
-//                   <div
-//                     id={`gmsg-${m.id}`}
-//                     data-msg-anim={m.id}
-//                     onContextMenu={(e) => openMsgMenu(e, m.id, isMine)}
-//                     className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
-//                   >
-//                     {!isMine && row.isFirstInGroup && (
-//                       <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
-//                         {m.senderName}
-//                       </div>
-//                     )}
-//                     <div className="msg-row relative">
-//                       <PollCard
-//                         poll={poll}
-//                         votes={votes}
-//                         myUid={myUid}
-//                         onVote={(optionId) =>
-//                           votePoll(
-//                             doc(db, "groups", groupId, "messages", m.id),
-//                             myUid,
-//                             optionId,
-//                             poll,
-//                             votes
-//                           )
-//                         }
-//                       />
-//                       <button
-//                         onClick={() => handleReply(m)}
-//                         title="Reply"
-//                         aria-label="Reply"
-//                         className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-9" : "-right-9"
-//                           } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 transition-colors border border-white/[0.08]`}
-//                       >
-//                         <CornerUpLeft size={13} />
-//                       </button>
-//                     </div>
-//                   </div>
-//                 </div>
+//                   m={m}
+//                   groupId={gid}
+//                   myUid={myUid}
+//                   isMine={isMine}
+//                   isFirstInGroup={row.isFirstInGroup}
+//                   onReply={handleReply}
+//                   onOpenMenu={openMsgMenu}
+//                 />
 //               );
 //             }
 
@@ -1713,28 +1753,40 @@
 //           myUid={myUid}
 //           onClose={() => setForwardData(null)}
 //           onSelectChat={async (targetChatId) => {
-//             await forwardMessageToChat(
-//               targetChatId,
-//               myUid,
-//               forwardPayload(forwardData)
-//             );
-//             setForwardData(null);
+//             try {
+//               await forwardMessageToChat(
+//                 targetChatId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
 //           }}
 //           onSelectGroup={async (targetGroupId) => {
-//             await forwardMessageToGroup(
-//               targetGroupId,
-//               myUid,
-//               forwardPayload(forwardData)
-//             );
-//             setForwardData(null);
+//             try {
+//               await forwardMessageToGroup(
+//                 targetGroupId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
 //           }}
 //           onSelectChannel={async (channelId) => {
-//             await forwardMessageToChannel(
-//               channelId,
-//               myUid,
-//               forwardPayload(forwardData)
-//             );
-//             setForwardData(null);
+//             try {
+//               await forwardMessageToChannel(
+//                 channelId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
 //           }}
 //         />
 //       )}
@@ -1800,11 +1852,14 @@ import {
   LogOut,
   ListChecks,
   List,
+  Search,
 } from "lucide-react";
 import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+import { useMessageSearch } from "@/hooks/useMessageSearch";
 import SmoothImage from "@/components/UI/SmoothImage";
 import GroupComposer, { GroupComposerHandle } from "./GroupComposer";
 import GroupMessageRow from "./GroupMessageRow";
+import GroupSearchBar from "./GroupSearchBar";
 import PollCard from "../polls/PollCard";
 import GroupWallpaper, {
   getCachedWallpaper,
@@ -2931,6 +2986,38 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
     [pinnedMessages]
   );
 
+  const {
+    searchOpen,
+    searchQuery,
+    setSearchQuery,
+    openSearch,
+    closeSearch,
+    matchCount,
+    activeIndex,
+    searching,
+    goOlder,
+    goNewer,
+  } = useMessageSearch({
+    messages,
+    hasMore: hasMoreMessages,
+    isLoadingOlderRef,
+    loadOlderRef,
+    scrollToMessage,
+    idPrefix: "gmsg-",
+    resetKey: groupId,
+    enabled: !!groupId,
+    renderToken: rows,
+  });
+
+  useEffect(() => {
+    if (searchOpen) setMenuOpen(false);
+  }, [searchOpen]);
+
+  function handleOpenSearch() {
+    setMenuOpen(false);
+    openSearch();
+  }
+
   if (!groupId || !group) {
     return (
       <div
@@ -3165,109 +3252,140 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
         )}
 
         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 relative z-20">
-          <div className="h-14 flex items-center justify-between px-5">
-            <div
-              className="flex items-center gap-2.5 cursor-pointer"
-              onClick={() => setShowGroupInfo(true)}
-            >
-              <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
-                {group.avatarUrl ? (
-                  <SmoothImage
-                    src={group.avatarUrl}
-                    alt={group.name || "group"}
-                    width={32}
-                    height={32}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Users size={14} className="text-[#a893ff]" />
-                )}
-              </div>
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-sm font-semibold text-white/80">
-                  {group.name}
-                </span>
-                <span className="text-[11px] leading-tight">
-                  {typingUsers.length > 0 ? (
-                    <span className="flex items-center gap-1 text-[#a893ff]">
-                      {typingLabel}
-                      <span className="typing-dots">
-                        <span className="typing-dot" />
-                        <span className="typing-dot" />
-                        <span className="typing-dot" />
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500">
-                      {group.memberCount} member
-                      {group.memberCount === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label="Group menu"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+          {searchOpen ? (
+            <GroupSearchBar
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              total={matchCount}
+              activeIndex={activeIndex}
+              hasMore={hasMoreMessages}
+              loading={searching}
+              onPrev={goOlder}
+              onNext={goNewer}
+              onClose={closeSearch}
+            />
+          ) : (
+            <div className="h-14 flex items-center justify-between px-5">
+              <div
+                className="flex items-center gap-2.5 cursor-pointer"
+                onClick={() => setShowGroupInfo(true)}
               >
-                <MoreVertical size={16} />
-              </button>
-              {menuOpen && (
-                <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
-                  <button
-                    className="ctx-item text-zinc-300"
-                    onClick={() => {
-                      setPollModalOpen(true);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <ListChecks size={14} className="text-zinc-500" />
-                    Create poll
-                  </button>
-                  <button
-                    className="ctx-item text-zinc-300"
-                    onClick={() => {
-                      wallpaperInputRef.current?.click();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <ImagePlus size={14} className="text-zinc-500" />
-                    Change wallpaper
-                  </button>
-                  {wallpaper?.url && (
-                    <button
-                      className="ctx-item text-zinc-300"
-                      onClick={() => {
-                        removeWallpaper();
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <ImageOff size={14} className="text-zinc-500" />
-                      Remove wallpaper
-                    </button>
+                <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
+                  {group.avatarUrl ? (
+                    <SmoothImage
+                      src={group.avatarUrl}
+                      alt={group.name || "group"}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Users size={14} className="text-[#a893ff]" />
                   )}
-                  <div className="ctx-divider" />
-                  <button
-                    className="ctx-item text-red-400"
-                    onClick={() => {
-                      setLeaveConfirm(true);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    {isOwner ? (
-                      <Trash2 size={14} className="text-red-400/60" />
-                    ) : (
-                      <LogOut size={14} className="text-red-400/60" />
-                    )}
-                    {isOwner ? "Delete group" : "Leave group"}
-                  </button>
                 </div>
-              )}
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-sm font-semibold text-white/80">
+                    {group.name}
+                  </span>
+                  <span className="text-[11px] leading-tight">
+                    {typingUsers.length > 0 ? (
+                      <span className="flex items-center gap-1 text-[#a893ff]">
+                        {typingLabel}
+                        <span className="typing-dots">
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500">
+                        {group.memberCount} member
+                        {group.memberCount === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleOpenSearch}
+                  aria-label="Search messages"
+                  title="Search messages"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                >
+                  <Search size={16} />
+                </button>
+                <div className="relative" ref={menuRef}>
+                  <button
+                    onClick={() => setMenuOpen((v) => !v)}
+                    aria-label="Group menu"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {menuOpen && (
+                    <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+                      <button
+                        className="ctx-item text-zinc-300"
+                        onClick={handleOpenSearch}
+                      >
+                        <Search size={14} className="text-zinc-500" />
+                        Search messages
+                      </button>
+                      <button
+                        className="ctx-item text-zinc-300"
+                        onClick={() => {
+                          setPollModalOpen(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <ListChecks size={14} className="text-zinc-500" />
+                        Create poll
+                      </button>
+                      <button
+                        className="ctx-item text-zinc-300"
+                        onClick={() => {
+                          wallpaperInputRef.current?.click();
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <ImagePlus size={14} className="text-zinc-500" />
+                        Change wallpaper
+                      </button>
+                      {wallpaper?.url && (
+                        <button
+                          className="ctx-item text-zinc-300"
+                          onClick={() => {
+                            removeWallpaper();
+                            setMenuOpen(false);
+                          }}
+                        >
+                          <ImageOff size={14} className="text-zinc-500" />
+                          Remove wallpaper
+                        </button>
+                      )}
+                      <div className="ctx-divider" />
+                      <button
+                        className="ctx-item text-red-400"
+                        onClick={() => {
+                          setLeaveConfirm(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {isOwner ? (
+                          <Trash2 size={14} className="text-red-400/60" />
+                        ) : (
+                          <LogOut size={14} className="text-red-400/60" />
+                        )}
+                        {isOwner ? "Delete group" : "Leave group"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {currentPin && (
             <div className="absolute left-0 right-0 top-full z-30 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md">
