@@ -53,6 +53,7 @@
 //   Video,
 //   Bookmark,
 //   List,
+//   Search,
 // } from "lucide-react";
 // import { GIFTS, RARITY_COLORS } from "@/lib/gifts";
 // import { useWindowVisibilityStore } from "@/store/window-visibility-store";
@@ -60,10 +61,12 @@
 // import { useCallStore } from "@/store/call-store";
 // import { disintegrate } from "@/lib/disintegrate";
 // import { getSavedChatId, SAVED_CHAT_TITLE } from "@/lib/savedChat";
+// import { useMessageSearch } from "@/hooks/useMessageSearch";
 
 // import MessageRow from "./MessageRow";
 // import CallLogMessage from "./CallLogMessage";
 // import Composer, { ComposerHandle, SendPayload } from "./Composer";
+// import GroupSearchBar from "../group/GroupSearchBar";
 // import GroupWallpaper, {
 //   getCachedWallpaper,
 //   cacheWallpaper,
@@ -262,7 +265,7 @@
 //   const callBusyRef = useRef(false);
 //   const scrollLockedRef = useRef(false);
 //   const pinsLenRef = useRef(0);
-//   const loadOlderRef = useRef<() => void>(() => { });
+//   const loadOlderRef = useRef<() => Promise<void>>(async () => { });
 
 //   const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
 //   const isSaved = !!chatId && !!myUid && chatId === getSavedChatId(myUid);
@@ -906,6 +909,8 @@
 //     const el = document.getElementById(`msg-${id}`);
 //     if (!el) return;
 //     el.scrollIntoView({ behavior: "smooth", block: "center" });
+//     el.classList.remove("highlight-flash");
+//     void el.offsetWidth;
 //     el.classList.add("highlight-flash");
 //     setTimeout(() => el.classList.remove("highlight-flash"), 1500);
 //   }, []);
@@ -1181,6 +1186,38 @@
 //     [pinnedMessages]
 //   );
 
+//   const {
+//     searchOpen,
+//     searchQuery,
+//     setSearchQuery,
+//     openSearch,
+//     closeSearch,
+//     matchCount,
+//     activeIndex,
+//     searching,
+//     goOlder,
+//     goNewer,
+//   } = useMessageSearch({
+//     messages,
+//     hasMore: hasMoreMessages,
+//     isLoadingOlderRef,
+//     loadOlderRef,
+//     scrollToMessage,
+//     idPrefix: "msg-",
+//     resetKey: chatId,
+//     enabled: !!chatId,
+//     renderToken: rows,
+//   });
+
+//   useEffect(() => {
+//     if (searchOpen) setMenuOpen(false);
+//   }, [searchOpen]);
+
+//   function handleOpenSearch() {
+//     setMenuOpen(false);
+//     openSearch();
+//   }
+
 //   const safePinIndex = Math.min(pinIndex, Math.max(0, pinnedMessages.length - 1));
 //   const currentPin = pinnedMessages[safePinIndex] ?? null;
 //   const hasManyPins = pinnedMessages.length > 1;
@@ -1434,177 +1471,206 @@
 //         )}
 
 //         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 relative z-20">
-//           <div className="h-14 flex items-center justify-between px-5">
-//             {isSaved ? (
-//               <div className="flex items-center gap-3">
-//                 <div
-//                   className="w-9 h-9 rounded-full flex items-center justify-center text-white ring-1 ring-white/[0.08] shrink-0"
-//                   style={{
-//                     background:
-//                       "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)",
-//                   }}
-//                 >
-//                   <Bookmark size={17} strokeWidth={2.2} />
-//                 </div>
-//                 <div className="flex flex-col items-start min-w-0">
-//                   <span className="text-sm font-semibold text-white/80 leading-tight">
-//                     {SAVED_CHAT_TITLE}
-//                   </span>
-//                   <span className="text-[11px] leading-tight text-zinc-500">
-//                     Only you can see this chat
-//                   </span>
-//                 </div>
-//               </div>
-//             ) : (
-//               <button
-//                 onClick={() => setProfileOpen(true)}
-//                 className="flex items-center gap-3 cursor-pointer group"
-//               >
-//                 <div className="relative shrink-0">
-//                   {otherUser?.avatar ? (
-//                     <img
-//                       src={otherUser.avatar}
-//                       alt={otherUser.username ?? "User"}
-//                       width={36}
-//                       height={36}
-//                       decoding="async"
-//                       className="w-9 h-9 rounded-full object-cover ring-1 ring-white/[0.08]"
-//                     />
-//                   ) : (
-//                     <div className="w-9 h-9 rounded-full bg-[#522fb7]/30 flex items-center justify-center text-sm font-semibold text-white/80 ring-1 ring-white/[0.08]">
-//                       {(otherUser?.username?.[0] ?? "?").toUpperCase()}
-//                     </div>
-//                   )}
-//                   {otherUser && isOnline(otherUser) && (
-//                     <span className="absolute right-0 bottom-0 w-2.5 h-2.5 rounded-full bg-[#34D399] border-2 border-[#0d0b17]" />
-//                   )}
-//                 </div>
-
-//                 <div className="flex flex-col items-start min-w-0">
-//                   <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
-//                     {otherUser?.username ?? "..."}
-//                     {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
-//                       <img
-//                         src={GIFTS[otherUser.featuredGift].imageUrl}
-//                         alt={GIFTS[otherUser.featuredGift].name}
-//                         title={GIFTS[otherUser.featuredGift].name}
-//                         width={16}
-//                         height={16}
-//                         decoding="async"
-//                         className="shrink-0 w-4 h-4 object-contain"
-//                         style={{
-//                           filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
-//                             }90)`,
-//                         }}
-//                       />
-//                     )}
-//                   </span>
-
-//                   {otherUser && (
-//                     <span className="text-[11px] leading-tight">
-//                       {typingUsers.length > 0 ? (
-//                         <span className="flex items-center gap-1 text-[#a893ff]">
-//                           typing
-//                           <span className="typing-dots">
-//                             <span className="typing-dot" />
-//                             <span className="typing-dot" />
-//                             <span className="typing-dot" />
-//                           </span>
-//                         </span>
-//                       ) : isOnline(otherUser) ? (
-//                         <span className="text-[#34D399]">Online</span>
-//                       ) : (
-//                         <span className="text-zinc-500">
-//                           {formatLastSeen(otherUser.lastSeen)}
-//                         </span>
-//                       )}
+//           {searchOpen ? (
+//             <GroupSearchBar
+//               query={searchQuery}
+//               onQueryChange={setSearchQuery}
+//               total={matchCount}
+//               activeIndex={activeIndex}
+//               hasMore={hasMoreMessages}
+//               loading={searching}
+//               onPrev={goOlder}
+//               onNext={goNewer}
+//               onClose={closeSearch}
+//             />
+//           ) : (
+//             <div className="h-14 flex items-center justify-between px-5">
+//               {isSaved ? (
+//                 <div className="flex items-center gap-3">
+//                   <div
+//                     className="w-9 h-9 rounded-full flex items-center justify-center text-white ring-1 ring-white/[0.08] shrink-0"
+//                     style={{
+//                       background:
+//                         "linear-gradient(135deg, #7c5cff 0%, #5b3df0 100%)",
+//                     }}
+//                   >
+//                     <Bookmark size={17} strokeWidth={2.2} />
+//                   </div>
+//                   <div className="flex flex-col items-start min-w-0">
+//                     <span className="text-sm font-semibold text-white/80 leading-tight">
+//                       {SAVED_CHAT_TITLE}
 //                     </span>
-//                   )}
+//                     <span className="text-[11px] leading-tight text-zinc-500">
+//                       Only you can see this chat
+//                     </span>
+//                   </div>
 //                 </div>
-//               </button>
-//             )}
-
-//             <div className="flex items-center gap-1">
-//               {!isSaved && (
-//                 <>
-//                   <button
-//                     onClick={() => handleStartCall("audio")}
-//                     title="Voice call"
-//                     aria-label="Voice call"
-//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
-//                   >
-//                     <Phone size={16} />
-//                   </button>
-//                   <button
-//                     onClick={() => handleStartCall("video")}
-//                     title="Video call"
-//                     aria-label="Video call"
-//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
-//                   >
-//                     <Video size={16} />
-//                   </button>
-//                 </>
-//               )}
-
-//               <div className="relative" ref={menuRef}>
+//               ) : (
 //                 <button
-//                   onClick={() => setMenuOpen((v) => !v)}
-//                   aria-label="Chat menu"
-//                   className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                   onClick={() => setProfileOpen(true)}
+//                   className="flex items-center gap-3 cursor-pointer group"
 //                 >
-//                   <MoreVertical size={16} />
-//                 </button>
-//                 {galleryOpen && (
-//                   <MediaGallery chatId={chatId} onClose={() => setGalleryOpen(false)} />
-//                 )}
-//                 {menuOpen && (
-//                   <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
-//                     <button
-//                       className="ctx-item text-zinc-300"
-//                       onClick={() => {
-//                         setGalleryOpen(true);
-//                         setMenuOpen(false);
-//                       }}
-//                     >
-//                       <ImageIcon size={14} className="text-zinc-500" />
-//                       Media gallery
-//                     </button>
-//                     <button
-//                       className="ctx-item text-zinc-300"
-//                       onClick={() => {
-//                         wallpaperInputRef.current?.click();
-//                         setMenuOpen(false);
-//                       }}
-//                     >
-//                       <ImagePlus size={14} className="text-zinc-500" />
-//                       Change wallpaper
-//                     </button>
-//                     {wallpaper?.url && (
-//                       <button className="ctx-item text-zinc-300" onClick={removeWallpaper}>
-//                         <ImageOff size={14} className="text-zinc-500" />
-//                         Remove wallpaper
-//                       </button>
+//                   <div className="relative shrink-0">
+//                     {otherUser?.avatar ? (
+//                       <img
+//                         src={otherUser.avatar}
+//                         alt={otherUser.username ?? "User"}
+//                         width={36}
+//                         height={36}
+//                         decoding="async"
+//                         className="w-9 h-9 rounded-full object-cover ring-1 ring-white/[0.08]"
+//                       />
+//                     ) : (
+//                       <div className="w-9 h-9 rounded-full bg-[#522fb7]/30 flex items-center justify-center text-sm font-semibold text-white/80 ring-1 ring-white/[0.08]">
+//                         {(otherUser?.username?.[0] ?? "?").toUpperCase()}
+//                       </div>
 //                     )}
-//                     {!isSaved && (
-//                       <>
-//                         <div className="ctx-divider" />
-//                         <button
-//                           className="ctx-item text-red-400"
-//                           onClick={() => {
-//                             setDeleteChatConfirm(true);
-//                             setMenuOpen(false);
-//                           }}
-//                         >
-//                           <Trash2 size={14} className="text-red-400/60" />
-//                           Delete chat
-//                         </button>
-//                       </>
+//                     {otherUser && isOnline(otherUser) && (
+//                       <span className="absolute right-0 bottom-0 w-2.5 h-2.5 rounded-full bg-[#34D399] border-2 border-[#0d0b17]" />
 //                     )}
 //                   </div>
+
+//                   <div className="flex flex-col items-start min-w-0">
+//                     <span className="flex items-center gap-1.5 text-sm font-semibold text-white/80 group-hover:text-white transition-colors leading-tight">
+//                       {otherUser?.username ?? "..."}
+//                       {otherUser?.featuredGift && GIFTS[otherUser.featuredGift] && (
+//                         <img
+//                           src={GIFTS[otherUser.featuredGift].imageUrl}
+//                           alt={GIFTS[otherUser.featuredGift].name}
+//                           title={GIFTS[otherUser.featuredGift].name}
+//                           width={16}
+//                           height={16}
+//                           decoding="async"
+//                           className="shrink-0 w-4 h-4 object-contain"
+//                           style={{
+//                             filter: `drop-shadow(0 0 3px ${RARITY_COLORS[GIFTS[otherUser.featuredGift].rarity]
+//                               }90)`,
+//                           }}
+//                         />
+//                       )}
+//                     </span>
+
+//                     {otherUser && (
+//                       <span className="text-[11px] leading-tight">
+//                         {typingUsers.length > 0 ? (
+//                           <span className="flex items-center gap-1 text-[#a893ff]">
+//                             typing
+//                             <span className="typing-dots">
+//                               <span className="typing-dot" />
+//                               <span className="typing-dot" />
+//                               <span className="typing-dot" />
+//                             </span>
+//                           </span>
+//                         ) : isOnline(otherUser) ? (
+//                           <span className="text-[#34D399]">Online</span>
+//                         ) : (
+//                           <span className="text-zinc-500">
+//                             {formatLastSeen(otherUser.lastSeen)}
+//                           </span>
+//                         )}
+//                       </span>
+//                     )}
+//                   </div>
+//                 </button>
+//               )}
+
+//               <div className="flex items-center gap-1">
+//                 <button
+//                   onClick={handleOpenSearch}
+//                   title="Search messages"
+//                   aria-label="Search messages"
+//                   className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                 >
+//                   <Search size={16} />
+//                 </button>
+//                 {!isSaved && (
+//                   <>
+//                     <button
+//                       onClick={() => handleStartCall("audio")}
+//                       title="Voice call"
+//                       aria-label="Voice call"
+//                       className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
+//                     >
+//                       <Phone size={16} />
+//                     </button>
+//                     <button
+//                       onClick={() => handleStartCall("video")}
+//                       title="Video call"
+//                       aria-label="Video call"
+//                       className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-[#a893ff] hover:bg-[#7c5cff]/10 transition-colors cursor-pointer"
+//                     >
+//                       <Video size={16} />
+//                     </button>
+//                   </>
 //                 )}
+
+//                 <div className="relative" ref={menuRef}>
+//                   <button
+//                     onClick={() => setMenuOpen((v) => !v)}
+//                     aria-label="Chat menu"
+//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                   >
+//                     <MoreVertical size={16} />
+//                   </button>
+//                   {galleryOpen && (
+//                     <MediaGallery chatId={chatId} onClose={() => setGalleryOpen(false)} />
+//                   )}
+//                   {menuOpen && (
+//                     <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={handleOpenSearch}
+//                       >
+//                         <Search size={14} className="text-zinc-500" />
+//                         Search messages
+//                       </button>
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={() => {
+//                           setGalleryOpen(true);
+//                           setMenuOpen(false);
+//                         }}
+//                       >
+//                         <ImageIcon size={14} className="text-zinc-500" />
+//                         Media gallery
+//                       </button>
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={() => {
+//                           wallpaperInputRef.current?.click();
+//                           setMenuOpen(false);
+//                         }}
+//                       >
+//                         <ImagePlus size={14} className="text-zinc-500" />
+//                         Change wallpaper
+//                       </button>
+//                       {wallpaper?.url && (
+//                         <button className="ctx-item text-zinc-300" onClick={removeWallpaper}>
+//                           <ImageOff size={14} className="text-zinc-500" />
+//                           Remove wallpaper
+//                         </button>
+//                       )}
+//                       {!isSaved && (
+//                         <>
+//                           <div className="ctx-divider" />
+//                           <button
+//                             className="ctx-item text-red-400"
+//                             onClick={() => {
+//                               setDeleteChatConfirm(true);
+//                               setMenuOpen(false);
+//                             }}
+//                           >
+//                             <Trash2 size={14} className="text-red-400/60" />
+//                             Delete chat
+//                           </button>
+//                         </>
+//                       )}
+//                     </div>
+//                   )}
+//                 </div>
 //               </div>
 //             </div>
-//           </div>
+//           )}
 
 //           {currentPin && (
 //             <div className="absolute left-0 right-0 top-full z-30 border-b border-white/[0.06] bg-[#0d0b17]/90 backdrop-blur-md">
@@ -1835,6 +1901,7 @@
 //   );
 // }
 
+
 "use client";
 
 import {
@@ -1899,6 +1966,7 @@ import { useCallStore } from "@/store/call-store";
 import { disintegrate } from "@/lib/disintegrate";
 import { getSavedChatId, SAVED_CHAT_TITLE } from "@/lib/savedChat";
 import { useMessageSearch } from "@/hooks/useMessageSearch";
+import { useUser } from "@/hooks/useUser";
 
 import MessageRow from "./MessageRow";
 import CallLogMessage from "./CallLogMessage";
@@ -2055,7 +2123,6 @@ export default function ChatWindow() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [replyMessage, setReplyMessage] = useState<any | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [otherUser, setOtherUser] = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null);
@@ -2078,6 +2145,15 @@ export default function ChatWindow() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [freshIds, setFreshIds] = useState<Set<string>>(() => new Set());
+
+  const otherUid = useMemo(() => {
+    if (!chatId || !myUid || chatId === getSavedChatId(myUid)) return null;
+    const [uid1, uid2] = chatId.split("_");
+    return uid1 === myUid ? uid2 : uid1;
+  }, [chatId, myUid]);
+
+  const otherUser = useUser(otherUid);
+  const myProfile = useUser(myUid);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const msgMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2127,19 +2203,6 @@ export default function ChatWindow() {
     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
   }, []);
 
-  useEffect(() => {
-    if (!chatId || !myUid || chatId === getSavedChatId(myUid)) return;
-    const [uid1, uid2] = chatId.split("_");
-    const otherUid = uid1 === myUid ? uid2 : uid1;
-    const unsub = onSnapshot(doc(db, "users", otherUid), (snap) => {
-      if (activeChatIdRef.current !== chatId) return;
-      setOtherUser(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-    }, () => {
-      if (activeChatIdRef.current === chatId) setOtherUser(null);
-    });
-    return () => unsub();
-  }, [chatId, myUid]);
-
   useLayoutEffect(() => {
     setPendingMessages((previous) => {
       previous.forEach((message) => {
@@ -2153,7 +2216,6 @@ export default function ChatWindow() {
       return [];
     });
     setMessages([]);
-    setOtherUser(null);
     setProfileOpen(false);
     setFirstUnreadId(null);
     setShowScrollButton(false);
@@ -2924,17 +2986,19 @@ export default function ChatWindow() {
     if (!myUid || !chatId || !otherUser?.id || callBusyRef.current) return;
     callBusyRef.current = true;
     try {
-      let myName = "User";
-      let myAvatar: string | null = null;
-      try {
-        const mySnap = await getDoc(doc(db, "users", myUid));
-        if (mySnap.exists()) {
-          const data = mySnap.data();
-          myName = data?.username || myName;
-          myAvatar = data?.avatar ?? null;
+      let myName = myProfile?.username || "User";
+      let myAvatar: string | null = myProfile?.avatar ?? null;
+      if (!myProfile) {
+        try {
+          const mySnap = await getDoc(doc(db, "users", myUid));
+          if (mySnap.exists()) {
+            const data = mySnap.data();
+            myName = data?.username || myName;
+            myAvatar = data?.avatar ?? null;
+          }
+        } catch (err) {
+          console.error("Failed to load own profile for call:", err);
         }
-      } catch (err) {
-        console.error("Failed to load own profile for call:", err);
       }
 
       const { callId, roomName } = await createCall({
