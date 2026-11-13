@@ -4,7 +4,7 @@
 
 # Nexo
 
-Мессенджер реального времени: личные и групповые чаты, каналы, голосовые и видеозвонки, нативный клиент для Windows.
+A real-time messaging app featuring individual and group chats, channels, voice and video calls, as well as a native application for Windows.
 
 [![GitHub stars](https://img.shields.io/github/stars/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/network/members)
