@@ -4,7 +4,7 @@
 
 # Nexo
 
-Real-time communication platform with messaging, channels, voice and video calls, and a native desktop client.
+Мессенджер реального времени: личные и групповые чаты, каналы, голосовые и видеозвонки, нативный клиент для Windows.
 
 [![GitHub stars](https://img.shields.io/github/stars/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/m1tywaflow/chat?style=flat&logo=github)](https://github.com/m1tywaflow/chat/network/members)
@@ -18,7 +18,7 @@ Real-time communication platform with messaging, channels, voice and video calls
 
 ## Overview
 
-Nexo is a full-stack communication platform that combines private and group messaging, public channels, voice and video calls, profile customization, and a Windows desktop application. Conversations and user state are synchronized in real time, and the interface relies on optimistic updates to stay responsive.
+Nexo is a full-stack communication platform: private and group chats, public channels, voice and video calls, profile customization and a Windows desktop app. Conversations and user state sync in real time, and optimistic updates keep the interface fast and responsive.
 
 <div align="center">
 
@@ -34,9 +34,8 @@ Nexo is a full-stack communication platform that combines private and group mess
 
 ### Messaging
 
-- Private and group conversations
-- Real-time message synchronization
-- Message editing, deletion, and forwarding
+- Private and group conversations with real-time sync
+- Editing, deleting and forwarding messages
 - Replies and pinned messages
 - Emoji reactions
 - Read receipts and unread indicators
@@ -49,23 +48,23 @@ Nexo is a full-stack communication platform that combines private and group mess
 - Subscriber management
 - Reactions and view counters
 - Pinned posts
-- Content forwarding and media sharing
+- Forwarding and media sharing
 
 ### Voice and Video
 
 - Voice and video calls powered by LiveKit
-- Call controls
-- Conversation-based calls
+- In-call controls
+- Calls started directly from a conversation
 
 ### Profiles and Themes
 
-- Custom avatars, banners, decorations, and colors
+- Custom avatars, banners, decorations and colors
 - Collectible gifts
-- Dark, light, and custom themes
+- Dark, light and custom themes
 
 ### Desktop Client
 
-- Native Windows application built with Electron
+- Native Windows app built with Electron
 - Desktop notifications
 - Automatic updates via GitHub Releases
 - NSIS installer
@@ -89,10 +88,10 @@ Nexo is a full-stack communication platform that combines private and group mess
 
 ## Architecture
 
-- **Firebase** provides authentication and Firestore-based real-time synchronization of conversations and user state.
-- **LiveKit** handles real-time voice and video communication.
-- **Cloudinary** handles media storage, processing, and delivery.
-- **Electron** wraps the web client into a Windows desktop application.
+- **Firebase** handles authentication and real-time sync of conversations and user state through Firestore.
+- **LiveKit** powers voice and video calls.
+- **Cloudinary** stores, processes and delivers media.
+- **Electron** wraps the web client into a Windows desktop app.
 
 ```mermaid
 flowchart TD
@@ -126,7 +125,7 @@ public/
 | `src/app`           | Next.js routes and pages                     |
 | `src/components`    | UI components                                |
 | `src/hooks`         | React hooks                                  |
-| `src/lib`           | Firebase, LiveKit, and utility logic         |
+| `src/lib`           | Firebase, LiveKit and utility logic          |
 | `src/stores`        | Zustand stores                               |
 | `src/types`         | TypeScript types                             |
 | `electron/main.js`  | Electron main process                        |
@@ -150,7 +149,7 @@ npm install
 
 ### Configuration
 
-Create a `.env.local` file in the project root and provide your Firebase, LiveKit, and Cloudinary credentials.
+Create a `.env.local` file in the project root and add your Firebase, LiveKit and Cloudinary credentials.
 
 ### Development
 
@@ -158,7 +157,7 @@ Create a `.env.local` file in the project root and provide your Firebase, LiveKi
 npm run dev
 ```
 
-The application is available at `http://localhost:3000`.
+The app will be available at `http://localhost:3000`.
 
 ## Build
 
@@ -182,8 +181,8 @@ npm run dist
 - [x] Profiles and customization
 - [x] Themes
 - [x] Windows desktop client with automatic updates
-- [ ] Additional personalization features
-- [ ] Additional desktop features
+- [ ] More personalization options
+- [ ] More desktop features
 - [ ] Performance improvements
 
 ## License
