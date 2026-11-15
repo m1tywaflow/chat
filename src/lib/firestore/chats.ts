@@ -604,6 +604,8 @@ import {
   useUserCacheStore,
 } from "@/store/user-cache-store";
 
+export { searchUsers } from "@/lib/firestore/users";
+
 export interface PinnedItem {
   id: string;
   text: string;
@@ -666,21 +668,6 @@ export async function createOrGetChat(myUid: string, otherUid: string) {
   );
 
   return chatId;
-}
-
-export async function searchUsers(search: string) {
-  const q = search?.toLowerCase().trim();
-
-  if (!q) return [];
-
-  const snap = await getDocs(collection(db, "users"));
-
-  return snap.docs
-    .map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }))
-    .filter((u: any) => (u.username || "").toLowerCase().includes(q));
 }
 
 export async function sendMessage(
