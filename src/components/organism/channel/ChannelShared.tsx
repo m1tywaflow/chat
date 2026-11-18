@@ -4,8 +4,6 @@ import { memo, useEffect } from "react";
 import { X } from "lucide-react";
 import { getCustomEmoji } from "@/lib/customEmoji";
 
-/* ───────── stickers ───────── */
-
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
@@ -16,12 +14,17 @@ export function isStickerOnlyText(text: string | undefined): boolean {
     return trimmed.length > 0 && STICKER_TOKEN_ONLY_RE.test(trimmed);
 }
 
+export function isVideoUrl(url: string): boolean {
+    return (
+        /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url) ||
+        url.includes("/video/upload/")
+    );
+}
+
 export const TEXT_EMOJIS = (
     "😀 😁 😂 🤣 😊 😉 😍 🥰 😘 😎 🤔 🤨 😐 🙄 😏 😴 😢 😭 😡 🤯 🥳 🤗 😅 🙃 " +
     "👍 👎 👏 🙏 💪 🤝 👀 🔥 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ✨ 🎉 💯 ☕ 🍕 🎮 🚀"
 ).split(" ");
-
-/* ───────── dates / numbers ───────── */
 
 export function toDate(ts: any): Date {
     if (!ts) return new Date();
@@ -65,15 +68,14 @@ export function formatViews(n: number | undefined): string {
     return `${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
 }
 
-/* ───────── upload ───────── */
-
 export async function uploadPostImage(file: File) {
+    const isVid = file.type.startsWith("video/");
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", "jhravxtb");
-    formData.append("folder", "channel_posts");
+    formData.append("folder", isVid ? "channel_videos" : "channel_posts");
     const res = await fetch(
-        "https://api.cloudinary.com/v1_1/dgylh67ms/image/upload",
+        `https://api.cloudinary.com/v1_1/dgylh67ms/${isVid ? "video" : "image"}/upload`,
         { method: "POST", body: formData }
     );
     if (!res.ok) throw new Error("Upload failed");
@@ -84,8 +86,6 @@ export async function uploadPostImage(file: File) {
         height: data.height as number,
     };
 }
-
-/* ───────── components ───────── */
 
 export const ReactionGlyph = memo(function ReactionGlyph({
     token,
@@ -178,12 +178,22 @@ export function ImageLightbox({
             >
                 <X size={20} />
             </button>
-            <img
-                src={url}
-                alt="full"
-                className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg select-none"
-                onClick={(e) => e.stopPropagation()}
-            />
+            {isVideoUrl(url) ? (
+                <video
+                    src={url}
+                    controls
+                    autoPlay
+                    className="max-w-[90vw] max-h-[90vh] rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ) : (
+                <img
+                    src={url}
+                    alt="full"
+                    className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg select-none"
+                    onClick={(e) => e.stopPropagation()}
+                />
+            )}
         </div>
     );
 }
