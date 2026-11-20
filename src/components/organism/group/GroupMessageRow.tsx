@@ -14,12 +14,13 @@ import {
     MoreVertical,
     Check,
     X,
-    Play,
     ChevronDown,
 } from "lucide-react";
 import ForwardedFrom from "@/components/atoms/ForwardedFrom";
 import VoiceBubble from "@/components/atoms/VoiceBubble";
+import VideoThumb from "@/components/atoms/VideoThumb";
 import { CUSTOM_EMOJIS, isCustomEmojiUrl } from "@/lib/customEmoji";
+import { decoSrc } from "@/lib/cdn";
 import {
     MessageMeta,
     ReactionGlyph,
@@ -37,6 +38,8 @@ const REACTION_OPTIONS = [...REACTION_EMOJIS, ...CUSTOM_EMOJIS.map((e) => e.id)]
 const PICKER_MARGIN = 8;
 const PICKER_GAP = 8;
 const PICKER_TOP_LIMIT = 64;
+const MESSAGE_IMAGE_WIDTH = 520;
+const REPLY_THUMB_WIDTH = 96;
 
 const URL_REGEX = /https?:\/\/[^\s<>"]+/i;
 
@@ -58,8 +61,6 @@ const cloudinaryUrl = (url: string, transform: string) =>
         ? url.replace("/upload/", `/upload/${transform}/`)
         : url;
 const tinySrc = (url: string) => cloudinaryUrl(url, "e_blur:1000,q_1,w_24,f_auto");
-const fullSrc = (url: string, w = 520) =>
-    cloudinaryUrl(url, `f_auto,q_auto,dpr_auto,w_${w}`);
 
 const ReactionPicker = memo(function ReactionPicker({
     anchorRef,
@@ -208,7 +209,7 @@ const ChatImage = memo(function ChatImage({
                 />
             )}
             <img
-                src={fullSrc(url)}
+                src={decoSrc(url, MESSAGE_IMAGE_WIDTH)}
                 alt="image"
                 decoding="async"
                 loading={priority ? "eager" : "lazy"}
@@ -325,7 +326,7 @@ const ReplyQuote = memo(function ReplyQuote({
             <span className={`absolute left-0 top-0 h-full w-[3px] ${barColor}`} />
             {preview.thumbUrl && (
                 <img
-                    src={fullSrc(preview.thumbUrl, 64)}
+                    src={decoSrc(preview.thumbUrl, REPLY_THUMB_WIDTH)}
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -620,22 +621,14 @@ const GroupMessageRow = memo(function GroupMessageRow({
                             <>
                                 {m.imageUrl &&
                                     (msgIsVideo ? (
-                                        <div
-                                            className="video-thumb"
-                                            onClick={() => !m.pending && onOpenLightbox(m.imageUrl)}
-                                        >
-                                            <video
-                                                src={m.imageUrl}
-                                                className="chat-video"
-                                                preload="metadata"
-                                                onLoadedMetadata={onMediaLoad}
-                                            />
-                                            <div className="play-overlay">
-                                                <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                                                    <Play size={18} className="text-white ml-0.5" fill="white" />
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <VideoThumb
+                                            url={m.imageUrl}
+                                            width={m.imageWidth}
+                                            height={m.imageHeight}
+                                            disabled={!!m.pending}
+                                            onLoad={onMediaLoad}
+                                            onOpen={onOpenLightbox}
+                                        />
                                     ) : (
                                         <ChatImage
                                             url={m.imageUrl}
