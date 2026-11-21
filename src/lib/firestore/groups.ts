@@ -413,6 +413,28 @@ export async function editGroupMessage(
   await updateDoc(msgRef, { text, edited: true });
 }
 
+const DELETED_GROUP_MESSAGE_PATCH = {
+  deleted: true,
+  text: "",
+  imageUrl: null,
+  voiceUrl: null,
+};
+
+const DELETE_BATCH_SIZE = 450;
+
+function buildGroupLastMessage(id: string, m: any) {
+  return {
+    messageId: id,
+    text: m.text ?? "",
+    imageUrl: m.imageUrl ?? null,
+    voiceUrl: m.voiceUrl ?? null,
+    type: m.voiceUrl ? "voice" : m.imageUrl ? "image" : "text",
+    senderId: m.senderId,
+    senderName: m.senderName,
+    createdAt: m.createdAt,
+  };
+}
+
 export async function deleteGroupMessage(
   groupId: string,
   messageId: string
@@ -420,12 +442,7 @@ export async function deleteGroupMessage(
   const groupRef = doc(db, "groups", groupId);
   const msgRef = doc(db, "groups", groupId, "messages", messageId);
 
-  await updateDoc(msgRef, {
-    deleted: true,
-    text: "",
-    imageUrl: null,
-    voiceUrl: null,
-  });
+  await updateDoc(msgRef, DELETED_GROUP_MESSAGE_PATCH);
 
   try {
     await removeGroupPinnedMessage(groupId, messageId);
@@ -452,19 +469,82 @@ export async function deleteGroupMessage(
     return;
   }
 
-  const m = lastDoc.data();
   await updateDoc(groupRef, {
-    lastMessage: {
-      messageId: lastDoc.id,
-      text: m.text ?? "",
-      imageUrl: m.imageUrl ?? null,
-      voiceUrl: m.voiceUrl ?? null,
-      type: m.voiceUrl ? "voice" : m.imageUrl ? "image" : "text",
-      senderId: m.senderId,
-      senderName: m.senderName,
-      createdAt: m.createdAt,
-    },
+    lastMessage: buildGroupLastMessage(lastDoc.id, lastDoc.data()),
   });
+}
+
+export async function deleteGroupMessages(
+  groupId: string,
+  messageIds: string[]
+): Promise<void> {
+  const ids = [...new Set(messageIds)];
+  if (!groupId || ids.length === 0) return;
+  if (ids.length === 1) {
+    await deleteGroupMessage(groupId, ids[0]);
+    return;
+  }
+
+  const idSet = new Set(ids);
+  const groupRef = doc(db, "groups", groupId);
+
+  const [groupSnap, recentSnap] = await Promise.all([
+    getDoc(groupRef),
+    getDocs(
+      query(
+        collection(db, "groups", groupId, "messages"),
+        orderBy("createdAt", "desc"),
+        limit(ids.length + 20)
+      )
+    ),
+  ]);
+
+  const groupPatch: Record<string, any> = {};
+
+  if (groupSnap.exists()) {
+    const data = groupSnap.data() as any;
+
+    const currentPins = readPins(data);
+    const nextPins = currentPins.filter((p) => !idSet.has(p.id));
+    if (nextPins.length !== currentPins.length) {
+      Object.assign(groupPatch, buildPinPatch(nextPins));
+    }
+
+    const currentLast = data.lastMessage;
+    const lastAffected =
+      !currentLast?.messageId || idSet.has(currentLast.messageId);
+    if (lastAffected) {
+      const lastDoc = recentSnap.docs.find(
+        (d) => !idSet.has(d.id) && !d.data().deleted
+      );
+      groupPatch.lastMessage = lastDoc
+        ? buildGroupLastMessage(lastDoc.id, lastDoc.data())
+        : null;
+    }
+  }
+
+  const hasGroupPatch = Object.keys(groupPatch).length > 0;
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += DELETE_BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + DELETE_BATCH_SIZE));
+  }
+
+  await Promise.all(
+    chunks.map((chunk, index) => {
+      const batch = writeBatch(db);
+      chunk.forEach((id) => {
+        batch.update(
+          doc(db, "groups", groupId, "messages", id),
+          DELETED_GROUP_MESSAGE_PATCH
+        );
+      });
+      if (hasGroupPatch && index === chunks.length - 1) {
+        batch.update(groupRef, groupPatch);
+      }
+      return batch.commit();
+    })
+  );
 }
 
 export async function toggleGroupReaction(
