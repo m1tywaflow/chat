@@ -19,6 +19,7 @@ import {
   increment,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ForwardableContent } from "@/types/forward";
@@ -442,6 +443,80 @@ export async function deleteChannelPost(channelId: string, postId: string) {
   }
 
   await refreshLastPostPreview(channelId);
+}
+
+const DELETE_BATCH_SIZE = 450;
+
+export async function deleteChannelPosts(channelId: string, postIds: string[]) {
+  const ids = [...new Set(postIds)];
+  if (!channelId || ids.length === 0) return;
+  if (ids.length === 1) {
+    await deleteChannelPost(channelId, ids[0]);
+    return;
+  }
+
+  const idSet = new Set(ids);
+  const channelRef = doc(db, "channels", channelId);
+
+  const [channelSnap, recentSnap] = await Promise.all([
+    getDoc(channelRef),
+    getDocs(
+      query(
+        collection(db, "channels", channelId, "posts"),
+        orderBy("createdAt", "desc"),
+        limit(ids.length + 1)
+      )
+    ),
+  ]);
+
+  const channelPatch: Record<string, any> = {};
+
+  if (channelSnap.exists()) {
+    const data = channelSnap.data();
+
+    const currentPins = readChannelPins(data);
+    const nextPins = currentPins.filter((p) => !idSet.has(p.id));
+    if (nextPins.length !== currentPins.length) {
+      Object.assign(channelPatch, buildChannelPinPatch(nextPins));
+    }
+
+    const lastAffected = !data.lastPostId || idSet.has(data.lastPostId);
+    if (lastAffected) {
+      const latest = recentSnap.docs.find((d) => !idSet.has(d.id));
+      if (!latest) {
+        channelPatch.lastPostId = null;
+        channelPatch.lastPostPreview = "";
+      } else {
+        const latestData = latest.data() as ChannelPost;
+        channelPatch.lastPostId = latest.id;
+        channelPatch.lastPostAt = latestData.createdAt ?? serverTimestamp();
+        channelPatch.lastPostPreview = computePostPreview(
+          latestData.text,
+          latestData.imageUrl
+        );
+      }
+    }
+  }
+
+  const hasChannelPatch = Object.keys(channelPatch).length > 0;
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += DELETE_BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + DELETE_BATCH_SIZE));
+  }
+
+  await Promise.all(
+    chunks.map((chunk, index) => {
+      const batch = writeBatch(db);
+      chunk.forEach((id) => {
+        batch.delete(doc(db, "channels", channelId, "posts", id));
+      });
+      if (hasChannelPatch && index === chunks.length - 1) {
+        batch.update(channelRef, channelPatch);
+      }
+      return batch.commit();
+    })
+  );
 }
 
 export async function deleteChannel(channelId: string) {

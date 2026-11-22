@@ -12,6 +12,7 @@ interface SelectableShellProps {
     store: SelectionStore;
     id: string;
     selectable: boolean;
+    inset?: boolean;
     children: ReactNode;
 }
 
@@ -19,6 +20,7 @@ export default function SelectableShell({
     store,
     id,
     selectable,
+    inset = false,
     children,
 }: SelectableShellProps) {
     const mode = useSelectionMode(store);
@@ -35,14 +37,14 @@ export default function SelectableShell({
 
     return (
         <div
-            className={`relative ${selected ? "bg-[#7c5cff]/[0.14]" : ""} ${mode && selectable ? "cursor-pointer" : ""}`}
+            className={`relative ${mode && inset ? "pl-9" : ""} ${selected ? "bg-[#7c5cff]/[0.14]" : ""} ${mode && selectable ? "cursor-pointer" : ""}`}
             onMouseDown={mode ? onMouseDown : undefined}
         >
             {mode && selectable && (
                 <span
                     className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center rounded-md border ${selected
-                        ? "bg-gradient-to-br from-[#7c5cff] to-[#5b3df0] border-[#a996ff]/60 text-white"
-                        : "border-white/25 bg-black/20 text-transparent"
+                            ? "bg-gradient-to-br from-[#7c5cff] to-[#5b3df0] border-[#a996ff]/60 text-white"
+                            : "border-white/25 bg-black/20 text-transparent"
                         }`}
                 >
                     <Check size={12} strokeWidth={3.5} />
