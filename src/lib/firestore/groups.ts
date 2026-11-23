@@ -559,13 +559,23 @@ export async function toggleGroupReaction(
     if (!snap.exists()) return;
 
     const data = snap.data() as GroupMessage;
-    const current = data.reactions?.[token] || [];
-    const hasReacted = current.includes(uid);
+    const reactions = (data.reactions ?? {}) as Record<string, string[]>;
+    const hasReacted = (reactions[token] ?? []).includes(uid);
 
-    transaction.update(msgRef, {
+    const patch: Record<string, any> = {
       [`reactions.${token}`]: hasReacted ? arrayRemove(uid) : arrayUnion(uid),
       reactionChange: { token, uid, added: !hasReacted },
-    });
+    };
+
+    if (!hasReacted) {
+      for (const [otherToken, uids] of Object.entries(reactions)) {
+        if (otherToken !== token && Array.isArray(uids) && uids.includes(uid)) {
+          patch[`reactions.${otherToken}`] = arrayRemove(uid);
+        }
+      }
+    }
+
+    transaction.update(msgRef, patch);
   });
 }
 
