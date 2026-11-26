@@ -173,17 +173,6 @@ Windows desktop installer:
 npm run dist
 ```
 
-## Roadmap
-
-- [x] Private and group messaging
-- [x] Channels
-- [x] Voice and video calls
-- [x] Profiles and customization
-- [x] Themes
-- [x] Windows desktop client with automatic updates
-- [ ] More personalization options
-- [ ] More desktop features
-- [ ] Performance improvements
 
 ## License
 
