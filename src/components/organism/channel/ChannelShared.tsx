@@ -3,6 +3,7 @@
 // import { memo, useEffect } from "react";
 // import { X } from "lucide-react";
 // import { getCustomEmoji } from "@/lib/customEmoji";
+// import { splitLinks } from "@/lib/links";
 
 // const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 // const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
@@ -112,12 +113,52 @@
 //     );
 // });
 
+// type LinkTone = "mine" | "other";
+
+// const LINK_TONES: Record<LinkTone, string> = {
+//     mine: "text-white decoration-white/50 hover:decoration-white",
+//     other: "text-[#a996ff] decoration-[#a996ff]/50 hover:decoration-[#a996ff]",
+// };
+
+// const TextWithLinks = memo(function TextWithLinks({
+//     text,
+//     tone,
+// }: {
+//     text: string;
+//     tone: LinkTone;
+// }) {
+//     if (!text.includes("http")) return <span>{text}</span>;
+//     const segments = splitLinks(text);
+//     return (
+//         <>
+//             {segments.map((segment, i) =>
+//                 segment.type === "link" ? (
+//                     <a
+//                         key={i}
+//                         href={segment.value}
+//                         target="_blank"
+//                         rel="noreferrer noopener"
+//                         onClick={(e) => e.stopPropagation()}
+//                         className={`underline underline-offset-2 [overflow-wrap:anywhere] transition-colors ${LINK_TONES[tone]}`}
+//                     >
+//                         {segment.value}
+//                     </a>
+//                 ) : (
+//                     <span key={i}>{segment.value}</span>
+//                 )
+//             )}
+//         </>
+//     );
+// });
+
 // export const RichText = memo(function RichText({
 //     text,
 //     variant = "inline",
+//     tone = "other",
 // }: {
 //     text: string;
 //     variant?: "inline" | "large";
+//     tone?: LinkTone;
 // }) {
 //     const parts = text.split(STICKER_TOKEN_SPLIT_RE);
 //     return (
@@ -145,7 +186,8 @@
 //                     }
 //                 }
 //                 if (variant === "large" && !part.trim()) return null;
-//                 return part ? <span key={i}>{part}</span> : null;
+//                 if (!part) return null;
+//                 return <TextWithLinks key={i} text={part} tone={tone} />;
 //             })}
 //         </>
 //     );
@@ -261,9 +303,10 @@
 //     );
 // }
 
+
 "use client";
 
-import { memo, useEffect } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { X } from "lucide-react";
 import { getCustomEmoji } from "@/lib/customEmoji";
 import { splitLinks } from "@/lib/links";
@@ -271,6 +314,25 @@ import { splitLinks } from "@/lib/links";
 const STICKER_TOKEN_SPLIT_RE = /(::[\w-]+::)/g;
 const STICKER_TOKEN_MATCH_RE = /^::([\w-]+)::$/;
 const STICKER_TOKEN_ONLY_RE = /^(?:\s*::[\w-]+::\s*)+$/;
+
+const CLOUDINARY_CLOUD =
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "dgylh67ms";
+const CLOUDINARY_PRESET =
+    process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "jhravxtb";
+
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+});
+const DAY_FORMAT = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+});
+const DAY_YEAR_FORMAT = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+});
 
 export function isStickerOnlyText(text: string | undefined): boolean {
     if (!text) return false;
@@ -290,17 +352,18 @@ export const TEXT_EMOJIS = (
     "👍 👎 👏 🙏 💪 🤝 👀 🔥 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ✨ 🎉 💯 ☕ 🍕 🎮 🚀"
 ).split(" ");
 
-export function toDate(ts: any): Date {
+export function toDate(ts: unknown): Date {
     if (!ts) return new Date();
-    return typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+    if (ts instanceof Date) return ts;
+    const value = ts as { toDate?: () => Date; seconds?: number };
+    if (typeof value.toDate === "function") return value.toDate();
+    if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
+    return new Date(ts as string | number);
 }
 
-export function formatTime(ts: any): string {
+export function formatTime(ts: unknown): string {
     if (!ts) return "";
-    return toDate(ts).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+    return TIME_FORMAT.format(toDate(ts));
 }
 
 export function dayKey(d: Date): string {
@@ -314,11 +377,9 @@ export function formatDayLabel(d: Date): string {
     const key = dayKey(d);
     if (key === dayKey(now)) return "Today";
     if (key === dayKey(yesterday)) return "Yesterday";
-    return d.toLocaleDateString("en-US", {
-        day: "numeric",
-        month: "long",
-        ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
-    });
+    return d.getFullYear() !== now.getFullYear()
+        ? DAY_YEAR_FORMAT.format(d)
+        : DAY_FORMAT.format(d);
 }
 
 export function formatViews(n: number | undefined): string {
@@ -336,19 +397,36 @@ export async function uploadPostImage(file: File) {
     const isVid = file.type.startsWith("video/");
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", "jhravxtb");
+    formData.append("upload_preset", CLOUDINARY_PRESET);
     formData.append("folder", isVid ? "channel_videos" : "channel_posts");
     const res = await fetch(
-        `https://api.cloudinary.com/v1_1/dgylh67ms/${isVid ? "video" : "image"}/upload`,
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${isVid ? "video" : "image"}/upload`,
         { method: "POST", body: formData }
     );
     if (!res.ok) throw new Error("Upload failed");
     const data = await res.json();
+    if (!data?.secure_url) throw new Error("Upload failed");
     return {
         url: data.secure_url as string,
         width: data.width as number,
         height: data.height as number,
     };
+}
+
+function useEscapeKey(onEscape: () => void) {
+    const handlerRef = useRef(onEscape);
+
+    useEffect(() => {
+        handlerRef.current = onEscape;
+    });
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") handlerRef.current();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, []);
 }
 
 export const ReactionGlyph = memo(function ReactionGlyph({
@@ -390,8 +468,13 @@ const TextWithLinks = memo(function TextWithLinks({
     text: string;
     tone: LinkTone;
 }) {
-    if (!text.includes("http")) return <span>{text}</span>;
-    const segments = splitLinks(text);
+    const segments = useMemo(
+        () => (text.includes("http") ? splitLinks(text) : null),
+        [text]
+    );
+
+    if (!segments) return <span>{text}</span>;
+
     return (
         <>
             {segments.map((segment, i) =>
@@ -423,10 +506,12 @@ export const RichText = memo(function RichText({
     variant?: "inline" | "large";
     tone?: LinkTone;
 }) {
-    const parts = text.split(STICKER_TOKEN_SPLIT_RE);
+    const parts = useMemo(() => text.split(STICKER_TOKEN_SPLIT_RE), [text]);
+
     return (
         <>
             {parts.map((part, i) => {
+                if (!part) return null;
                 const match = part.match(STICKER_TOKEN_MATCH_RE);
                 if (match) {
                     const custom = getCustomEmoji(match[1]);
@@ -436,6 +521,7 @@ export const RichText = memo(function RichText({
                                 key={i}
                                 src={custom.url}
                                 alt={custom.id}
+                                decoding="async"
                                 className="inline-block w-28 h-28 object-contain"
                             />
                         ) : (
@@ -443,13 +529,13 @@ export const RichText = memo(function RichText({
                                 key={i}
                                 src={custom.url}
                                 alt={custom.id}
+                                decoding="async"
                                 className="inline-block align-text-bottom w-6 h-6 object-contain mx-0.5"
                             />
                         );
                     }
                 }
                 if (variant === "large" && !part.trim()) return null;
-                if (!part) return null;
                 return <TextWithLinks key={i} text={part} tone={tone} />;
             })}
         </>
@@ -463,16 +549,13 @@ export function ImageLightbox({
     url: string;
     onClose: () => void;
 }) {
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, [onClose]);
+    useEscapeKey(onClose);
 
     return (
         <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Media preview"
             className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 animate-[fadeIn_0.15s_ease]"
             onClick={onClose}
         >
@@ -518,13 +601,7 @@ export function ConfirmDialog({
     onConfirm: () => void;
     confirmLabel?: string;
 }) {
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onCancel();
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, [onCancel]);
+    useEscapeKey(onCancel);
 
     return (
         <div

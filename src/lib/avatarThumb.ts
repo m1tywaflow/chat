@@ -1,8 +1,12 @@
 const CLOUDINARY_UPLOAD_MARKER = "/upload/";
-const TRANSFORMATION_PREFIX = /^(?:a_|ar_|b_|bo_|c_|co_|dpr_|e_|f_|fl_|g_|h_|if_|l_|o_|p_|q_|r_|so_|t_|u_|w_|x_|y_|z_)/;
+const TRANSFORMATION_PREFIX =
+  /^(?:a_|ar_|b_|bo_|c_|co_|dpr_|e_|f_|fl_|g_|h_|if_|l_|o_|p_|q_|r_|so_|t_|u_|w_|x_|y_|z_)/;
 
 export function avatarThumb(url: string, size: number): string {
-  if (!url.includes("res.cloudinary.com") || !url.includes(CLOUDINARY_UPLOAD_MARKER)) {
+  if (
+    !url.includes("res.cloudinary.com") ||
+    !url.includes(CLOUDINARY_UPLOAD_MARKER)
+  ) {
     return url;
   }
 

@@ -553,6 +553,11 @@
 //     [openPostComments]
 //   );
 
+//   const handleMediaLoad = useCallback(() => {
+//     const el = scrollContainerRef.current;
+//     if (el && isNearBottomRef.current) el.scrollTop = el.scrollHeight;
+//   }, []);
+
 //   const handlePost = useCallback(
 //     async (text: string, file: File | null) => {
 //       try {
@@ -1010,6 +1015,7 @@
 //                   onOpenComments={openComments}
 //                   onTogglePicker={togglePicker}
 //                   onToggleCustomPicker={toggleCustomPicker}
+//                   onMediaLoad={handleMediaLoad}
 //                 />
 //               </SelectableShell>
 //             );
@@ -1239,6 +1245,7 @@ import {
   useRef,
   useState,
 } from "react";
+import dynamic from "next/dynamic";
 import { Channel, ChannelPost, ChannelPinnedItem } from "@/types/channel";
 import {
   subscribeToChannelDoc,
@@ -1283,8 +1290,6 @@ import { usePinnedBanner } from "@/hooks/usePinnedBanner";
 import { useMessageSelection } from "@/hooks/useMessageSelection";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import ChannelInfoModal from "./ChannelInfoModal";
-import ForwardPicker from "@/components/molecules/forward-picker/ForwardPicker";
 import PinnedBanner from "@/components/molecules/pinned-banner/PinnedBanner";
 import SelectionBar from "@/components/molecules/selection-picker/SelectionBar";
 import ChannelPostCard from "./Channelpostcard";
@@ -1292,7 +1297,6 @@ import ChannelComposer from "./Channelcomposer";
 import GroupSearchBar from "../group/GroupSearchBar";
 import SelectableShell from "../group/SelectableShell";
 import PollCard from "../polls/PollCard";
-import CreatePollModal from "../polls/CreatePollModal";
 import {
   ConfirmDialog,
   ImageLightbox,
@@ -1303,20 +1307,85 @@ import {
 } from "./ChannelShared";
 import "./ChannelWindow.css";
 
+const ChannelInfoModal = dynamic(() => import("./ChannelInfoModal"));
+const ForwardPicker = dynamic(
+  () => import("@/components/molecules/forward-picker/ForwardPicker")
+);
+const CreatePollModal = dynamic(() => import("../polls/CreatePollModal"));
+
 const NEAR_BOTTOM_THRESHOLD = 150;
 const VIEW_DWELL_MS = 1000;
 const MENU_MARGIN = 8;
 const MAX_ANIMATED_DELETES = 4;
+const PRIORITY_TAIL = 8;
 const EMPTY_POSTS: ChannelPost[] = [];
 const EMPTY_PINS: ChannelPinnedItem[] = [];
+const EMPTY_VOTES: NonNullable<ChannelPost["pollVotes"]> = {};
+const MENU_ITEM_CLASS =
+  "w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors";
 
 type Row =
   | { type: "date"; key: string; label: string }
   | { type: "post"; post: ChannelPost; priority: boolean };
 
+type SelectionStore = ReturnType<typeof useMessageSelection>["store"];
+
 interface MenuPos {
   left: number;
   top: number;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function isEqual(a: unknown, b: unknown, depth = 0): boolean {
+  if (Object.is(a, b)) return true;
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  if (depth > 8) return false;
+  if (a instanceof Date || b instanceof Date) {
+    return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  const keys = Object.keys(ra);
+  if (keys.length !== Object.keys(rb).length) return false;
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(rb, key)) return false;
+    if (!isEqual(ra[key], rb[key], depth + 1)) return false;
+  }
+  return true;
+}
+
+function reusePosts(prev: ChannelPost[], next: ChannelPost[]): ChannelPost[] {
+  if (!prev.length) return next;
+  const byId = new Map(prev.map((p) => [p.id, p] as const));
+  let changed = prev.length !== next.length;
+  const merged = next.map((p, i) => {
+    const old = byId.get(p.id);
+    const stable = old && isEqual(old, p) ? old : p;
+    if (stable !== prev[i]) changed = true;
+    return stable;
+  });
+  return changed ? merged : prev;
+}
+
+function buildPinPreview(post: ChannelPost): string {
+  if (post.type === "poll" && post.poll) return `📊 ${post.poll.question}`;
+  if (post.text) return post.text;
+  if (post.imageUrl) {
+    const sticker = CUSTOM_EMOJIS.find((e) => e.url === post.imageUrl);
+    if (sticker) return `::${sticker.id}::`;
+  }
+  return "📷 Photo";
 }
 
 interface PollPostRowProps {
@@ -1334,51 +1403,320 @@ const PollPostRow = memo(function PollPostRow({
   onObserve,
   onContextMenu,
 }: PollPostRowProps) {
-  const setRef = useCallback(
-    (el: HTMLDivElement | null) => onObserve(el, post.id),
-    [onObserve, post.id]
-  );
+  const postId = post.id;
   const poll = post.poll;
+  const votes = post.pollVotes ?? EMPTY_VOTES;
+
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => onObserve(el, postId),
+    [onObserve, postId]
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => onContextMenu(e, postId),
+    [onContextMenu, postId]
+  );
+
+  const handleVote = useCallback(
+    (optionId: Parameters<typeof votePoll>[2]) => {
+      if (!poll) return;
+      return votePoll(
+        doc(db, "channels", channelId, "posts", postId),
+        myUid,
+        optionId,
+        poll,
+        votes
+      );
+    },
+    [channelId, postId, myUid, poll, votes]
+  );
+
   if (!poll) return null;
-  const votes = post.pollVotes ?? {};
+
   return (
     <div
-      id={`channel-post-${post.id}`}
+      id={`channel-post-${postId}`}
       ref={setRef}
-      onContextMenu={(e) => onContextMenu(e, post.id)}
+      onContextMenu={handleContextMenu}
       className="flex justify-start"
     >
       <PollCard
         poll={poll}
         votes={votes}
         myUid={myUid}
-        onVote={(optionId) =>
-          votePoll(
-            doc(db, "channels", channelId, "posts", post.id),
-            myUid,
-            optionId,
-            poll,
-            votes
-          )
-        }
+        onVote={handleVote}
       />
     </div>
   );
 });
 
-function buildPinPreview(post: ChannelPost): string {
-  if (post.type === "poll" && post.poll) return `📊 ${post.poll.question}`;
-  if (post.text) return post.text;
-  if (post.imageUrl) {
-    const sticker = CUSTOM_EMOJIS.find((e) => e.url === post.imageUrl);
-    if (sticker) return `::${sticker.id}::`;
-  }
-  return "📷 Photo";
+interface PostContextMenuProps {
+  post: ChannelPost;
+  x: number;
+  y: number;
+  isOwner: boolean;
+  isPinned: boolean;
+  onClose: () => void;
+  onEdit: (postId: string) => void;
+  onTogglePin: (post: ChannelPost) => void;
+  onForward: (post: ChannelPost) => void;
+  onSelect: (postId: string) => void;
+  onDelete: (postId: string) => void;
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(value, max));
+const PostContextMenu = memo(function PostContextMenu({
+  post,
+  x,
+  y,
+  isOwner,
+  isPinned,
+  onClose,
+  onEdit,
+  onTogglePin,
+  onForward,
+  onSelect,
+  onDelete,
+}: PostContextMenuProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<MenuPos | null>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const handleDismiss = () => onClose();
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", handleDismiss);
+    window.addEventListener("scroll", handleDismiss, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("resize", handleDismiss);
+      window.removeEventListener("scroll", handleDismiss, true);
+    };
+  }, [onClose]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = x;
+    if (left + width > vw - MENU_MARGIN) left = x - width;
+    left = clamp(
+      left,
+      MENU_MARGIN,
+      Math.max(MENU_MARGIN, vw - width - MENU_MARGIN)
+    );
+
+    let top = y;
+    if (top + height > vh - MENU_MARGIN) top = y - height;
+    top = clamp(
+      top,
+      MENU_MARGIN,
+      Math.max(MENU_MARGIN, vh - height - MENU_MARGIN)
+    );
+
+    setPos({ left, top });
+  }, [x, y]);
+
+  const canEdit =
+    isOwner &&
+    post.type !== "poll" &&
+    !(!post.text && post.imageUrl && isCustomEmojiUrl(post.imageUrl));
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "fixed",
+        top: pos?.top ?? y,
+        left: pos?.left ?? x,
+        visibility: pos ? "visible" : "hidden",
+        zIndex: 250,
+      }}
+      className="w-44 rounded-xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {canEdit && (
+        <button onClick={() => onEdit(post.id)} className={MENU_ITEM_CLASS}>
+          <Pencil size={14} className="text-zinc-400" />
+          Edit
+        </button>
+      )}
+
+      {isOwner && (
+        <button onClick={() => onTogglePin(post)} className={MENU_ITEM_CLASS}>
+          {isPinned ? (
+            <PinOff size={14} className="text-zinc-400" />
+          ) : (
+            <Pin size={14} className="text-zinc-400" />
+          )}
+          {isPinned ? "Unpin" : "Pin"}
+        </button>
+      )}
+
+      <button onClick={() => onForward(post)} className={MENU_ITEM_CLASS}>
+        <Forward size={14} className="text-zinc-400" />
+        Forward
+      </button>
+
+      {isOwner && (
+        <button onClick={() => onSelect(post.id)} className={MENU_ITEM_CLASS}>
+          <CheckSquare size={14} className="text-zinc-400" />
+          Select
+        </button>
+      )}
+
+      {isOwner && (
+        <>
+          <div className="h-px bg-white/[0.06] my-1" />
+          <button
+            onClick={() => onDelete(post.id)}
+            className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-red-400 hover:bg-red-500/[0.08] transition-colors"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </>
+      )}
+    </div>
+  );
+});
+
+interface PostRowsProps {
+  rows: Row[];
+  store: SelectionStore;
+  isOwner: boolean;
+  myUid: string;
+  channelId: string;
+  channelName: string;
+  pinnedIds: Set<string>;
+  editingPostId: string | null;
+  pickerOpenId: string | null;
+  reactionPickerOpenId: string | null;
+  freshIds: Set<string>;
+  onObserve: (el: HTMLElement | null, postId: string) => void;
+  onContextMenu: (e: React.MouseEvent, postId: string) => void;
+  onStartEdit: (postId: string) => void;
+  onSaveEdit: (postId: string, text: string) => Promise<void>;
+  onCancelEdit: () => void;
+  onDelete: (postId: string) => void;
+  onOpenLightbox: (url: string) => void;
+  onReact: (postId: string, token: string) => void;
+  onOpenComments: (postId: string) => void;
+  onTogglePicker: (postId: string) => void;
+  onToggleCustomPicker: (postId: string) => void;
+  onMediaLoad: () => void;
 }
+
+const PostRows = memo(function PostRows({
+  rows,
+  store,
+  isOwner,
+  myUid,
+  channelId,
+  channelName,
+  pinnedIds,
+  editingPostId,
+  pickerOpenId,
+  reactionPickerOpenId,
+  freshIds,
+  onObserve,
+  onContextMenu,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
+  onOpenLightbox,
+  onReact,
+  onOpenComments,
+  onTogglePicker,
+  onToggleCustomPicker,
+  onMediaLoad,
+}: PostRowsProps) {
+  return (
+    <>
+      {rows.map((row) => {
+        if (row.type === "date") {
+          return (
+            <div key={row.key} className="self-center pt-1">
+              <span className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide text-[#b9a8ff] bg-[#12111f]/80 border border-[#7c5cff]/20 shadow-sm shadow-black/30">
+                {row.label}
+              </span>
+            </div>
+          );
+        }
+        const p = row.post;
+
+        if (p.type === "poll" && p.poll) {
+          return (
+            <SelectableShell
+              key={p.id}
+              store={store}
+              id={p.id}
+              selectable={isOwner}
+              inset
+            >
+              <PollPostRow
+                post={p}
+                myUid={myUid}
+                channelId={channelId}
+                onObserve={onObserve}
+                onContextMenu={onContextMenu}
+              />
+            </SelectableShell>
+          );
+        }
+
+        return (
+          <SelectableShell
+            key={p.id}
+            store={store}
+            id={p.id}
+            selectable={isOwner}
+            inset
+          >
+            <ChannelPostCard
+              post={p}
+              channelName={channelName}
+              myUid={myUid}
+              isOwner={isOwner}
+              isPinned={pinnedIds.has(p.id)}
+              isEditing={editingPostId === p.id}
+              isPickerOpen={pickerOpenId === p.id}
+              isCustomPickerOpen={reactionPickerOpenId === p.id}
+              priority={row.priority}
+              animate={freshIds.has(p.id)}
+              onObserve={onObserve}
+              onContextMenu={onContextMenu}
+              onStartEdit={onStartEdit}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={onCancelEdit}
+              onDelete={onDelete}
+              onOpenLightbox={onOpenLightbox}
+              onReact={onReact}
+              onOpenComments={onOpenComments}
+              onTogglePicker={onTogglePicker}
+              onToggleCustomPicker={onToggleCustomPicker}
+              onMediaLoad={onMediaLoad}
+            />
+          </SelectableShell>
+        );
+      })}
+    </>
+  );
+});
 
 export default function ChannelWindow({
   channelId,
@@ -1413,7 +1751,6 @@ export default function ChannelWindow({
     x: number;
     y: number;
   } | null>(null);
-  const [postMenuPos, setPostMenuPos] = useState<MenuPos | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [forwardData, setForwardData] = useState<ChannelPost | null>(null);
   const [freshIds, setFreshIds] = useState<Set<string>>(() => new Set());
@@ -1421,7 +1758,6 @@ export default function ChannelWindow({
 
   const { store, selectionMode } = useMessageSelection();
 
-  const postMenuRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isNearBottomRef = useRef(true);
   const knownPostIdsRef = useRef<Set<string>>(new Set());
@@ -1438,6 +1774,11 @@ export default function ChannelWindow({
   const visibleRef = useRef(isWindowVisible);
   const isLoadingOlderRef = useRef(false);
   const loadOlderRef = useRef<() => Promise<void>>(async () => { });
+  const postsRef = useRef<ChannelPost[]>(EMPTY_POSTS);
+
+  useLayoutEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
 
   useLayoutEffect(() => {
     channelIdRef.current = channelId;
@@ -1466,14 +1807,14 @@ export default function ChannelWindow({
     store.clear();
   }, [channelId, store]);
 
-  function handleScroll() {
+  const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
     isNearBottomRef.current = nearBottom;
     setShowScrollButton((prev) => (prev === !nearBottom ? prev : !nearBottom));
-  }
+  }, []);
 
   useLayoutEffect(() => {
     const intent = scrollIntentRef.current;
@@ -1538,6 +1879,16 @@ export default function ChannelWindow({
     };
   }, [channelId]);
 
+  useEffect(() => {
+    if (!isWindowVisible) return;
+    const observer = viewObserverRef.current;
+    if (!observer) return;
+    postElsRef.current.forEach((el) => {
+      observer.unobserve(el);
+      observer.observe(el);
+    });
+  }, [isWindowVisible]);
+
   const observePost = useCallback((el: HTMLElement | null, postId: string) => {
     const prev = postElsRef.current.get(postId);
     if (!el) {
@@ -1565,7 +1916,7 @@ export default function ChannelWindow({
 
       const prevIds = knownPostIdsRef.current;
       const nextIds = new Set(p.map((post) => post.id));
-      const hasNewPost = [...nextIds].some((id) => !prevIds.has(id));
+      const added = [...nextIds].filter((id) => !prevIds.has(id));
       const isInitialSnapshot = !hasReceivedPostsSnapshotRef.current;
       knownPostIdsRef.current = nextIds;
       hasReceivedPostsSnapshotRef.current = true;
@@ -1573,16 +1924,15 @@ export default function ChannelWindow({
       if (isInitialSnapshot) {
         scrollIntentRef.current = "initial";
       } else {
-        if (hasNewPost && isNearBottomRef.current) {
+        if (added.length && isNearBottomRef.current) {
           scrollIntentRef.current = "follow";
         }
-        const added = [...nextIds].filter((id) => !prevIds.has(id));
         if (added.length) {
           setFreshIds((prev) => new Set([...prev, ...added]));
         }
       }
 
-      setPosts(p.slice().reverse());
+      setPosts((prev) => reusePosts(prev, p.slice().reverse()));
       setPostsChannelId(channelId);
     });
     return () => unsub();
@@ -1608,16 +1958,23 @@ export default function ChannelWindow({
     };
   }, [channelId, myUid]);
 
+  const unreadCount =
+    channel && channel.id === channelId
+      ? (channel as Channel & { unreadCounts?: Record<string, number> })
+        .unreadCounts?.[myUid] ?? 0
+      : 0;
+
   useEffect(() => {
     if (
       !channelId ||
       !myUid ||
       !isWindowVisible ||
-      postsChannelId !== channelId
+      postsChannelId !== channelId ||
+      unreadCount <= 0
     )
       return;
     markChannelAsRead(channelId, myUid).catch(() => { });
-  }, [channelId, myUid, isWindowVisible, postsChannelId, posts.length]);
+  }, [channelId, myUid, isWindowVisible, postsChannelId, unreadCount]);
 
   useEffect(() => {
     if (!pickerOpenId && !reactionPickerOpenId) return;
@@ -1632,64 +1989,6 @@ export default function ChannelWindow({
     return () => window.removeEventListener("click", handleClick);
   }, [pickerOpenId, reactionPickerOpenId]);
 
-  useEffect(() => {
-    if (!postMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (
-        postMenuRef.current &&
-        !postMenuRef.current.contains(e.target as Node)
-      ) {
-        setPostMenu(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPostMenu(null);
-    };
-    const handleScrollClose = () => setPostMenu(null);
-    window.addEventListener("click", handleClick);
-    window.addEventListener("keydown", handleKey);
-    window.addEventListener("resize", handleScrollClose);
-    window.addEventListener("scroll", handleScrollClose, true);
-    return () => {
-      window.removeEventListener("click", handleClick);
-      window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("resize", handleScrollClose);
-      window.removeEventListener("scroll", handleScrollClose, true);
-    };
-  }, [postMenu]);
-
-  useLayoutEffect(() => {
-    if (!postMenu) {
-      setPostMenuPos(null);
-      return;
-    }
-    const el = postMenuRef.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    let left = postMenu.x;
-    if (left + width > vw - MENU_MARGIN) left = postMenu.x - width;
-    left = clamp(
-      left,
-      MENU_MARGIN,
-      Math.max(MENU_MARGIN, vw - width - MENU_MARGIN)
-    );
-
-    let top = postMenu.y;
-    if (top + height > vh - MENU_MARGIN) top = postMenu.y - height;
-    top = clamp(
-      top,
-      MENU_MARGIN,
-      Math.max(MENU_MARGIN, vh - height - MENU_MARGIN)
-    );
-
-    setPostMenuPos((prev) =>
-      prev && prev.left === left && prev.top === top ? prev : { left, top }
-    );
-  }, [postMenu]);
-
   const rawPins = useMemo<ChannelPinnedItem[]>(() => {
     if (!channel || channel.id !== channelId) return EMPTY_PINS;
     if (channel.pins && channel.pins.length) return channel.pins;
@@ -1697,10 +1996,7 @@ export default function ChannelWindow({
     return EMPTY_PINS;
   }, [channel, channelId]);
 
-  const displayPosts = useMemo(
-    () => (postsChannelId === channelId ? posts : EMPTY_POSTS),
-    [postsChannelId, channelId, posts]
-  );
+  const displayPosts = postsChannelId === channelId ? posts : EMPTY_POSTS;
 
   const selectableIds = useMemo(
     () => (isOwner ? displayPosts.map((p) => p.id) : []),
@@ -1731,9 +2027,10 @@ export default function ChannelWindow({
     (postId: string, token: string) => {
       setPickerOpenId(null);
       setReactionPickerOpenId(null);
-      Promise.resolve(togglePostReaction(channelId, postId, token, myUid)).catch(
-        (err) => console.error("Reaction failed:", err)
-      );
+      const known = postsRef.current.find((p) => p.id === postId)?.reactions;
+      Promise.resolve(
+        togglePostReaction(channelId, postId, token, myUid, known)
+      ).catch((err) => console.error("Reaction failed:", err));
     },
     [channelId, myUid]
   );
@@ -1749,9 +2046,10 @@ export default function ChannelWindow({
 
   const openPostMenu = useCallback((e: React.MouseEvent, postId: string) => {
     e.preventDefault();
-    setPostMenuPos(null);
     setPostMenu({ postId, x: e.clientX, y: e.clientY });
   }, []);
+
+  const closePostMenu = useCallback(() => setPostMenu(null), []);
 
   const startEdit = useCallback((postId: string) => {
     setEditingPostId(postId);
@@ -1792,9 +2090,14 @@ export default function ChannelWindow({
     async (text: string, file: File | null) => {
       try {
         let imageUrl: string | undefined;
-        if (file) imageUrl = (await uploadPostImage(file)).url;
+        let media: { width: number; height: number } | undefined;
+        if (file) {
+          const uploaded = await uploadPostImage(file);
+          imageUrl = uploaded.url;
+          media = { width: uploaded.width, height: uploaded.height };
+        }
         scrollIntentRef.current = "force";
-        await createChannelPost(channelId, myUid, text, imageUrl);
+        await createChannelPost(channelId, myUid, text, imageUrl, media);
       } catch (err) {
         console.error("Post failed:", err);
         scrollIntentRef.current = null;
@@ -1843,26 +2146,50 @@ export default function ChannelWindow({
     }
   }
 
-  async function togglePin(post: ChannelPost) {
-    setPostMenu(null);
-    try {
-      if (pinnedIds.has(post.id)) {
-        await removePinnedPost(channelId, post.id);
-      } else {
-        await addPinnedPost(channelId, post.id, buildPinPreview(post));
+  const togglePin = useCallback(
+    async (post: ChannelPost) => {
+      setPostMenu(null);
+      try {
+        if (pinnedIds.has(post.id)) {
+          await removePinnedPost(channelId, post.id);
+        } else {
+          await addPinnedPost(channelId, post.id, buildPinPreview(post));
+        }
+      } catch (err) {
+        console.error("Pin failed:", err);
       }
-    } catch (err) {
-      console.error("Pin failed:", err);
-    }
-  }
+    },
+    [channelId, pinnedIds]
+  );
 
-  async function handleUnpin(postId: string) {
-    try {
-      await removePinnedPost(channelId, postId);
-    } catch (err) {
-      console.error("Unpin failed:", err);
-    }
-  }
+  const handleUnpin = useCallback(
+    async (postId: string) => {
+      try {
+        await removePinnedPost(channelId, postId);
+      } catch (err) {
+        console.error("Unpin failed:", err);
+      }
+    },
+    [channelId]
+  );
+
+  const menuForward = useCallback((post: ChannelPost) => {
+    setForwardData(post);
+    setPostMenu(null);
+  }, []);
+
+  const menuSelect = useCallback(
+    (postId: string) => {
+      store.start(postId);
+      setPostMenu(null);
+    },
+    [store]
+  );
+
+  const menuDelete = useCallback((postId: string) => {
+    setDeleteConfirmId(postId);
+    setPostMenu(null);
+  }, []);
 
   async function confirmDelete() {
     if (!channelId || !deleteConfirmId) return;
@@ -1966,6 +2293,7 @@ export default function ChannelWindow({
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
+    const priorityFrom = displayPosts.length - PRIORITY_TAIL;
     let prevDay = "";
     displayPosts.forEach((p, i) => {
       const d = toDate(p.createdAt);
@@ -1974,11 +2302,7 @@ export default function ChannelWindow({
         out.push({ type: "date", key: `date-${dk}`, label: formatDayLabel(d) });
         prevDay = dk;
       }
-      out.push({
-        type: "post",
-        post: p,
-        priority: i >= displayPosts.length - 8,
-      });
+      out.push({ type: "post", post: p, priority: i >= priorityFrom });
     });
     return out;
   }, [displayPosts]);
@@ -2045,7 +2369,6 @@ export default function ChannelWindow({
   const menuPost = postMenu
     ? displayPosts.find((p) => p.id === postMenu.postId)
     : undefined;
-  const isMenuPostPinned = menuPost ? pinnedIds.has(menuPost.id) : false;
   const subscriptionKnown = subscriptionChannelId === channelId;
   const isSubscribed = subscriptionKnown && isSub;
 
@@ -2116,8 +2439,8 @@ export default function ChannelWindow({
               <button
                 onClick={toggleSub}
                 className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${isSubscribed
-                  ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
-                  : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
+                    ? "bg-white/[0.05] text-zinc-400 border border-white/[0.08] hover:border-red-400/30 hover:text-red-400"
+                    : "bg-[#7c5cff]/15 text-[#a893ff] border border-[#7c5cff]/30 hover:bg-[#7c5cff]/25"
                   }`}
               >
                 {isSubscribed ? "Unsubscribe" : "Subscribe"}
@@ -2183,73 +2506,31 @@ export default function ChannelWindow({
         className="chat-scroll relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4"
       >
         <div className="flex flex-col gap-3">
-          {rows.map((row) => {
-            if (row.type === "date") {
-              return (
-                <div key={row.key} className="self-center pt-1">
-                  <span className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide text-[#b9a8ff] bg-[#12111f]/80 border border-[#7c5cff]/20 shadow-sm shadow-black/30">
-                    {row.label}
-                  </span>
-                </div>
-              );
-            }
-            const p = row.post;
-
-            if (p.type === "poll" && p.poll) {
-              return (
-                <SelectableShell
-                  key={p.id}
-                  store={store}
-                  id={p.id}
-                  selectable={isOwner}
-                  inset
-                >
-                  <PollPostRow
-                    post={p}
-                    myUid={myUid}
-                    channelId={channelId}
-                    onObserve={observePost}
-                    onContextMenu={openPostMenu}
-                  />
-                </SelectableShell>
-              );
-            }
-
-            return (
-              <SelectableShell
-                key={p.id}
-                store={store}
-                id={p.id}
-                selectable={isOwner}
-                inset
-              >
-                <ChannelPostCard
-                  post={p}
-                  channelName={channel.name}
-                  myUid={myUid}
-                  isOwner={isOwner}
-                  isPinned={pinnedIds.has(p.id)}
-                  isEditing={editingPostId === p.id}
-                  isPickerOpen={pickerOpenId === p.id}
-                  isCustomPickerOpen={reactionPickerOpenId === p.id}
-                  priority={row.priority}
-                  animate={freshIds.has(p.id)}
-                  onObserve={observePost}
-                  onContextMenu={openPostMenu}
-                  onStartEdit={startEdit}
-                  onSaveEdit={saveEdit}
-                  onCancelEdit={cancelEdit}
-                  onDelete={requestDelete}
-                  onOpenLightbox={openLightbox}
-                  onReact={handleReact}
-                  onOpenComments={openComments}
-                  onTogglePicker={togglePicker}
-                  onToggleCustomPicker={toggleCustomPicker}
-                  onMediaLoad={handleMediaLoad}
-                />
-              </SelectableShell>
-            );
-          })}
+          <PostRows
+            rows={rows}
+            store={store}
+            isOwner={isOwner}
+            myUid={myUid}
+            channelId={channelId}
+            channelName={channel.name}
+            pinnedIds={pinnedIds}
+            editingPostId={editingPostId}
+            pickerOpenId={pickerOpenId}
+            reactionPickerOpenId={reactionPickerOpenId}
+            freshIds={freshIds}
+            onObserve={observePost}
+            onContextMenu={openPostMenu}
+            onStartEdit={startEdit}
+            onSaveEdit={saveEdit}
+            onCancelEdit={cancelEdit}
+            onDelete={requestDelete}
+            onOpenLightbox={openLightbox}
+            onReact={handleReact}
+            onOpenComments={openComments}
+            onTogglePicker={togglePicker}
+            onToggleCustomPicker={toggleCustomPicker}
+            onMediaLoad={handleMediaLoad}
+          />
 
           {displayPosts.length === 0 && (
             <div className="text-center text-zinc-600 text-sm py-10">
@@ -2276,89 +2557,20 @@ export default function ChannelWindow({
       </div>
 
       {postMenu && menuPost && (
-        <div
-          ref={postMenuRef}
-          style={{
-            position: "fixed",
-            top: postMenuPos?.top ?? postMenu.y,
-            left: postMenuPos?.left ?? postMenu.x,
-            visibility: postMenuPos ? "visible" : "hidden",
-            zIndex: 250,
-          }}
-          className="w-44 rounded-xl bg-[#12111f] border border-white/[0.10] shadow-xl shadow-black/50 overflow-hidden py-1"
-          onClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          {isOwner &&
-            menuPost.type !== "poll" &&
-            !(
-              !menuPost.text &&
-              menuPost.imageUrl &&
-              isCustomEmojiUrl(menuPost.imageUrl)
-            ) && (
-              <button
-                onClick={() => startEdit(menuPost.id)}
-                className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
-              >
-                <Pencil size={14} className="text-zinc-400" />
-                Edit
-              </button>
-            )}
-
-          {isOwner && (
-            <button
-              onClick={() => togglePin(menuPost)}
-              className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
-            >
-              {isMenuPostPinned ? (
-                <PinOff size={14} className="text-zinc-400" />
-              ) : (
-                <Pin size={14} className="text-zinc-400" />
-              )}
-              {isMenuPostPinned ? "Unpin" : "Pin"}
-            </button>
-          )}
-
-          <button
-            onClick={() => {
-              setForwardData(menuPost);
-              setPostMenu(null);
-            }}
-            className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
-          >
-            <Forward size={14} className="text-zinc-400" />
-            Forward
-          </button>
-
-          {isOwner && (
-            <button
-              onClick={() => {
-                store.start(menuPost.id);
-                setPostMenu(null);
-              }}
-              className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/[0.06] transition-colors"
-            >
-              <CheckSquare size={14} className="text-zinc-400" />
-              Select
-            </button>
-          )}
-
-          {isOwner && (
-            <>
-              <div className="h-px bg-white/[0.06] my-1" />
-              <button
-                onClick={() => {
-                  setDeleteConfirmId(menuPost.id);
-                  setPostMenu(null);
-                }}
-                className="w-full flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-[13px] text-red-400 hover:bg-red-500/[0.08] transition-colors"
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </>
-          )}
-        </div>
+        <PostContextMenu
+          key={`${postMenu.postId}:${postMenu.x}:${postMenu.y}`}
+          post={menuPost}
+          x={postMenu.x}
+          y={postMenu.y}
+          isOwner={isOwner}
+          isPinned={pinnedIds.has(menuPost.id)}
+          onClose={closePostMenu}
+          onEdit={startEdit}
+          onTogglePin={togglePin}
+          onForward={menuForward}
+          onSelect={menuSelect}
+          onDelete={menuDelete}
+        />
       )}
 
       {isOwner && (
@@ -2382,7 +2594,7 @@ export default function ChannelWindow({
         <ChannelInfoModal
           channel={channel}
           isOwner={isOwner}
-          isSub={isSub}
+          isSub={isSubscribed}
           onClose={() => setInfoModalOpen(false)}
           onToggleSub={() => {
             toggleSub();

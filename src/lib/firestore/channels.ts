@@ -39,6 +39,27 @@
 //   return "";
 // }
 
+// function buildReactionPatch(
+//   reactions: Record<string, string[]>,
+//   token: string,
+//   uid: string
+// ): Record<string, any> {
+//   const has = (reactions[token] ?? []).includes(uid);
+//   const patch: Record<string, any> = {
+//     [`reactions.${token}`]: has ? arrayRemove(uid) : arrayUnion(uid),
+//   };
+
+//   if (!has) {
+//     for (const [otherToken, uids] of Object.entries(reactions)) {
+//       if (otherToken !== token && Array.isArray(uids) && uids.includes(uid)) {
+//         patch[`reactions.${otherToken}`] = arrayRemove(uid);
+//       }
+//     }
+//   }
+
+//   return patch;
+// }
+
 // export function readChannelPins(data: any): ChannelPinnedItem[] {
 //   if (Array.isArray(data?.pins)) {
 //     return data.pins
@@ -376,12 +397,8 @@
 //   const postRef = doc(db, "channels", channelId, "posts", postId);
 //   const snap = await getDoc(postRef);
 //   if (!snap.exists()) return;
-//   const reactions = snap.data().reactions || {};
-//   const current: string[] = reactions[token] || [];
-//   const has = current.includes(uid);
-//   await updateDoc(postRef, {
-//     [`reactions.${token}`]: has ? arrayRemove(uid) : arrayUnion(uid),
-//   });
+//   const reactions = (snap.data().reactions || {}) as Record<string, string[]>;
+//   await updateDoc(postRef, buildReactionPatch(reactions, token, uid));
 // }
 
 // export async function toggleCommentReaction(
@@ -402,12 +419,8 @@
 //   );
 //   const snap = await getDoc(commentRef);
 //   if (!snap.exists()) return;
-//   const reactions = snap.data().reactions || {};
-//   const current: string[] = reactions[token] || [];
-//   const has = current.includes(uid);
-//   await updateDoc(commentRef, {
-//     [`reactions.${token}`]: has ? arrayRemove(uid) : arrayUnion(uid),
-//   });
+//   const reactions = (snap.data().reactions || {}) as Record<string, string[]>;
+//   await updateDoc(commentRef, buildReactionPatch(reactions, token, uid));
 // }
 
 // export async function markPostViewed(
@@ -778,6 +791,14 @@ import {
   ChannelPinnedItem,
 } from "@/types/channel";
 
+export type UserBrief = { username: string; avatarUrl: string | null };
+
+const USER_CACHE_TTL_MS = 5 * 60 * 1000;
+const DELETE_BATCH_SIZE = 450;
+
+const userCache = new Map<string, { value: UserBrief | null; at: number }>();
+const userInflight = new Map<string, Promise<UserBrief | null>>();
+
 function computePostPreview(text?: string | null, imageUrl?: string | null) {
   if (text && text.trim()) return text.slice(0, 80);
   if (imageUrl) return "📷 Photo";
@@ -825,35 +846,6 @@ function buildChannelPinPatch(next: ChannelPinnedItem[]) {
     pins: next,
     pinnedPostId: next.length ? next[next.length - 1].id : null,
   };
-}
-
-async function refreshLastPostPreview(channelId: string) {
-  const latestSnap = await getDocs(
-    query(
-      collection(db, "channels", channelId, "posts"),
-      orderBy("createdAt", "desc"),
-      limit(1)
-    )
-  );
-
-  const channelRef = doc(db, "channels", channelId);
-
-  if (latestSnap.empty) {
-    await updateDoc(channelRef, {
-      lastPostId: null,
-      lastPostPreview: "",
-    });
-    return;
-  }
-
-  const latest = latestSnap.docs[0];
-  const data = latest.data() as ChannelPost;
-
-  await updateDoc(channelRef, {
-    lastPostId: latest.id,
-    lastPostAt: data.createdAt ?? serverTimestamp(),
-    lastPostPreview: computePostPreview(data.text, data.imageUrl),
-  });
 }
 
 export async function createChannel(
@@ -930,18 +922,35 @@ export async function subscribeToChannel(channelId: string, uid: string) {
   });
 }
 
-export async function unsubscribeFromChannel(channelId: string, uid: string) {
-  const channelSnap = await getDoc(doc(db, "channels", channelId));
-  if (channelSnap.exists() && channelSnap.data().ownerId === uid)
-    throw new Error("Owner cannot unsubscribe from own channel");
+async function removeSubscriberTx(
+  channelId: string,
+  uid: string,
+  ownerError: string
+) {
   const subRef = doc(db, "channels", channelId, "subscribers", uid);
   const channelRef = doc(db, "channels", channelId);
   await runTransaction(db, async (tx) => {
+    const channelSnap = await tx.get(channelRef);
     const subSnap = await tx.get(subRef);
+    if (channelSnap.exists() && channelSnap.data().ownerId === uid) {
+      throw new Error(ownerError);
+    }
     if (!subSnap.exists()) return;
     tx.delete(subRef);
     tx.update(channelRef, { subscriberCount: increment(-1) });
   });
+}
+
+export async function unsubscribeFromChannel(channelId: string, uid: string) {
+  await removeSubscriberTx(
+    channelId,
+    uid,
+    "Owner cannot unsubscribe from own channel"
+  );
+}
+
+export async function removeSubscriber(channelId: string, uid: string) {
+  await removeSubscriberTx(channelId, uid, "Cannot remove the channel owner");
 }
 
 export async function getChannelSubscribers(
@@ -956,22 +965,16 @@ export async function getChannelSubscribers(
   const uids = subsSnap.docs.map((d) => d.id);
   if (uids.length === 0) return [];
 
-  const userDocs = await Promise.all(
-    uids.map((uid) => getDoc(doc(db, "users", uid)))
-  );
-  const usersMap = new Map<string, any>();
-  userDocs.forEach((snap) => {
-    if (snap.exists()) usersMap.set(snap.id, snap.data());
-  });
+  const usersMap = await getUsersByIds(uids);
 
   return subsSnap.docs.map((d) => {
     const data = d.data();
-    const user = usersMap.get(d.id);
+    const user = usersMap[d.id];
     return {
       uid: d.id,
       subscribedAt: data.subscribedAt,
       username: user?.username || "Unknown",
-      avatarUrl: user?.avatar || null,
+      avatarUrl: user?.avatarUrl || null,
     };
   });
 }
@@ -986,20 +989,6 @@ export async function getChannelByOwner(uid: string): Promise<Channel | null> {
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { id: d.id, ...d.data() } as Channel;
-}
-
-export async function removeSubscriber(channelId: string, uid: string) {
-  const channelSnap = await getDoc(doc(db, "channels", channelId));
-  if (channelSnap.exists() && channelSnap.data().ownerId === uid)
-    throw new Error("Cannot remove the channel owner");
-  const subRef = doc(db, "channels", channelId, "subscribers", uid);
-  const channelRef = doc(db, "channels", channelId);
-  await runTransaction(db, async (tx) => {
-    const subSnap = await tx.get(subRef);
-    if (!subSnap.exists()) return;
-    tx.delete(subRef);
-    tx.update(channelRef, { subscriberCount: increment(-1) });
-  });
 }
 
 export function subscribeToMyChannels(
@@ -1041,8 +1030,10 @@ export function subscribeToMyChannels(
       const unsub = onSnapshot(doc(db, "channels", id), (chSnap) => {
         if (chSnap.exists()) {
           channelsMap.set(id, { id: chSnap.id, ...chSnap.data() } as Channel);
-          emit();
+        } else {
+          channelsMap.delete(id);
         }
+        emit();
         awaitingInitialChannels.delete(id);
         completeInitialLoad();
       });
@@ -1086,33 +1077,6 @@ export function subscribeToChannelPost(
   });
 }
 
-export async function createChannelPost(
-  channelId: string,
-  authorId: string,
-  text: string,
-  imageUrl?: string
-) {
-  const postRef = doc(collection(db, "channels", channelId, "posts"));
-  await setDoc(postRef, {
-    authorId,
-    text: text || "",
-    imageUrl: imageUrl || null,
-    createdAt: serverTimestamp(),
-    reactions: {},
-    commentCount: 0,
-    views: 0,
-  });
-
-  const channelUpdate: Record<string, any> = {
-    lastPostAt: serverTimestamp(),
-    lastPostId: postRef.id,
-    lastPostPreview: computePostPreview(text, imageUrl),
-  };
-  await bumpUnreadForSubscribers(channelId, authorId, channelUpdate);
-
-  await updateDoc(doc(db, "channels", channelId), channelUpdate);
-}
-
 async function bumpUnreadForSubscribers(
   channelId: string,
   authorId: string,
@@ -1127,6 +1091,40 @@ async function bumpUnreadForSubscribers(
   });
 }
 
+export async function createChannelPost(
+  channelId: string,
+  authorId: string,
+  text: string,
+  imageUrl?: string,
+  media?: { width: number; height: number }
+) {
+  const postRef = doc(collection(db, "channels", channelId, "posts"));
+  const channelRef = doc(db, "channels", channelId);
+
+  const channelUpdate: Record<string, any> = {
+    lastPostAt: serverTimestamp(),
+    lastPostId: postRef.id,
+    lastPostPreview: computePostPreview(text, imageUrl),
+  };
+  await bumpUnreadForSubscribers(channelId, authorId, channelUpdate);
+
+  const batch = writeBatch(db);
+  batch.set(postRef, {
+    authorId,
+    text: text || "",
+    imageUrl: imageUrl || null,
+    ...(imageUrl && media
+      ? { imageWidth: media.width, imageHeight: media.height }
+      : {}),
+    createdAt: serverTimestamp(),
+    reactions: {},
+    commentCount: 0,
+    views: 0,
+  });
+  batch.update(channelRef, channelUpdate);
+  await batch.commit();
+}
+
 export async function markChannelAsRead(channelId: string, uid: string) {
   await updateDoc(doc(db, "channels", channelId), {
     [`unreadCounts.${uid}`]: 0,
@@ -1137,12 +1135,16 @@ export async function togglePostReaction(
   channelId: string,
   postId: string,
   token: string,
-  uid: string
+  uid: string,
+  knownReactions?: Record<string, string[]>
 ) {
   const postRef = doc(db, "channels", channelId, "posts", postId);
-  const snap = await getDoc(postRef);
-  if (!snap.exists()) return;
-  const reactions = (snap.data().reactions || {}) as Record<string, string[]>;
+  let reactions = knownReactions;
+  if (!reactions) {
+    const snap = await getDoc(postRef);
+    if (!snap.exists()) return;
+    reactions = (snap.data().reactions || {}) as Record<string, string[]>;
+  }
   await updateDoc(postRef, buildReactionPatch(reactions, token, uid));
 }
 
@@ -1191,27 +1193,9 @@ export async function markPostViewed(
   });
 }
 
-export async function deleteChannelPost(channelId: string, postId: string) {
-  await deleteDoc(doc(db, "channels", channelId, "posts", postId));
-
-  try {
-    await removePinnedPost(channelId, postId);
-  } catch (err) {
-    console.warn("Unpin on delete failed:", err);
-  }
-
-  await refreshLastPostPreview(channelId);
-}
-
-const DELETE_BATCH_SIZE = 450;
-
 export async function deleteChannelPosts(channelId: string, postIds: string[]) {
   const ids = [...new Set(postIds)];
   if (!channelId || ids.length === 0) return;
-  if (ids.length === 1) {
-    await deleteChannelPost(channelId, ids[0]);
-    return;
-  }
 
   const idSet = new Set(ids);
   const channelRef = doc(db, "channels", channelId);
@@ -1275,6 +1259,10 @@ export async function deleteChannelPosts(channelId: string, postIds: string[]) {
       return batch.commit();
     })
   );
+}
+
+export async function deleteChannelPost(channelId: string, postId: string) {
+  await deleteChannelPosts(channelId, [postId]);
 }
 
 export async function deleteChannel(channelId: string) {
@@ -1347,23 +1335,56 @@ export async function deleteComment(
   });
 }
 
+function fetchUserBrief(uid: string): Promise<UserBrief | null> {
+  const cached = userCache.get(uid);
+  if (cached && Date.now() - cached.at < USER_CACHE_TTL_MS) {
+    return Promise.resolve(cached.value);
+  }
+  const pending = userInflight.get(uid);
+  if (pending) return pending;
+
+  const request = getDoc(doc(db, "users", uid))
+    .then((snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const value: UserBrief | null = data
+        ? {
+            username: data.username || "Unknown",
+            avatarUrl: data.avatar || null,
+          }
+        : null;
+      userCache.set(uid, { value, at: Date.now() });
+      return value;
+    })
+    .catch(() => null)
+    .finally(() => {
+      userInflight.delete(uid);
+    });
+
+  userInflight.set(uid, request);
+  return request;
+}
+
+export function getCachedUsers(uids: string[]): Record<string, UserBrief> {
+  const out: Record<string, UserBrief> = {};
+  const now = Date.now();
+  for (const uid of uids) {
+    const cached = userCache.get(uid);
+    if (cached && cached.value && now - cached.at < USER_CACHE_TTL_MS) {
+      out[uid] = cached.value;
+    }
+  }
+  return out;
+}
+
 export async function getUsersByIds(
   uids: string[]
-): Promise<Record<string, { username: string; avatarUrl: string | null }>> {
+): Promise<Record<string, UserBrief>> {
   const uniqueIds = Array.from(new Set(uids));
-  const docs = await Promise.all(
-    uniqueIds.map((uid) => getDoc(doc(db, "users", uid)))
-  );
-  const map: Record<string, { username: string; avatarUrl: string | null }> =
-    {};
-  docs.forEach((snap) => {
-    if (snap.exists()) {
-      const data = snap.data();
-      map[snap.id] = {
-        username: data.username || "Unknown",
-        avatarUrl: data.avatar || null,
-      };
-    }
+  const results = await Promise.all(uniqueIds.map(fetchUserBrief));
+  const map: Record<string, UserBrief> = {};
+  uniqueIds.forEach((uid, i) => {
+    const value = results[i];
+    if (value) map[uid] = value;
   });
   return map;
 }
@@ -1374,16 +1395,16 @@ export async function updateChannelPostText(
   newText: string
 ) {
   const postRef = doc(db, "channels", channelId, "posts", postId);
-  const postSnap = await getDoc(postRef);
+  const channelRef = doc(db, "channels", channelId);
+
+  const [postSnap, channelSnap] = await Promise.all([
+    getDoc(postRef),
+    getDoc(channelRef),
+  ]);
   const imageUrl = postSnap.exists() ? postSnap.data().imageUrl : null;
 
-  await updateDoc(postRef, {
-    text: newText,
-    edited: true,
-  });
-
-  const channelRef = doc(db, "channels", channelId);
-  const channelSnap = await getDoc(channelRef);
+  const batch = writeBatch(db);
+  batch.update(postRef, { text: newText, edited: true });
 
   if (channelSnap.exists()) {
     const channelData = channelSnap.data();
@@ -1401,8 +1422,10 @@ export async function updateChannelPostText(
       );
     }
 
-    if (Object.keys(update).length) await updateDoc(channelRef, update);
+    if (Object.keys(update).length) batch.update(channelRef, update);
   }
+
+  await batch.commit();
 }
 
 export async function addPinnedPost(
@@ -1455,7 +1478,17 @@ export async function forwardMessageToChannel(
   original: ForwardableContent
 ) {
   const postRef = doc(collection(db, "channels", channelId, "posts"));
-  await setDoc(postRef, {
+  const channelRef = doc(db, "channels", channelId);
+
+  const channelUpdate: Record<string, any> = {
+    lastPostAt: serverTimestamp(),
+    lastPostId: postRef.id,
+    lastPostPreview: computePostPreview(original.text, original.imageUrl),
+  };
+  await bumpUnreadForSubscribers(channelId, myUid, channelUpdate);
+
+  const batch = writeBatch(db);
+  batch.set(postRef, {
     authorId: myUid,
     text: original.text || "",
     imageUrl: original.imageUrl || null,
@@ -1468,15 +1501,8 @@ export async function forwardMessageToChannel(
     views: 0,
     forwardedFrom: buildForwardedFrom(original),
   });
-
-  const channelUpdate: Record<string, any> = {
-    lastPostAt: serverTimestamp(),
-    lastPostId: postRef.id,
-    lastPostPreview: computePostPreview(original.text, original.imageUrl),
-  };
-  await bumpUnreadForSubscribers(channelId, myUid, channelUpdate);
-
-  await updateDoc(doc(db, "channels", channelId), channelUpdate);
+  batch.update(channelRef, channelUpdate);
+  await batch.commit();
 }
 
 export async function updateChannelInfo(

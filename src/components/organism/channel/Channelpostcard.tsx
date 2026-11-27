@@ -22,7 +22,9 @@
 // import { ChannelPost } from "@/types/channel";
 // import { CUSTOM_EMOJIS, isCustomEmojiUrl } from "@/lib/customEmoji";
 // import { decoSrc, videoPoster } from "@/lib/cdn";
+// import { extractFirstUrl } from "@/lib/links";
 // import ForwardedFrom from "@/components/atoms/ForwardedFrom";
+// import LinkPreview from "../chat-window/LinkPreview";
 // import CommentsStrip from "./CommentsStrip";
 // import {
 //     ReactionGlyph,
@@ -329,6 +331,7 @@
 //     onOpenComments: (postId: string) => void;
 //     onTogglePicker: (postId: string) => void;
 //     onToggleCustomPicker: (postId: string) => void;
+//     onMediaLoad?: () => void;
 // }
 
 // const ts = (x: any) => x?.seconds ?? x?.getTime?.() ?? 0;
@@ -384,6 +387,7 @@
 //     onOpenComments,
 //     onTogglePicker,
 //     onToggleCustomPicker,
+//     onMediaLoad,
 // }: PostCardProps) {
 //     const [editText, setEditText] = useState("");
 //     const editRef = useRef<HTMLTextAreaElement | null>(null);
@@ -408,6 +412,8 @@
 //         (el: HTMLDivElement | null) => onObserve(el, p.id),
 //         [onObserve, p.id]
 //     );
+
+//     const previewUrl = useMemo(() => extractFirstUrl(p.text), [p.text]);
 
 //     const views = (p as any).views as number | undefined;
 //     const time = formatTime(p.createdAt);
@@ -581,6 +587,14 @@
 //                             </div>
 //                         )}
 
+//                         {previewUrl && (
+//                             <LinkPreview
+//                                 url={previewUrl}
+//                                 isMine={false}
+//                                 onLayout={onMediaLoad}
+//                             />
+//                         )}
+
 //                         <div className="flex items-end justify-between gap-3 mt-2">
 //                             <div className="min-w-0 flex-1">{actions}</div>
 
@@ -668,6 +682,14 @@ import {
 
 const REACTION_EMOJIS = ["❤️", "😂", "😮", "👍", "🔥"];
 const POST_IMAGE_WIDTH = 760;
+const FADE_MS = 200;
+const EMPTY_IDS: string[] = [];
+
+type PostExtras = ChannelPost & {
+    views?: number;
+    imageWidth?: number;
+    imageHeight?: number;
+};
 
 const cloudinaryUrl = (url: string, transform: string) =>
     url?.includes("/upload/")
@@ -691,6 +713,18 @@ const PostImage = memo(function PostImage({
     onOpen: (url: string) => void;
 }) {
     const [loaded, setLoaded] = useState(false);
+    const [settled, setSettled] = useState(false);
+
+    useEffect(() => {
+        if (!loaded) return;
+        const timer = setTimeout(() => setSettled(true), FADE_MS);
+        return () => clearTimeout(timer);
+    }, [loaded]);
+
+    const imgRef = useCallback((el: HTMLImageElement | null) => {
+        if (el && el.complete && el.naturalWidth > 0) setLoaded(true);
+    }, []);
+
     return (
         <div
             className={`relative w-full max-h-[300px] overflow-hidden bg-white/[0.03] ${roundedTop ? "rounded-t-2xl" : ""
@@ -702,15 +736,17 @@ const PostImage = memo(function PostImage({
                         : "4 / 3",
             }}
         >
+            {!settled && (
+                <img
+                    src={tinySrc(url)}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover scale-105"
+                />
+            )}
             <img
-                src={tinySrc(url)}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-                className="absolute inset-0 w-full h-full object-cover scale-105"
-                style={{ filter: "blur(10px)" }}
-            />
-            <img
+                ref={imgRef}
                 src={decoSrc(url, POST_IMAGE_WIDTH)}
                 alt="post"
                 decoding="async"
@@ -747,7 +783,14 @@ const PostVideo = memo(function PostVideo({
     return (
         <div
             role="button"
+            tabIndex={0}
             onClick={() => onOpen(url)}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpen(url);
+                }
+            }}
             className={`relative w-full max-h-[300px] overflow-hidden bg-black cursor-pointer ${roundedTop ? "rounded-t-2xl" : ""
                 }`}
             style={{
@@ -787,7 +830,7 @@ const PostVideo = memo(function PostVideo({
     );
 });
 
-function PostMeta({
+const PostMeta = memo(function PostMeta({
     time,
     views,
     edited,
@@ -811,7 +854,7 @@ function PostMeta({
             </span>
         </div>
     );
-}
+});
 
 interface ActionsProps {
     postId: string;
@@ -840,13 +883,17 @@ const PostActionsBar = memo(function PostActionsBar({
     onTogglePicker,
     onToggleCustomPicker,
 }: ActionsProps) {
-    const summary = Object.entries(reactions || {})
-        .filter(([, uids]) => uids.length > 0)
-        .map(([token, uids]) => ({
-            token,
-            count: uids.length,
-            mine: uids.includes(myUid),
-        }));
+    const summary = useMemo(
+        () =>
+            Object.entries(reactions || {})
+                .filter(([, uids]) => uids.length > 0)
+                .map(([token, uids]) => ({
+                    token,
+                    count: uids.length,
+                    mine: uids.includes(myUid),
+                })),
+        [reactions, myUid]
+    );
 
     return (
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -927,6 +974,8 @@ const PostActionsBar = memo(function PostActionsBar({
                                         <img
                                             src={emoji.url}
                                             alt={emoji.id}
+                                            loading="lazy"
+                                            decoding="async"
                                             className="w-9 h-9 object-contain"
                                         />
                                     </button>
@@ -965,9 +1014,35 @@ export interface PostCardProps {
     onMediaLoad?: () => void;
 }
 
-const ts = (x: any) => x?.seconds ?? x?.getTime?.() ?? 0;
+const ts = (x: unknown): number => {
+    const v = x as { seconds?: number; getTime?: () => number } | null | undefined;
+    return v?.seconds ?? v?.getTime?.() ?? 0;
+};
 
-function samePost(a: any, b: any) {
+function sameStringArray(a: string[] | undefined, b: string[] | undefined) {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+}
+
+function sameReactions(
+    a: Record<string, string[]> | undefined,
+    b: Record<string, string[]> | undefined
+) {
+    if (a === b) return true;
+    const ka = a ? Object.keys(a) : [];
+    const kb = b ? Object.keys(b) : [];
+    if (ka.length !== kb.length) return false;
+    for (const key of ka) {
+        if (!sameStringArray(a?.[key], b?.[key])) return false;
+    }
+    return true;
+}
+
+function samePost(a: PostExtras, b: PostExtras) {
     if (a === b) return true;
     return (
         a.id === b.id &&
@@ -979,9 +1054,9 @@ function samePost(a: any, b: any) {
         a.imageWidth === b.imageWidth &&
         a.imageHeight === b.imageHeight &&
         ts(a.createdAt) === ts(b.createdAt) &&
+        sameReactions(a.reactions, b.reactions) &&
         JSON.stringify(a.recentCommenters ?? null) ===
         JSON.stringify(b.recentCommenters ?? null) &&
-        JSON.stringify(a.reactions ?? null) === JSON.stringify(b.reactions ?? null) &&
         JSON.stringify(a.forwardedFrom ?? null) ===
         JSON.stringify(b.forwardedFrom ?? null)
     );
@@ -989,6 +1064,7 @@ function samePost(a: any, b: any) {
 
 function areEqual(prev: PostCardProps, next: PostCardProps) {
     for (const key of Object.keys(next) as (keyof PostCardProps)[]) {
+        if (key === "priority") continue;
         if (key === "post") {
             if (!samePost(prev.post, next.post)) return false;
         } else if (!Object.is(prev[key], next[key])) return false;
@@ -1026,44 +1102,73 @@ const ChannelPostCard = memo(function ChannelPostCard({
 
     useEffect(() => {
         latestText.current = p.text;
-    });
+    }, [p.text]);
 
     useEffect(() => {
         if (!isEditing) return;
         setEditText(latestText.current || "");
-        requestAnimationFrame(() => {
+        const raf = requestAnimationFrame(() => {
             const el = editRef.current;
             if (!el) return;
             el.focus();
             el.setSelectionRange(el.value.length, el.value.length);
         });
+        return () => cancelAnimationFrame(raf);
     }, [isEditing]);
 
+    const postId = p.id;
+
     const setRootRef = useCallback(
-        (el: HTMLDivElement | null) => onObserve(el, p.id),
-        [onObserve, p.id]
+        (el: HTMLDivElement | null) => onObserve(el, postId),
+        [onObserve, postId]
     );
 
-    const previewUrl = useMemo(() => extractFirstUrl(p.text), [p.text]);
+    const handleContextMenu = useCallback(
+        (e: React.MouseEvent) => onContextMenu(e, postId),
+        [onContextMenu, postId]
+    );
 
-    const views = (p as any).views as number | undefined;
-    const time = formatTime(p.createdAt);
+    const handleOpenComments = useCallback(
+        () => onOpenComments(postId),
+        [onOpenComments, postId]
+    );
+
+    const handleStartEdit = useCallback(
+        () => onStartEdit(postId),
+        [onStartEdit, postId]
+    );
+
+    const handleDelete = useCallback(() => onDelete(postId), [onDelete, postId]);
+
+    const previewUrl = useMemo(() => extractFirstUrl(p.text), [p.text]);
+    const time = useMemo(() => formatTime(p.createdAt), [p.createdAt]);
+    const richText = useMemo(
+        () => (p.text ? <RichText text={p.text} /> : null),
+        [p.text]
+    );
+    const richTextLarge = useMemo(
+        () => (p.text ? <RichText text={p.text} variant="large" /> : null),
+        [p.text]
+    );
+
+    const extras = p as PostExtras;
+    const views = extras.views;
+    const mediaWidth = extras.imageWidth;
+    const mediaHeight = extras.imageHeight;
     const isImageStickerPost = !p.text && p.imageUrl && isCustomEmojiUrl(p.imageUrl);
     const isTextStickerPost = !p.imageUrl && isStickerOnlyText(p.text);
     const isStickerPost = (isImageStickerPost || isTextStickerPost) && !isEditing;
     const mediaIsVideo = !!p.imageUrl && isVideoUrl(p.imageUrl);
-    const mediaWidth = (p as ChannelPost & { imageWidth?: number }).imageWidth;
-    const mediaHeight = (p as ChannelPost & { imageHeight?: number }).imageHeight;
 
     function save() {
         const trimmed = editText.trim();
         if (!trimmed) onCancelEdit();
-        else onSaveEdit(p.id, trimmed);
+        else onSaveEdit(postId, trimmed);
     }
 
     const actions = (
         <PostActionsBar
-            postId={p.id}
+            postId={postId}
             reactions={p.reactions}
             commentCount={p.commentCount || 0}
             showCommentsPill={isStickerPost}
@@ -1080,9 +1185,9 @@ const ChannelPostCard = memo(function ChannelPostCard({
     if (isStickerPost) {
         return (
             <div
-                id={`channel-post-${p.id}`}
+                id={`channel-post-${postId}`}
                 ref={setRootRef}
-                onContextMenu={(e) => onContextMenu(e, p.id)}
+                onContextMenu={handleContextMenu}
                 className={`relative group max-w-[380px] flex flex-col items-start gap-1.5 ${animate ? "post-enter" : ""
                     }`}
             >
@@ -1091,11 +1196,12 @@ const ChannelPostCard = memo(function ChannelPostCard({
                     <img
                         src={p.imageUrl!}
                         alt="sticker"
+                        decoding="async"
                         className="w-32 h-32 object-contain"
                     />
                 ) : (
                     <div className="inline-flex flex-wrap items-end gap-1">
-                        <RichText text={p.text} variant="large" />
+                        {richTextLarge}
                     </div>
                 )}
 
@@ -1110,7 +1216,7 @@ const ChannelPostCard = memo(function ChannelPostCard({
                         <>
                             {isTextStickerPost && (
                                 <button
-                                    onClick={() => onStartEdit(p.id)}
+                                    onClick={handleStartEdit}
                                     aria-label="Edit post"
                                     className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-[#a893ff] cursor-pointer"
                                 >
@@ -1118,7 +1224,7 @@ const ChannelPostCard = memo(function ChannelPostCard({
                                 </button>
                             )}
                             <button
-                                onClick={() => onDelete(p.id)}
+                                onClick={handleDelete}
                                 aria-label="Delete post"
                                 className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-red-400 cursor-pointer"
                             >
@@ -1134,9 +1240,9 @@ const ChannelPostCard = memo(function ChannelPostCard({
 
     return (
         <div
-            id={`channel-post-${p.id}`}
+            id={`channel-post-${postId}`}
             ref={setRootRef}
-            onContextMenu={(e) => onContextMenu(e, p.id)}
+            onContextMenu={handleContextMenu}
             className={`relative group w-full max-w-[380px] rounded-2xl border overflow-visible shadow-sm shadow-black/20 transition-colors ${isPinned ? "border-[#7c5cff]/40" : "border-white/[0.08]"
                 } ${animate ? "post-enter" : ""}`}
             style={{ background: "var(--color-msg-bg)" }}
@@ -1212,9 +1318,9 @@ const ChannelPostCard = memo(function ChannelPostCard({
                     </div>
                 ) : (
                     <>
-                        {p.text && (
+                        {richText && (
                             <div className="text-[14px] leading-[1.45] whitespace-pre-wrap break-words">
-                                <RichText text={p.text} />
+                                {richText}
                             </div>
                         )}
 
@@ -1233,14 +1339,14 @@ const ChannelPostCard = memo(function ChannelPostCard({
                                 {isOwner && (
                                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button
-                                            onClick={() => onStartEdit(p.id)}
+                                            onClick={handleStartEdit}
                                             aria-label="Edit post"
                                             className="text-zinc-600 hover:text-[#a893ff] cursor-pointer"
                                         >
                                             <Pencil size={13} />
                                         </button>
                                         <button
-                                            onClick={() => onDelete(p.id)}
+                                            onClick={handleDelete}
                                             aria-label="Delete post"
                                             className="text-zinc-600 hover:text-red-400 cursor-pointer"
                                         >
@@ -1263,8 +1369,8 @@ const ChannelPostCard = memo(function ChannelPostCard({
             <div className="rounded-b-2xl overflow-hidden">
                 <CommentsStrip
                     count={p.commentCount || 0}
-                    commenterIds={p.recentCommenters ?? []}
-                    onClick={() => onOpenComments(p.id)}
+                    commenterIds={p.recentCommenters ?? EMPTY_IDS}
+                    onClick={handleOpenComments}
                 />
             </div>
         </div>
