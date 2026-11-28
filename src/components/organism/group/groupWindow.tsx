@@ -1,3 +1,1818 @@
+// "use client";
+
+// import {
+//   memo,
+//   useCallback,
+//   useEffect,
+//   useLayoutEffect,
+//   useMemo,
+//   useRef,
+//   useState,
+// } from "react";
+// import dynamic from "next/dynamic";
+// import { createPortal } from "react-dom";
+// import { useGroupStore } from "@/store/group-store";
+// import {
+//   subscribeToGroupMessages,
+//   loadOlderGroupMessages,
+//   markGroupMessageRead,
+//   markGroupAsRead,
+//   toggleGroupReaction,
+//   editGroupMessage,
+//   deleteGroupMessage,
+//   deleteGroupMessages,
+//   addGroupPinnedMessage,
+//   removeGroupPinnedMessage,
+//   readPins,
+//   leaveGroup,
+//   deleteGroup,
+//   forwardMessageToGroup,
+//   type PinnedItem,
+// } from "@/lib/firestore/groups";
+// import { createGroupPoll } from "@/lib/firestore/groupPolls";
+// import { votePoll } from "@/lib/polls";
+// import { forwardMessageToChat } from "@/lib/firestore/chats";
+// import { forwardMessageToChannel } from "@/lib/firestore/channels";
+// import { CUSTOM_EMOJIS } from "@/lib/customEmoji";
+// import { auth, db } from "@/lib/firebase";
+// import { onAuthStateChanged } from "firebase/auth";
+// import { onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
+// import {
+//   X,
+//   CornerUpLeft,
+//   Forward,
+//   MoreVertical,
+//   Trash2,
+//   ImageIcon,
+//   ImagePlus,
+//   ImageOff,
+//   Download,
+//   Pencil,
+//   Pin,
+//   PinOff,
+//   Copy,
+//   ChevronDown,
+//   Users,
+//   LogOut,
+//   ListChecks,
+//   Search,
+//   CheckSquare,
+// } from "lucide-react";
+// import { useWindowVisibilityStore } from "@/store/window-visibility-store";
+// import { useMessageSearch } from "@/hooks/useMessageSearch";
+// import { usePinnedBanner } from "@/hooks/usePinnedBanner";
+// import { useMessageSelection } from "@/hooks/useMessageSelection";
+// import PinnedBanner from "@/components/molecules/pinned-banner/PinnedBanner";
+// import SelectionBar from "@/components/molecules/selection-picker/SelectionBar";
+// import SmoothImage from "@/components/UI/SmoothImage";
+// import GroupComposer, { GroupComposerHandle } from "./GroupComposer";
+// import GroupMessageRow from "./GroupMessageRow";
+// import GroupSearchBar from "./GroupSearchBar";
+// import SelectableShell from "./SelectableShell";
+// import PollCard from "../polls/PollCard";
+// import GroupWallpaper, {
+//   getCachedWallpaper,
+//   cacheWallpaper,
+// } from "./GroupWallpaper";
+// import {
+//   ConfirmDialog,
+//   dayKey,
+//   formatDayLabel,
+//   isVideo,
+//   toDate,
+//   uploadImage,
+// } from "./GroupShared";
+// import { disintegrate } from "@/lib/disintegrate";
+// import "./GroupWindow.css";
+
+// const GroupModal = dynamic(() => import("./groupModal"));
+// const ForwardPicker = dynamic(
+//   () => import("@/components/molecules/forward-picker/ForwardPicker")
+// );
+// const CreatePollModal = dynamic(() => import("../polls/CreatePollModal"));
+
+// const NEAR_BOTTOM_THRESHOLD = 120;
+// const GROUP_GAP_MS = 5 * 60 * 1000;
+// const MAX_JUMP_PAGES = 12;
+// const MENU_MARGIN = 8;
+// const MAX_ANIMATED_DELETES = 4;
+// const SCROLL_KEYS = [
+//   "ArrowUp",
+//   "ArrowDown",
+//   "PageUp",
+//   "PageDown",
+//   "Home",
+//   "End",
+//   " ",
+// ];
+// const EMPTY_MESSAGES: any[] = [];
+// const EMPTY_VOTES: Record<string, any> = {};
+
+// interface MsgMenuState {
+//   id: string;
+//   x: number;
+//   y: number;
+//   isMine: boolean;
+// }
+
+// interface MenuPos {
+//   left: number;
+//   top: number;
+// }
+
+// type Row =
+//   | { type: "date"; key: string; label: string }
+//   | {
+//     type: "msg";
+//     m: any;
+//     isFirstInGroup: boolean;
+//     isLastInGroup: boolean;
+//     priority: boolean;
+//   };
+
+// interface GroupPollRowProps {
+//   m: any;
+//   groupId: string;
+//   myUid: string;
+//   isMine: boolean;
+//   isFirstInGroup: boolean;
+//   onReply: (m: any) => void;
+//   onOpenMenu: (e: React.MouseEvent, msgId: string, isMine: boolean) => void;
+// }
+
+// const GroupPollRow = memo(function GroupPollRow({
+//   m,
+//   groupId,
+//   myUid,
+//   isMine,
+//   isFirstInGroup,
+//   onReply,
+//   onOpenMenu,
+// }: GroupPollRowProps) {
+//   const poll = m.poll;
+//   const votes = m.pollVotes ?? EMPTY_VOTES;
+//   return (
+//     <div className={isFirstInGroup ? "pt-2.5" : "pt-0.5"}>
+//       <div
+//         id={`gmsg-${m.id}`}
+//         data-msg-anim={m.id}
+//         onContextMenu={(e) => onOpenMenu(e, m.id, isMine)}
+//         className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
+//       >
+//         {!isMine && isFirstInGroup && (
+//           <div className="mb-0.5 px-1 text-[12px] font-semibold text-[#a893ff]">
+//             {m.senderName}
+//           </div>
+//         )}
+//         <div className="msg-row relative">
+//           <PollCard
+//             poll={poll}
+//             votes={votes}
+//             myUid={myUid}
+//             onVote={(optionId) =>
+//               votePoll(
+//                 doc(db, "groups", groupId, "messages", m.id),
+//                 myUid,
+//                 optionId,
+//                 poll,
+//                 votes
+//               )
+//             }
+//           />
+//           <button
+//             onClick={() => onReply(m)}
+//             title="Reply"
+//             aria-label="Reply"
+//             className={`reply-btn absolute top-1/2 -translate-y-1/2 ${isMine ? "-left-9" : "-right-9"
+//               } w-6 h-6 flex items-center justify-center rounded-full text-zinc-300 hover:text-[#a893ff] bg-[#0d0b17]/80 hover:bg-[#7c5cff]/20 transition-colors border border-white/[0.08]`}
+//           >
+//             <CornerUpLeft size={13} />
+//           </button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// });
+
+// function sameList(a: string[], b: string[]) {
+//   return a.length === b.length && a.every((v, i) => v === b[i]);
+// }
+
+// function samePins(a: PinnedItem[], b: PinnedItem[]) {
+//   return (
+//     a.length === b.length &&
+//     a.every((p, i) => p.id === b[i].id && p.text === b[i].text)
+//   );
+// }
+
+// function clamp(value: number, min: number, max: number) {
+//   return Math.max(min, Math.min(value, max));
+// }
+
+// function isTypingTarget(target: EventTarget | null) {
+//   const el = target as HTMLElement | null;
+//   if (!el) return false;
+//   const tag = el.tagName;
+//   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+// }
+
+// function msTime(m: any): number | null {
+//   const c = m?.createdAt;
+//   if (!c) return null;
+//   if (typeof c.toMillis === "function") return c.toMillis();
+//   if (c instanceof Date) return c.getTime();
+//   if (typeof c.seconds === "number") return c.seconds * 1000;
+//   return null;
+// }
+
+// function sameValue(a: any, b: any): boolean {
+//   if (a === b) return true;
+//   if (a == null || b == null) return false;
+//   if (typeof a !== "object" || typeof b !== "object") return false;
+//   if (typeof a.isEqual === "function") {
+//     try {
+//       return Boolean(a.isEqual(b));
+//     } catch {
+//       return false;
+//     }
+//   }
+//   if (typeof a.toMillis === "function" && typeof b.toMillis === "function") {
+//     return a.toMillis() === b.toMillis();
+//   }
+//   if (Array.isArray(a)) {
+//     return (
+//       Array.isArray(b) &&
+//       a.length === b.length &&
+//       a.every((v, i) => sameValue(v, b[i]))
+//     );
+//   }
+//   if (Array.isArray(b)) return false;
+//   const keysA = Object.keys(a);
+//   const keysB = Object.keys(b);
+//   if (keysA.length !== keysB.length) return false;
+//   return keysA.every((k) => sameValue(a[k], b[k]));
+// }
+
+// function nextPaint() {
+//   return new Promise<void>((resolve) =>
+//     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+//   );
+// }
+
+// function buildPinText(m: any): string {
+//   if (m.poll) return `📊 ${m.poll.question}`;
+//   if (m.text) return m.text;
+//   if (m.voiceUrl) return "🎤 Voice message";
+//   if (m.imageUrl) {
+//     const sticker = CUSTOM_EMOJIS.find((e) => e.url === m.imageUrl);
+//     if (sticker) return `::${sticker.id}::`;
+//   }
+//   return "📷 Photo";
+// }
+
+// function isBlobUrl(value: unknown): value is string {
+//   return typeof value === "string" && value.startsWith("blob:");
+// }
+
+// function matchesPendingMessage(pending: any, message: any) {
+//   if (
+//     pending.senderId !== message.senderId ||
+//     (pending.text || "") !== (message.text || "")
+//   ) {
+//     return false;
+//   }
+//   return isBlobUrl(pending.imageUrl)
+//     ? Boolean(message.imageUrl)
+//     : (pending.imageUrl || null) === (message.imageUrl || null);
+// }
+
+// export default function GroupWindow() {
+//   const groupId = useGroupStore((s) => s.activeGroupId);
+//   return <GroupWindowInner key={groupId ?? "none"} groupId={groupId} />;
+// }
+
+// function GroupWindowInner({ groupId }: { groupId: string | null }) {
+//   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
+//   const group = useGroupStore(
+//     (s) => s.groups.find((g) => g.id === s.activeGroupId) ?? null
+//   );
+//   const isWindowVisible = useWindowVisibilityStore((s) => s.isVisible);
+
+//   const memberIdSet = useMemo<Set<string>>(() => {
+//     const members: any = group?.members;
+//     if (!Array.isArray(members)) return new Set<string>();
+//     return new Set<string>(
+//       members
+//         .map((x: any) => (typeof x === "string" ? x : x?.uid ?? x?.id))
+//         .filter(Boolean)
+//     );
+//   }, [group?.members]);
+
+//   const [messages, setMessages] = useState<any[]>([]);
+//   const [messagesGroupId, setMessagesGroupId] = useState<string | null>(null);
+//   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
+//   const [myUid, setMyUid] = useState<string | null>(null);
+//   const [myUsername, setMyUsername] = useState("");
+//   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+//   const [typingNames, setTypingNames] = useState<Record<string, string>>({});
+//   const [replyMessage, setReplyMessage] = useState<any | null>(null);
+//   const [menuOpen, setMenuOpen] = useState(false);
+//   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+//   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null);
+//   const [pickerExpanded, setPickerExpanded] = useState(false);
+//   const [editingId, setEditingId] = useState<string | null>(null);
+//   const [msgMenu, setMsgMenu] = useState<MsgMenuState | null>(null);
+//   const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
+//   const [pinnedMessages, setPinnedMessages] = useState<PinnedItem[]>([]);
+//   const [copiedId, setCopiedId] = useState<string | null>(null);
+//   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+//   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
+//   const [leaveConfirm, setLeaveConfirm] = useState(false);
+//   const [showScrollButton, setShowScrollButton] = useState(false);
+//   const [isDraggingFile, setIsDraggingFile] = useState(false);
+//   const [showGroupInfo, setShowGroupInfo] = useState(false);
+//   const [wallpaper, setWallpaper] = useState<any>(() =>
+//     groupId ? getCachedWallpaper(groupId) : null
+//   );
+//   const [forwardData, setForwardData] = useState<any | null>(null);
+//   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+//   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+//   const [freshIds, setFreshIds] = useState<Set<string>>(() => new Set());
+//   const [pollModalOpen, setPollModalOpen] = useState(false);
+
+//   const { store, selectionMode } = useMessageSelection();
+
+//   const composerRef = useRef<GroupComposerHandle | null>(null);
+//   const menuRef = useRef<HTMLDivElement | null>(null);
+//   const msgMenuRef = useRef<HTMLDivElement | null>(null);
+//   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+//   const topSentinelRef = useRef<HTMLDivElement | null>(null);
+//   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
+//   const isNearBottom = useRef(true);
+//   const myUidRef = useRef<string | null>(null);
+//   const confirmedMessageIdsRef = useRef<Set<string>>(new Set());
+//   const receivedSnapshotRef = useRef(false);
+//   const scrollIntentRef = useRef<"initial" | "follow" | "force" | null>(null);
+//   const dragCounter = useRef(0);
+//   const isLoadingOlderRef = useRef(false);
+//   const reachedStartRef = useRef(false);
+//   const olderMessageIdsRef = useRef<Set<string>>(new Set());
+//   const readReceiptIdsRef = useRef<Set<string>>(new Set());
+//   const preserveScrollRef = useRef<{ height: number; top: number } | null>(
+//     null
+//   );
+//   const visibleRef = useRef(isWindowVisible);
+//   const unreadRef = useRef(0);
+//   const pendingRef = useRef<any[]>([]);
+//   const hasMoreRef = useRef(false);
+//   const jumpingRef = useRef(false);
+//   const scrollLockedRef = useRef(false);
+//   const loadOlderRef = useRef<() => Promise<void>>(async () => { });
+
+//   const scrollLocked = Boolean(msgMenu) || Boolean(pickerOpenId);
+
+//   useLayoutEffect(() => {
+//     myUidRef.current = myUid;
+//   }, [myUid]);
+
+//   useLayoutEffect(() => {
+//     visibleRef.current = isWindowVisible;
+//   }, [isWindowVisible]);
+
+//   useLayoutEffect(() => {
+//     pendingRef.current = pendingMessages;
+//   }, [pendingMessages]);
+
+//   useLayoutEffect(() => {
+//     hasMoreRef.current = hasMoreMessages;
+//   }, [hasMoreMessages]);
+
+//   useLayoutEffect(() => {
+//     scrollLockedRef.current = scrollLocked;
+//   }, [scrollLocked]);
+
+//   useEffect(() => {
+//     return () => {
+//       pendingRef.current.forEach((message) => {
+//         if (isBlobUrl(message.imageUrl)) {
+//           URL.revokeObjectURL(message.imageUrl);
+//         }
+//       });
+//     };
+//   }, []);
+
+//   useEffect(() => {
+//     return onAuthStateChanged(auth, (u) => setMyUid(u?.uid || null));
+//   }, []);
+
+//   useEffect(() => {
+//     if (!myUid) return;
+//     const unsub = onSnapshot(
+//       doc(db, "users", myUid),
+//       (snap) => {
+//         setMyUsername(snap.data()?.username || "");
+//       },
+//       (error) => {
+//         console.error("User listener failed:", error);
+//       }
+//     );
+//     return () => unsub();
+//   }, [myUid]);
+
+//   useEffect(() => {
+//     if (!groupId) return;
+//     const unsub = subscribeToGroupMessages(groupId, (msgs, hasMore) => {
+//       const prevIds = confirmedMessageIdsRef.current;
+//       const nextIds = new Set<string>(msgs.map((m) => m.id));
+//       const newMessages = msgs.filter(
+//         (m) => !prevIds.has(m.id) && !olderMessageIdsRef.current.has(m.id)
+//       );
+//       const isInitialSnapshot = !receivedSnapshotRef.current;
+//       confirmedMessageIdsRef.current = nextIds;
+//       receivedSnapshotRef.current = true;
+
+//       if (isInitialSnapshot) {
+//         scrollIntentRef.current = "initial";
+//       } else {
+//         if (newMessages.length > 0 && isNearBottom.current) {
+//           scrollIntentRef.current = "follow";
+//         }
+//         const added = newMessages
+//           .filter((m) => m.senderId !== myUidRef.current)
+//           .map((m) => m.id);
+//         if (added.length) {
+//           setFreshIds((prev) => new Set([...prev, ...added]));
+//         }
+//       }
+
+//       const liveStart = msgs.length ? msTime(msgs[0]) : null;
+
+//       setHasMoreMessages(reachedStartRef.current ? false : hasMore);
+//       setMessages((previous) => {
+//         const previousById = new Map<string, any>();
+//         previous.forEach((message) => previousById.set(message.id, message));
+//         const kept = previous.filter((message) => {
+//           if (nextIds.has(message.id)) return false;
+//           if (olderMessageIdsRef.current.has(message.id)) return true;
+//           if (!hasMore || liveStart === null) return false;
+//           const time = msTime(message);
+//           if (time === null || time >= liveStart) return false;
+//           olderMessageIdsRef.current.add(message.id);
+//           return true;
+//         });
+//         const live = msgs.map((message) => {
+//           const old = previousById.get(message.id);
+//           return old && sameValue(old, message) ? old : message;
+//         });
+//         const merged = [...kept, ...live];
+//         if (
+//           merged.length === previous.length &&
+//           merged.every((message, index) => message === previous[index])
+//         ) {
+//           return previous;
+//         }
+//         return merged;
+//       });
+//       setMessagesGroupId(groupId);
+
+//       setPendingMessages((previous) => {
+//         if (!previous.length || !newMessages.length) return previous;
+//         const consumed = new Set<number>();
+//         const next = previous.filter((pending) => {
+//           const matchIndex = newMessages.findIndex(
+//             (message, index) =>
+//               !consumed.has(index) && matchesPendingMessage(pending, message)
+//           );
+//           if (matchIndex === -1) return true;
+//           consumed.add(matchIndex);
+//           if (isBlobUrl(pending.imageUrl)) {
+//             URL.revokeObjectURL(pending.imageUrl);
+//           }
+//           return false;
+//         });
+//         return next.length === previous.length ? previous : next;
+//       });
+//     });
+//     return () => unsub();
+//   }, [groupId]);
+
+//   useEffect(() => {
+//     if (!groupId || !myUid || !isWindowVisible || messagesGroupId !== groupId)
+//       return;
+//     messages.forEach((m) => {
+//       if (
+//         m.senderId !== myUid &&
+//         !(m.readBy || []).includes(myUid) &&
+//         !readReceiptIdsRef.current.has(m.id)
+//       ) {
+//         readReceiptIdsRef.current.add(m.id);
+//         markGroupMessageRead(groupId, m.id, myUid).catch(() => {
+//           readReceiptIdsRef.current.delete(m.id);
+//         });
+//       }
+//     });
+//   }, [messages, messagesGroupId, groupId, myUid, isWindowVisible]);
+
+//   useEffect(() => {
+//     if (!groupId || !myUid) return;
+//     const unsub = onSnapshot(
+//       doc(db, "groups", groupId),
+//       (snap) => {
+//         const data = snap.data();
+
+//         const pins = readPins(data);
+//         setPinnedMessages((prev) => (samePins(prev, pins) ? prev : pins));
+
+//         const wp = data?.wallpaper || null;
+//         cacheWallpaper(groupId, wp);
+//         setWallpaper((prev: any) =>
+//           (prev?.url ?? null) === (wp?.url ?? null) ? prev : wp
+//         );
+
+//         const typingList = data?.typing
+//           ? Object.entries(data.typing)
+//             .filter(([uid, val]) => val && uid !== myUid)
+//             .map(([uid]) => uid)
+//           : [];
+//         setTypingUsers((prev) =>
+//           sameList(prev, typingList) ? prev : typingList
+//         );
+
+//         const unread = data?.unreadCounts?.[myUid] || 0;
+//         unreadRef.current = unread;
+//         if (unread > 0 && visibleRef.current) {
+//           unreadRef.current = 0;
+//           markGroupAsRead(groupId, myUid).catch(() => { });
+//         }
+//       },
+//       (error) => {
+//         console.error("Group listener failed:", error);
+//       }
+//     );
+//     return () => unsub();
+//   }, [groupId, myUid]);
+
+//   useEffect(() => {
+//     if (!isWindowVisible || !groupId || !myUid || unreadRef.current <= 0) return;
+//     unreadRef.current = 0;
+//     markGroupAsRead(groupId, myUid).catch(() => { });
+//   }, [isWindowVisible, groupId, myUid]);
+
+//   useEffect(() => {
+//     if (!groupId || !myUid || !visibleRef.current) return;
+//     markGroupAsRead(groupId, myUid).catch(() => { });
+//   }, [groupId, myUid]);
+
+//   useEffect(() => {
+//     if (typingUsers.length === 0) return;
+//     const missing = typingUsers.filter((uid) => !typingNames[uid]);
+//     if (missing.length === 0) return;
+//     let cancelled = false;
+//     Promise.all(
+//       missing.map(async (uid) => {
+//         try {
+//           const snap = await getDoc(doc(db, "users", uid));
+//           return [
+//             uid,
+//             snap.exists() ? snap.data()?.username || "User" : "User",
+//           ] as const;
+//         } catch {
+//           return [uid, "User"] as const;
+//         }
+//       })
+//     ).then((entries) => {
+//       if (cancelled) return;
+//       setTypingNames((prev) => {
+//         const next = { ...prev };
+//         entries.forEach(([uid, name]) => {
+//           next[uid] = name;
+//         });
+//         return next;
+//       });
+//     });
+//     return () => {
+//       cancelled = true;
+//     };
+//   }, [typingUsers, typingNames]);
+
+//   function handleScroll() {
+//     const el = chatScrollRef.current;
+//     if (!el) return;
+//     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+//     const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+//     isNearBottom.current = nearBottom;
+//     setShowScrollButton((prev) => (prev === !nearBottom ? prev : !nearBottom));
+//   }
+
+//   const loadOlder = useCallback(async () => {
+//     if (!groupId || isLoadingOlderRef.current || !hasMoreMessages) return;
+//     const oldest = messages[0];
+//     if (!oldest) return;
+
+//     isLoadingOlderRef.current = true;
+//     setIsLoadingOlder(true);
+//     const el = chatScrollRef.current;
+//     preserveScrollRef.current = el
+//       ? { height: el.scrollHeight, top: el.scrollTop }
+//       : null;
+
+//     try {
+//       const { messages: older, hasMore } = await loadOlderGroupMessages(
+//         groupId,
+//         oldest
+//       );
+//       if (!hasMore) reachedStartRef.current = true;
+//       setHasMoreMessages(hasMore);
+//       if (older.length) {
+//         setMessages((previous) => {
+//           const existingIds = new Set(previous.map((message) => message.id));
+//           const deduped = older.filter((message) => !existingIds.has(message.id));
+//           deduped.forEach((message) =>
+//             olderMessageIdsRef.current.add(message.id)
+//           );
+//           return [...deduped, ...previous];
+//         });
+//       } else {
+//         preserveScrollRef.current = null;
+//       }
+//     } catch (err) {
+//       preserveScrollRef.current = null;
+//       console.error("Load older failed:", err);
+//     } finally {
+//       isLoadingOlderRef.current = false;
+//       setIsLoadingOlder(false);
+//     }
+//   }, [groupId, hasMoreMessages, messages]);
+
+//   useLayoutEffect(() => {
+//     loadOlderRef.current = loadOlder;
+//   });
+
+//   useEffect(() => {
+//     const root = chatScrollRef.current;
+//     const target = topSentinelRef.current;
+//     if (!root || !target || !hasMoreMessages) return;
+//     const io = new IntersectionObserver(
+//       ([entry]) => {
+//         if (entry.isIntersecting && !scrollLockedRef.current)
+//           loadOlderRef.current();
+//       },
+//       { root, rootMargin: "200px 0px 0px 0px" }
+//     );
+//     io.observe(target);
+//     return () => io.disconnect();
+//   }, [groupId, hasMoreMessages, messages.length]);
+
+//   useLayoutEffect(() => {
+//     const el = chatScrollRef.current;
+//     const preserved = preserveScrollRef.current;
+//     if (!el || !preserved) return;
+//     el.scrollTop = el.scrollHeight - preserved.height + preserved.top;
+//     preserveScrollRef.current = null;
+//   }, [messages]);
+
+//   const scrollToBottom = useCallback((smooth = false) => {
+//     if (scrollLockedRef.current) return;
+//     const el = chatScrollRef.current;
+//     if (!el) return;
+//     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+//     else el.scrollTop = el.scrollHeight;
+//   }, []);
+
+//   const handleMediaLoad = useCallback(() => {
+//     if (isNearBottom.current) scrollToBottom();
+//   }, [scrollToBottom]);
+
+//   useLayoutEffect(() => {
+//     if (!groupId) return;
+//     const intent = scrollIntentRef.current;
+//     if (!intent) return;
+//     if (scrollLockedRef.current && intent !== "initial") {
+//       scrollIntentRef.current = null;
+//       return;
+//     }
+//     if (intent === "initial" || intent === "force" || isNearBottom.current) {
+//       scrollToBottom();
+//       isNearBottom.current = true;
+//       setShowScrollButton(false);
+//     }
+//     scrollIntentRef.current = null;
+//   }, [groupId, messages, pendingMessages, scrollToBottom]);
+
+//   useEffect(() => {
+//     document.body.style.overflow = lightboxUrl ? "hidden" : "";
+//     return () => {
+//       document.body.style.overflow = "";
+//     };
+//   }, [lightboxUrl]);
+
+//   useEffect(() => {
+//     if (!lightboxUrl) return;
+//     const handleKey = (e: KeyboardEvent) => {
+//       if (e.key === "Escape") setLightboxUrl(null);
+//     };
+//     window.addEventListener("keydown", handleKey);
+//     return () => window.removeEventListener("keydown", handleKey);
+//   }, [lightboxUrl]);
+
+//   useEffect(() => {
+//     if (!pickerOpenId && !msgMenu) return;
+//     const handleClick = () => {
+//       setPickerOpenId(null);
+//       setPickerExpanded(false);
+//       setMsgMenu(null);
+//     };
+//     window.addEventListener("click", handleClick);
+//     return () => window.removeEventListener("click", handleClick);
+//   }, [pickerOpenId, msgMenu]);
+
+//   useEffect(() => {
+//     if (!pickerOpenId) return;
+//     const handleKey = (e: KeyboardEvent) => {
+//       if (e.key === "Escape") {
+//         setPickerOpenId(null);
+//         setPickerExpanded(false);
+//       }
+//     };
+//     window.addEventListener("keydown", handleKey);
+//     return () => window.removeEventListener("keydown", handleKey);
+//   }, [pickerOpenId]);
+
+//   useEffect(() => {
+//     if (!msgMenu) return;
+//     const close = () => setMsgMenu(null);
+//     const handleKey = (e: KeyboardEvent) => {
+//       if (e.key === "Escape") setMsgMenu(null);
+//     };
+//     window.addEventListener("resize", close);
+//     window.addEventListener("keydown", handleKey);
+//     return () => {
+//       window.removeEventListener("resize", close);
+//       window.removeEventListener("keydown", handleKey);
+//     };
+//   }, [msgMenu]);
+
+//   useEffect(() => {
+//     const el = chatScrollRef.current;
+//     if (!scrollLocked || !el) return;
+
+//     const lockedTop = el.scrollTop;
+
+//     const isAllowed = (target: EventTarget | null) => {
+//       const node = target as HTMLElement | null;
+//       if (!node || !(node instanceof Node)) return true;
+//       if (!el.contains(node)) return true;
+//       return Boolean(node.closest?.("[data-allow-scroll]"));
+//     };
+
+//     const blockScroll = (e: Event) => {
+//       if (isAllowed(e.target)) return;
+//       e.preventDefault();
+//     };
+//     const blockKeys = (e: KeyboardEvent) => {
+//       if (isTypingTarget(e.target)) return;
+//       if (SCROLL_KEYS.includes(e.key)) e.preventDefault();
+//     };
+//     const blockScrollbar = (e: MouseEvent) => {
+//       const rect = el.getBoundingClientRect();
+//       if (e.clientX > rect.left + el.clientWidth) e.preventDefault();
+//     };
+//     const restore = () => {
+//       if (el.scrollTop !== lockedTop) el.scrollTop = lockedTop;
+//     };
+
+//     window.addEventListener("wheel", blockScroll, { passive: false, capture: true });
+//     window.addEventListener("touchmove", blockScroll, { passive: false, capture: true });
+//     el.addEventListener("mousedown", blockScrollbar, true);
+//     el.addEventListener("scroll", restore);
+//     window.addEventListener("keydown", blockKeys, true);
+//     return () => {
+//       window.removeEventListener("wheel", blockScroll, true);
+//       window.removeEventListener("touchmove", blockScroll, true);
+//       el.removeEventListener("mousedown", blockScrollbar, true);
+//       el.removeEventListener("scroll", restore);
+//       window.removeEventListener("keydown", blockKeys, true);
+//     };
+//   }, [scrollLocked]);
+
+//   useLayoutEffect(() => {
+//     if (!msgMenu) {
+//       setMenuPos(null);
+//       return;
+//     }
+//     const el = msgMenuRef.current;
+//     if (!el) return;
+//     const { width, height } = el.getBoundingClientRect();
+//     const vw = window.innerWidth;
+//     const vh = window.innerHeight;
+
+//     let left = msgMenu.x;
+//     if (left + width > vw - MENU_MARGIN) left = msgMenu.x - width;
+//     left = clamp(left, MENU_MARGIN, Math.max(MENU_MARGIN, vw - width - MENU_MARGIN));
+
+//     let top = msgMenu.y;
+//     if (top + height > vh - MENU_MARGIN) top = msgMenu.y - height;
+//     top = clamp(top, MENU_MARGIN, Math.max(MENU_MARGIN, vh - height - MENU_MARGIN));
+
+//     setMenuPos((prev) =>
+//       prev && prev.left === left && prev.top === top ? prev : { left, top }
+//     );
+//   }, [msgMenu, copiedId, pinnedMessages]);
+
+//   useEffect(() => {
+//     if (!menuOpen) return;
+//     const handleClick = (e: MouseEvent) => {
+//       if (menuRef.current && !menuRef.current.contains(e.target as Node))
+//         setMenuOpen(false);
+//     };
+//     window.addEventListener("click", handleClick);
+//     return () => window.removeEventListener("click", handleClick);
+//   }, [menuOpen]);
+
+//   function handleDragEnter(e: React.DragEvent) {
+//     e.preventDefault();
+//     if (e.dataTransfer.types.includes("Files")) {
+//       dragCounter.current++;
+//       setIsDraggingFile(true);
+//     }
+//   }
+//   function handleDragLeave(e: React.DragEvent) {
+//     e.preventDefault();
+//     dragCounter.current = Math.max(0, dragCounter.current - 1);
+//     if (dragCounter.current === 0) setIsDraggingFile(false);
+//   }
+//   function handleDragOver(e: React.DragEvent) {
+//     e.preventDefault();
+//   }
+//   function handleDrop(e: React.DragEvent) {
+//     e.preventDefault();
+//     dragCounter.current = 0;
+//     setIsDraggingFile(false);
+//     const file = e.dataTransfer.files?.[0];
+//     if (
+//       file &&
+//       (file.type.startsWith("image/") || file.type.startsWith("video/"))
+//     ) {
+//       composerRef.current?.acceptFile(file);
+//     }
+//   }
+
+//   const handleReply = useCallback((m: any) => {
+//     setReplyMessage(
+//       m?.poll ? { ...m, text: `📊 ${m.poll.question}`, imageUrl: undefined } : m
+//     );
+//     composerRef.current?.focus();
+//   }, []);
+
+//   const clearReply = useCallback(() => setReplyMessage(null), []);
+
+//   const handleReact = useCallback(
+//     async (messageId: string, token: string) => {
+//       if (!groupId || !myUid) return;
+//       setPickerOpenId(null);
+//       setPickerExpanded(false);
+//       try {
+//         await toggleGroupReaction(groupId, messageId, token, myUid);
+//       } catch (err) {
+//         console.error("Reaction failed:", err);
+//       }
+//     },
+//     [groupId, myUid]
+//   );
+
+//   const handleCreatePoll = useCallback(
+//     async (
+//       question: string,
+//       options: string[],
+//       multiple: boolean,
+//       correctIndex: number | null
+//     ) => {
+//       if (!groupId || !myUid) return;
+//       try {
+//         scrollIntentRef.current = "force";
+//         await createGroupPoll(groupId, myUid, {
+//           question,
+//           options,
+//           multiple,
+//           correctIndex,
+//           senderName: myUsername || "Unknown",
+//         });
+//       } catch (err) {
+//         console.error("Poll failed:", err);
+//         scrollIntentRef.current = null;
+//         throw err;
+//       }
+//     },
+//     [groupId, myUid, myUsername]
+//   );
+
+//   const openPicker = useCallback((e: React.MouseEvent, msgId: string) => {
+//     e.stopPropagation();
+//     setPickerOpenId((prev) => (prev === msgId ? null : msgId));
+//     setPickerExpanded(false);
+//     setMsgMenu(null);
+//   }, []);
+
+//   const expandPicker = useCallback(() => setPickerExpanded(true), []);
+
+//   const openMsgMenu = useCallback(
+//     (e: React.MouseEvent, msgId: string, isMine: boolean) => {
+//       e.preventDefault();
+//       e.stopPropagation();
+//       setMenuPos(null);
+//       setMsgMenu({ id: msgId, x: e.clientX, y: e.clientY, isMine });
+//       setPickerOpenId(null);
+//       setPickerExpanded(false);
+//     },
+//     []
+//   );
+
+//   const scrollToMessage = useCallback(async (id: string) => {
+//     let el = document.getElementById(`gmsg-${id}`);
+//     if (!el) {
+//       if (jumpingRef.current) return;
+//       jumpingRef.current = true;
+//       try {
+//         for (let i = 0; i < MAX_JUMP_PAGES && !el && hasMoreRef.current; i++) {
+//           await loadOlderRef.current();
+//           await nextPaint();
+//           el = document.getElementById(`gmsg-${id}`);
+//         }
+//       } finally {
+//         jumpingRef.current = false;
+//       }
+//     }
+//     if (!el) return;
+//     const target = el;
+//     target.scrollIntoView({ behavior: "smooth", block: "center" });
+//     target.classList.remove("highlight-flash");
+//     void target.offsetWidth;
+//     target.classList.add("highlight-flash");
+//     setTimeout(() => target.classList.remove("highlight-flash"), 1500);
+//   }, []);
+
+//   const openLightbox = useCallback((url: string) => setLightboxUrl(url), []);
+//   const cancelEdit = useCallback(() => setEditingId(null), []);
+
+//   const submitEdit = useCallback(
+//     async (id: string, text: string) => {
+//       if (!groupId) return;
+//       try {
+//         await editGroupMessage(groupId, id, text);
+//         setEditingId(null);
+//       } catch (err) {
+//         console.error("Edit failed:", err);
+//       }
+//     },
+//     [groupId]
+//   );
+
+//   function startEdit(m: any) {
+//     setEditingId(m.id);
+//     setMsgMenu(null);
+//   }
+
+//   function handleDelete(msgId: string) {
+//     setMsgMenu(null);
+//     setDeleteConfirmId(msgId);
+//   }
+
+//   async function confirmDelete() {
+//     if (!groupId || !deleteConfirmId) return;
+//     const id = deleteConfirmId;
+//     setDeleteConfirmId(null);
+//     const el = document.querySelector<HTMLElement>(`[data-msg-anim="${id}"]`);
+//     try {
+//       if (el) await disintegrate(el);
+//       await deleteGroupMessage(groupId, id);
+//     } catch (err) {
+//       console.error("Delete failed:", err);
+//       if (el) el.style.visibility = "";
+//     }
+//   }
+
+//   async function handlePin(m: any) {
+//     if (!groupId) return;
+//     setMsgMenu(null);
+//     const isAlreadyPinned = pinnedMessages.some((p) => p.id === m.id);
+//     try {
+//       if (isAlreadyPinned) {
+//         await removeGroupPinnedMessage(groupId, m.id);
+//       } else {
+//         await addGroupPinnedMessage(groupId, m.id, buildPinText(m));
+//       }
+//     } catch (err) {
+//       console.error("Pin failed:", err);
+//     }
+//   }
+
+//   async function handleUnpin(messageId: string) {
+//     if (!groupId) return;
+//     try {
+//       await removeGroupPinnedMessage(groupId, messageId);
+//     } catch (err) {
+//       console.error("Unpin failed:", err);
+//     }
+//   }
+
+//   async function handleCopy(m: any) {
+//     if (!m.text) return;
+//     try {
+//       await navigator.clipboard.writeText(m.text);
+//     } catch (err) {
+//       console.error("Copy failed:", err);
+//       return;
+//     }
+//     setCopiedId(m.id);
+//     setMsgMenu(null);
+//     setTimeout(() => setCopiedId(null), 1800);
+//   }
+
+//   async function confirmLeaveOrDelete() {
+//     if (!groupId || !myUid || !group) return;
+//     try {
+//       if (group.ownerId === myUid) await deleteGroup(groupId);
+//       else await leaveGroup(groupId, myUid);
+//       setActiveGroup(null);
+//     } catch (err) {
+//       console.error("Leave or delete group failed:", err);
+//     }
+//     setLeaveConfirm(false);
+//   }
+
+//   async function handleWallpaperChange(e: React.ChangeEvent<HTMLInputElement>) {
+//     const file = e.target.files?.[0];
+//     e.target.value = "";
+//     if (!file || !groupId) return;
+//     try {
+//       const url = await uploadImage(file, "chat_wallpapers");
+//       await updateDoc(doc(db, "groups", groupId), {
+//         wallpaper: { url, type: "image" },
+//       });
+//     } catch (err) {
+//       console.error("Wallpaper change failed:", err);
+//     }
+//   }
+
+//   async function removeWallpaper() {
+//     if (!groupId) return;
+//     try {
+//       await updateDoc(doc(db, "groups", groupId), { wallpaper: null });
+//     } catch (err) {
+//       console.error("Wallpaper remove failed:", err);
+//     }
+//   }
+
+//   function forwardPayload(message: any) {
+//     return {
+//       text: message.text || "",
+//       imageUrl: message.imageUrl || null,
+//       imageWidth: message.imageWidth ?? null,
+//       imageHeight: message.imageHeight ?? null,
+//       voiceUrl: message.voiceUrl || null,
+//       duration: message.duration,
+//       waveform: message.waveform,
+//       senderId: message.senderId,
+//       senderName:
+//         message.senderName || (message.senderId === myUid ? "You" : "user"),
+//       groupId: groupId!,
+//       sourceName: group?.name || "Group",
+//       messageId: message.id,
+//       forwardedFrom: message.forwardedFrom || null,
+//     };
+//   }
+
+//   const rows = useMemo<Row[]>(() => {
+//     const confirmed = messagesGroupId === groupId ? messages : EMPTY_MESSAGES;
+//     const all = [...confirmed, ...pendingMessages].filter((m) => !m.deleted);
+//     const dates = all.map((m) => toDate(m.createdAt));
+//     const keys = dates.map((d) => dayKey(d));
+
+//     const joins = (i: number, j: number) => {
+//       const a = all[i];
+//       const b = all[j];
+//       if (!a || !b) return false;
+//       if (a.senderId !== b.senderId) return false;
+//       if (a.type === "poll" || b.type === "poll") return false;
+//       return (
+//         keys[i] === keys[j] &&
+//         Math.abs(dates[j].getTime() - dates[i].getTime()) < GROUP_GAP_MS
+//       );
+//     };
+
+//     const out: Row[] = [];
+//     let prevDay = "";
+//     all.forEach((m, i) => {
+//       if (keys[i] !== prevDay) {
+//         out.push({
+//           type: "date",
+//           key: `date-${keys[i]}`,
+//           label: formatDayLabel(dates[i]),
+//         });
+//         prevDay = keys[i];
+//       }
+//       out.push({
+//         type: "msg",
+//         m,
+//         isFirstInGroup: !joins(i - 1, i),
+//         isLastInGroup: !joins(i, i + 1),
+//         priority: i >= all.length - 8,
+//       });
+//     });
+//     return out;
+//   }, [messages, messagesGroupId, groupId, pendingMessages]);
+
+//   const pinnedIds = useMemo(
+//     () => new Set(pinnedMessages.map((p) => p.id)),
+//     [pinnedMessages]
+//   );
+
+//   const selectableIds = useMemo(
+//     () =>
+//       rows.flatMap((row) =>
+//         row.type === "msg" && row.m.senderId === myUid && !row.m.pending
+//           ? [row.m.id as string]
+//           : []
+//       ),
+//     [rows, myUid]
+//   );
+
+//   useEffect(() => {
+//     if (store.size() === 0) return;
+//     store.retain(new Set(selectableIds));
+//   }, [store, selectableIds]);
+
+//   function openBulkDelete() {
+//     const ids = selectableIds.filter((id) => store.has(id));
+//     if (ids.length) setBulkDeleteIds(ids);
+//   }
+
+//   async function confirmBulkDelete() {
+//     const ids = bulkDeleteIds;
+//     setBulkDeleteIds(null);
+//     if (!groupId || !ids || !ids.length) return;
+//     store.clear();
+
+//     const rootRect = chatScrollRef.current?.getBoundingClientRect();
+//     let animatedCount = 0;
+//     const items = ids.map((id) => {
+//       const el = document.querySelector<HTMLElement>(`[data-msg-anim="${id}"]`);
+//       let animate = false;
+//       if (el && rootRect && animatedCount < MAX_ANIMATED_DELETES) {
+//         const rect = el.getBoundingClientRect();
+//         if (rect.bottom > rootRect.top && rect.top < rootRect.bottom) {
+//           animate = true;
+//           animatedCount++;
+//         }
+//       }
+//       if (el && !animate) el.style.visibility = "hidden";
+//       return { id, el, animate };
+//     });
+
+//     const animatedItems = items.filter((item) => item.animate);
+//     if (animatedItems.length) {
+//       await Promise.all(
+//         animatedItems.map(async (item) => {
+//           try {
+//             await disintegrate(item.el as HTMLElement);
+//           } catch {
+//             if (item.el) item.el.style.visibility = "";
+//           }
+//         })
+//       );
+//     }
+
+//     try {
+//       await deleteGroupMessages(groupId, ids);
+//     } catch (err) {
+//       console.error("Bulk delete failed:", err);
+//       items.forEach((item) => {
+//         if (item.el) item.el.style.visibility = "";
+//       });
+//     }
+//   }
+
+//   const pinBanner = usePinnedBanner(pinnedMessages, scrollToMessage);
+
+//   const {
+//     searchOpen,
+//     searchQuery,
+//     setSearchQuery,
+//     openSearch,
+//     closeSearch,
+//     matchCount,
+//     activeIndex,
+//     searching,
+//     goOlder,
+//     goNewer,
+//   } = useMessageSearch({
+//     messages,
+//     hasMore: hasMoreMessages,
+//     isLoadingOlderRef,
+//     loadOlderRef,
+//     scrollToMessage,
+//     idPrefix: "gmsg-",
+//     resetKey: groupId,
+//     enabled: !!groupId,
+//     renderToken: rows,
+//   });
+
+//   useEffect(() => {
+//     if (searchOpen) setMenuOpen(false);
+//   }, [searchOpen]);
+
+//   function handleOpenSearch() {
+//     setMenuOpen(false);
+//     openSearch();
+//   }
+
+//   if (!groupId || !group) {
+//     return (
+//       <div
+//         className="flex w-full justify-center items-center h-full gap-3 text-zinc-500"
+//         style={{ background: "var(--color-chat-bg)" }}
+//       >
+//         <span className="text-sm font-bold">Select a group in the Nexo</span>
+//       </div>
+//     );
+//   }
+
+//   const gid = groupId;
+
+//   const currentMsgMenu = msgMenu
+//     ? messages.find((m) => m.id === msgMenu.id)
+//     : null;
+//   const isOwner = group.ownerId === myUid;
+//   const currentIsPoll = currentMsgMenu?.type === "poll";
+//   const isCurrentMenuPinned = currentMsgMenu
+//     ? pinnedIds.has(currentMsgMenu.id)
+//     : false;
+
+//   const typingLabel =
+//     typingUsers.length === 1
+//       ? `${typingNames[typingUsers[0]] || "Someone"} is typing`
+//       : typingUsers.length === 2
+//         ? `${typingUsers.map((uid) => typingNames[uid] || "Someone").join(", ")} are typing`
+//         : `${typingUsers.length} people are typing`;
+
+//   return (
+//     <>
+//       {msgMenu &&
+//         currentMsgMenu &&
+//         !currentMsgMenu.deleted &&
+//         typeof document !== "undefined" &&
+//         createPortal(
+//           <div
+//             ref={msgMenuRef}
+//             className="msg-ctx-menu fixed z-[1000] min-w-[168px] rounded-2xl bg-[#0d0b17]/95 border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+//             style={{
+//               left: menuPos?.left ?? msgMenu.x,
+//               top: menuPos?.top ?? msgMenu.y,
+//               visibility: menuPos ? "visible" : "hidden",
+//             }}
+//             onClick={(e) => e.stopPropagation()}
+//             onContextMenu={(e) => e.preventDefault()}
+//           >
+//             {msgMenu.isMine &&
+//               currentMsgMenu.text &&
+//               !currentMsgMenu.imageUrl &&
+//               !currentIsPoll && (
+//                 <button
+//                   className="ctx-item text-zinc-300"
+//                   onClick={() => startEdit(currentMsgMenu)}
+//                 >
+//                   <Pencil size={14} className="text-zinc-500" />
+//                   Edit message
+//                 </button>
+//               )}
+//             <button
+//               className="ctx-item text-zinc-300"
+//               onClick={() => {
+//                 handleReply(currentMsgMenu);
+//                 setMsgMenu(null);
+//               }}
+//             >
+//               <CornerUpLeft size={14} className="text-zinc-500" />
+//               Reply
+//             </button>
+//             {!currentIsPoll && (
+//               <button
+//                 className="ctx-item text-zinc-300"
+//                 onClick={() => {
+//                   setForwardData(currentMsgMenu);
+//                   setMsgMenu(null);
+//                 }}
+//               >
+//                 <Forward size={14} className="text-zinc-500" />
+//                 Forward
+//               </button>
+//             )}
+//             {currentMsgMenu.text && !currentIsPoll && (
+//               <button
+//                 className="ctx-item text-zinc-300"
+//                 onClick={() => handleCopy(currentMsgMenu)}
+//               >
+//                 <Copy size={14} className="text-zinc-500" />
+//                 {copiedId === currentMsgMenu.id ? "Copied!" : "Copy text"}
+//               </button>
+//             )}
+//             <button
+//               className="ctx-item text-zinc-300"
+//               onClick={() => handlePin(currentMsgMenu)}
+//             >
+//               {isCurrentMenuPinned ? (
+//                 <PinOff size={14} className="text-zinc-500" />
+//               ) : (
+//                 <Pin size={14} className="text-zinc-500" />
+//               )}
+//               {isCurrentMenuPinned ? "Unpin" : "Pin message"}
+//             </button>
+//             {msgMenu.isMine && !currentMsgMenu.pending && (
+//               <button
+//                 className="ctx-item text-zinc-300"
+//                 onClick={() => {
+//                   store.start(currentMsgMenu.id);
+//                   setMsgMenu(null);
+//                 }}
+//               >
+//                 <CheckSquare size={14} className="text-zinc-500" />
+//                 Select
+//               </button>
+//             )}
+//             {msgMenu.isMine && (
+//               <>
+//                 <div className="ctx-divider" />
+//                 <button
+//                   className="ctx-item text-red-400"
+//                   onClick={() => handleDelete(currentMsgMenu.id)}
+//                 >
+//                   <Trash2 size={14} className="text-red-400/60" />
+//                   Delete
+//                 </button>
+//               </>
+//             )}
+//           </div>,
+//           document.body
+//         )}
+
+//       {lightboxUrl && (
+//         <div
+//           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
+//           onClick={() => setLightboxUrl(null)}
+//         >
+//           <div className="absolute top-4 right-4 flex items-center gap-2">
+//             <a
+//               href={lightboxUrl}
+//               download
+//               target="_blank"
+//               rel="noreferrer"
+//               aria-label="Download"
+//               onClick={(e) => e.stopPropagation()}
+//               className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+//             >
+//               <Download size={16} />
+//             </a>
+//             <button
+//               onClick={() => setLightboxUrl(null)}
+//               aria-label="Close"
+//               className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+//             >
+//               <X size={16} />
+//             </button>
+//           </div>
+//           {isVideo(lightboxUrl) ? (
+//             <video
+//               src={lightboxUrl}
+//               controls
+//               autoPlay
+//               className="lightbox-img max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl"
+//               onClick={(e) => e.stopPropagation()}
+//             />
+//           ) : (
+//             <img
+//               src={lightboxUrl}
+//               alt="photo"
+//               className="lightbox-img max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+//               onClick={(e) => e.stopPropagation()}
+//             />
+//           )}
+//         </div>
+//       )}
+
+//       {deleteConfirmId && (
+//         <ConfirmDialog
+//           icon={<Trash2 size={18} className="text-red-400" />}
+//           title="Delete message?"
+//           description="This action cannot be undone. The message will be permanently removed for everyone."
+//           onCancel={() => setDeleteConfirmId(null)}
+//           onConfirm={confirmDelete}
+//         />
+//       )}
+
+//       {bulkDeleteIds && (
+//         <ConfirmDialog
+//           icon={<Trash2 size={18} className="text-red-400" />}
+//           title={`Delete ${bulkDeleteIds.length} ${bulkDeleteIds.length === 1 ? "message" : "messages"}?`}
+//           description="This action cannot be undone. The selected messages will be permanently removed for everyone."
+//           onCancel={() => setBulkDeleteIds(null)}
+//           onConfirm={confirmBulkDelete}
+//         />
+//       )}
+
+//       {leaveConfirm && (
+//         <ConfirmDialog
+//           icon={
+//             isOwner ? (
+//               <Trash2 size={18} className="text-red-400" />
+//             ) : (
+//               <LogOut size={18} className="text-red-400" />
+//             )
+//           }
+//           title={isOwner ? "Delete group?" : "Leave group?"}
+//           description={
+//             isOwner
+//               ? "This will permanently delete the group for all members. This action cannot be undone."
+//               : "You will stop receiving messages from this group. You'll need a new invite to rejoin."
+//           }
+//           onCancel={() => setLeaveConfirm(false)}
+//           onConfirm={confirmLeaveOrDelete}
+//           confirmLabel={isOwner ? "Delete" : "Leave"}
+//         />
+//       )}
+
+//       <CreatePollModal
+//         open={pollModalOpen}
+//         onClose={() => setPollModalOpen(false)}
+//         onCreate={handleCreatePoll}
+//       />
+
+//       <div
+//         className="relative flex flex-col w-full h-full overflow-hidden"
+//         style={{
+//           background: "var(--color-chat-bg)",
+//           color: "var(--color-text)",
+//         }}
+//         onDragEnter={handleDragEnter}
+//         onDragLeave={handleDragLeave}
+//         onDragOver={handleDragOver}
+//         onDrop={handleDrop}
+//       >
+//         {wallpaper?.url ? (
+//           <GroupWallpaper url={wallpaper.url} />
+//         ) : (
+//           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+//             <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
+//             <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
+//           </div>
+//         )}
+
+//         {isDraggingFile && (
+//           <div className="absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#7c5cff] bg-[#0d0b17]/85 pointer-events-none">
+//             <div className="flex flex-col items-center gap-2 text-[#a893ff]">
+//               <ImageIcon size={32} />
+//               <span className="text-sm font-semibold">
+//                 Drop image or video to send
+//               </span>
+//             </div>
+//           </div>
+//         )}
+
+//         <div className="flex-none flex flex-col border-b border-white/[0.06] bg-[#0d0b17]/90 relative z-20">
+//           {selectionMode ? (
+//             <SelectionBar
+//               store={store}
+//               total={selectableIds.length}
+//               onCancel={store.clear}
+//               onSelectAll={() => store.selectMany(selectableIds)}
+//               onDelete={openBulkDelete}
+//             />
+//           ) : searchOpen ? (
+//             <GroupSearchBar
+//               query={searchQuery}
+//               onQueryChange={setSearchQuery}
+//               total={matchCount}
+//               activeIndex={activeIndex}
+//               hasMore={hasMoreMessages}
+//               loading={searching}
+//               onPrev={goOlder}
+//               onNext={goNewer}
+//               onClose={closeSearch}
+//             />
+//           ) : (
+//             <div className="h-14 flex items-center justify-between px-5">
+//               <div
+//                 className="flex items-center gap-2.5 cursor-pointer"
+//                 onClick={() => setShowGroupInfo(true)}
+//               >
+//                 <div className="w-8 h-8 rounded-full bg-[#1e2a3a] flex items-center justify-center shrink-0 overflow-hidden">
+//                   {group.avatarUrl ? (
+//                     <SmoothImage
+//                       src={group.avatarUrl}
+//                       alt={group.name || "group"}
+//                       width={32}
+//                       height={32}
+//                       className="w-full h-full object-cover"
+//                     />
+//                   ) : (
+//                     <Users size={14} className="text-[#a893ff]" />
+//                   )}
+//                 </div>
+//                 <div className="flex flex-col items-start leading-tight">
+//                   <span className="text-sm font-semibold text-white/80">
+//                     {group.name}
+//                   </span>
+//                   <span className="text-[11px] leading-tight">
+//                     {typingUsers.length > 0 ? (
+//                       <span className="flex items-center gap-1 text-[#a893ff]">
+//                         {typingLabel}
+//                         <span className="typing-dots">
+//                           <span className="typing-dot" />
+//                           <span className="typing-dot" />
+//                           <span className="typing-dot" />
+//                         </span>
+//                       </span>
+//                     ) : (
+//                       <span className="text-zinc-500">
+//                         {group.memberCount} member
+//                         {group.memberCount === 1 ? "" : "s"}
+//                       </span>
+//                     )}
+//                   </span>
+//                 </div>
+//               </div>
+
+//               <div className="flex items-center gap-1">
+//                 <button
+//                   onClick={handleOpenSearch}
+//                   aria-label="Search messages"
+//                   title="Search messages"
+//                   className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                 >
+//                   <Search size={16} />
+//                 </button>
+//                 <div className="relative" ref={menuRef}>
+//                   <button
+//                     onClick={() => setMenuOpen((v) => !v)}
+//                     aria-label="Group menu"
+//                     className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+//                   >
+//                     <MoreVertical size={16} />
+//                   </button>
+//                   {menuOpen && (
+//                     <div className="msg-ctx-menu absolute right-0 top-10 w-48 rounded-xl bg-[#0d0b17] border border-white/[0.08] shadow-xl shadow-black/40 overflow-hidden z-50">
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={handleOpenSearch}
+//                       >
+//                         <Search size={14} className="text-zinc-500" />
+//                         Search messages
+//                       </button>
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={() => {
+//                           setPollModalOpen(true);
+//                           setMenuOpen(false);
+//                         }}
+//                       >
+//                         <ListChecks size={14} className="text-zinc-500" />
+//                         Create poll
+//                       </button>
+//                       <button
+//                         className="ctx-item text-zinc-300"
+//                         onClick={() => {
+//                           wallpaperInputRef.current?.click();
+//                           setMenuOpen(false);
+//                         }}
+//                       >
+//                         <ImagePlus size={14} className="text-zinc-500" />
+//                         Change wallpaper
+//                       </button>
+//                       {wallpaper?.url && (
+//                         <button
+//                           className="ctx-item text-zinc-300"
+//                           onClick={() => {
+//                             removeWallpaper();
+//                             setMenuOpen(false);
+//                           }}
+//                         >
+//                           <ImageOff size={14} className="text-zinc-500" />
+//                           Remove wallpaper
+//                         </button>
+//                       )}
+//                       <div className="ctx-divider" />
+//                       <button
+//                         className="ctx-item text-red-400"
+//                         onClick={() => {
+//                           setLeaveConfirm(true);
+//                           setMenuOpen(false);
+//                         }}
+//                       >
+//                         {isOwner ? (
+//                           <Trash2 size={14} className="text-red-400/60" />
+//                         ) : (
+//                           <LogOut size={14} className="text-red-400/60" />
+//                         )}
+//                         {isOwner ? "Delete group" : "Leave group"}
+//                       </button>
+//                     </div>
+//                   )}
+//                 </div>
+//               </div>
+//             </div>
+//           )}
+
+//           <PinnedBanner
+//             banner={pinBanner}
+//             noun="message"
+//             placement="overlay"
+//             onUnpin={handleUnpin}
+//           />
+//         </div>
+
+//         <div
+//           ref={chatScrollRef}
+//           onScroll={handleScroll}
+//           className="chat-scroll relative z-10 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 min-h-0"
+//         >
+//           <div ref={topSentinelRef} className="h-px" aria-hidden />
+//           {isLoadingOlder && (
+//             <div className="py-2 text-center text-xs text-zinc-500">
+//               Loading older messages…
+//             </div>
+//           )}
+
+//           {rows.map((row) => {
+//             if (row.type === "date") {
+//               return (
+//                 <div key={row.key} className="flex justify-center pt-3 pb-1">
+//                   <span className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide text-[#b9a8ff] bg-[#12111f]/80 border border-[#7c5cff]/20 shadow-sm shadow-black/30">
+//                     {row.label}
+//                   </span>
+//                 </div>
+//               );
+//             }
+//             const { m } = row;
+//             const isMine = m.senderId === myUid;
+//             const selectable = isMine && !m.pending;
+
+//             if (m.type === "poll" && m.poll && myUid) {
+//               return (
+//                 <SelectableShell
+//                   key={m.id}
+//                   store={store}
+//                   id={m.id}
+//                   selectable={selectable}
+//                 >
+//                   <GroupPollRow
+//                     m={m}
+//                     groupId={gid}
+//                     myUid={myUid}
+//                     isMine={isMine}
+//                     isFirstInGroup={row.isFirstInGroup}
+//                     onReply={handleReply}
+//                     onOpenMenu={openMsgMenu}
+//                   />
+//                 </SelectableShell>
+//               );
+//             }
+
+//             const isPickerOpen = pickerOpenId === m.id;
+//             return (
+//               <SelectableShell
+//                 key={m.id}
+//                 store={store}
+//                 id={m.id}
+//                 selectable={selectable}
+//               >
+//                 <GroupMessageRow
+//                   m={m}
+//                   myUid={myUid}
+//                   isMine={isMine}
+//                   isRead={
+//                     isMine &&
+//                     !m.pending &&
+//                     (m.readBy || []).some(
+//                       (uid: string) =>
+//                         uid !== m.senderId && memberIdSet.has(uid)
+//                     )
+//                   }
+//                   isFirstInGroup={row.isFirstInGroup}
+//                   isLastInGroup={row.isLastInGroup}
+//                   isPickerOpen={isPickerOpen}
+//                   pickerExpanded={isPickerOpen && pickerExpanded}
+//                   isPinned={pinnedIds.has(m.id)}
+//                   isEditing={editingId === m.id}
+//                   animate={!!m.pending || freshIds.has(m.id)}
+//                   priority={row.priority}
+//                   onReply={handleReply}
+//                   onOpenPicker={openPicker}
+//                   onExpandPicker={expandPicker}
+//                   onOpenMenu={openMsgMenu}
+//                   onReact={handleReact}
+//                   onScrollToMessage={scrollToMessage}
+//                   onOpenLightbox={openLightbox}
+//                   onMediaLoad={handleMediaLoad}
+//                   onSubmitEdit={submitEdit}
+//                   onCancelEdit={cancelEdit}
+//                 />
+//               </SelectableShell>
+//             );
+//           })}
+
+//           {showScrollButton && (
+//             <button
+//               onClick={() => {
+//                 scrollToBottom(true);
+//                 isNearBottom.current = true;
+//                 setShowScrollButton(false);
+//               }}
+//               title="Scroll to bottom"
+//               aria-label="Scroll to bottom"
+//               className="sticky float-right z-20 bottom-2 w-10 h-10 flex items-center justify-center rounded-full bg-[#12111f] border border-white/[0.10] shadow-lg shadow-black/40 text-[#a893ff] hover:bg-[#1b1633] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+//             >
+//               <ChevronDown size={18} />
+//             </button>
+//           )}
+//         </div>
+
+//         {showGroupInfo && (
+//           <GroupModal
+//             groupId={groupId}
+//             myUid={myUid}
+//             onClose={() => setShowGroupInfo(false)}
+//           />
+//         )}
+
+//         <input
+//           ref={wallpaperInputRef}
+//           type="file"
+//           accept="image/*"
+//           className="hidden"
+//           onChange={handleWallpaperChange}
+//         />
+
+//         <GroupComposer
+//           key={groupId}
+//           ref={composerRef}
+//           groupId={groupId}
+//           myUid={myUid}
+//           myUsername={myUsername}
+//           groupMembers={group.members}
+//           replyMessage={replyMessage}
+//           onClearReply={clearReply}
+//           setPendingMessages={setPendingMessages}
+//           isNearBottomRef={isNearBottom}
+//           scrollIntentRef={scrollIntentRef}
+//         />
+//       </div>
+
+//       {forwardData && myUid && (
+//         <ForwardPicker
+//           myUid={myUid}
+//           onClose={() => setForwardData(null)}
+//           onSelectChat={async (targetChatId) => {
+//             try {
+//               await forwardMessageToChat(
+//                 targetChatId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
+//           }}
+//           onSelectGroup={async (targetGroupId) => {
+//             try {
+//               await forwardMessageToGroup(
+//                 targetGroupId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
+//           }}
+//           onSelectChannel={async (channelId) => {
+//             try {
+//               await forwardMessageToChannel(
+//                 channelId,
+//                 myUid,
+//                 forwardPayload(forwardData)
+//               );
+//               setForwardData(null);
+//             } catch (err) {
+//               console.error("Forward failed:", err);
+//             }
+//           }}
+//         />
+//       )}
+//     </>
+//   );
+// }
+
+
 "use client";
 
 import {
@@ -15,7 +1830,7 @@ import { useGroupStore } from "@/store/group-store";
 import {
   subscribeToGroupMessages,
   loadOlderGroupMessages,
-  markGroupMessageRead,
+  markGroupMessagesRead,
   markGroupAsRead,
   toggleGroupReaction,
   editGroupMessage,
@@ -96,6 +1911,7 @@ const GROUP_GAP_MS = 5 * 60 * 1000;
 const MAX_JUMP_PAGES = 12;
 const MENU_MARGIN = 8;
 const MAX_ANIMATED_DELETES = 4;
+const MAX_FRESH_IDS = 60;
 const SCROLL_KEYS = [
   "ArrowUp",
   "ArrowDown",
@@ -107,6 +1923,9 @@ const SCROLL_KEYS = [
 ];
 const EMPTY_MESSAGES: any[] = [];
 const EMPTY_VOTES: Record<string, any> = {};
+
+const AMBIENT_BACKGROUND =
+  "radial-gradient(340px circle at 130px 82px, rgba(91,61,240,0.12), transparent 70%), radial-gradient(320px circle at calc(100% - 126px) calc(100% - 30px), rgba(43,31,120,0.14), transparent 70%)";
 
 interface MsgMenuState {
   id: string;
@@ -441,7 +2260,14 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
           .filter((m) => m.senderId !== myUidRef.current)
           .map((m) => m.id);
         if (added.length) {
-          setFreshIds((prev) => new Set([...prev, ...added]));
+          setFreshIds((prev) => {
+            const merged = [...prev, ...added];
+            return new Set(
+              merged.length > MAX_FRESH_IDS
+                ? merged.slice(merged.length - MAX_FRESH_IDS)
+                : merged
+            );
+          });
         }
       }
 
@@ -499,6 +2325,7 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
   useEffect(() => {
     if (!groupId || !myUid || !isWindowVisible || messagesGroupId !== groupId)
       return;
+    const ids: string[] = [];
     messages.forEach((m) => {
       if (
         m.senderId !== myUid &&
@@ -506,10 +2333,12 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
         !readReceiptIdsRef.current.has(m.id)
       ) {
         readReceiptIdsRef.current.add(m.id);
-        markGroupMessageRead(groupId, m.id, myUid).catch(() => {
-          readReceiptIdsRef.current.delete(m.id);
-        });
+        ids.push(m.id);
       }
+    });
+    if (!ids.length) return;
+    markGroupMessagesRead(groupId, ids, myUid).catch(() => {
+      ids.forEach((id) => readReceiptIdsRef.current.delete(id));
     });
   }, [messages, messagesGroupId, groupId, myUid, isWindowVisible]);
 
@@ -1460,10 +3289,10 @@ function GroupWindowInner({ groupId }: { groupId: string | null }) {
         {wallpaper?.url ? (
           <GroupWallpaper url={wallpaper.url} />
         ) : (
-          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-            <div className="absolute -top-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#5b3df0]/10 blur-[120px]" />
-            <div className="absolute -bottom-40 -right-16 w-[380px] h-[380px] rounded-full bg-[#2b1f78]/12 blur-[120px]" />
-          </div>
+          <div
+            className="pointer-events-none absolute inset-0 z-0"
+            style={{ background: AMBIENT_BACKGROUND }}
+          />
         )}
 
         {isDraggingFile && (
